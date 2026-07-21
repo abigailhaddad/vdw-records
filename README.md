@@ -29,9 +29,22 @@ independently — which takes about five minutes; see the notebook.
 
 ## Verify it yourself
 
-Open **`vdw_records_notebook.ipynb`** and run all cells (~5 minutes,
-needs only Python 3 + numpy). It is written for a skeptical reader and
-assumes no trust in the authors:
+Requires Python 3 with `numpy` and `jupyter`:
+
+```bash
+pip install -r requirements.txt
+```
+
+Then open **`vdw_records_notebook.ipynb`** and run all cells (~1 minute of
+compute, mostly the record-prime cell):
+
+```bash
+jupyter notebook vdw_records_notebook.ipynb
+# or run it headless, non-interactively:
+jupyter nbconvert --to notebook --execute vdw_records_notebook.ipynb --stdout
+```
+
+It is written for a skeptical reader and assumes no trust in the authors:
 
 1. brute-force bedrock — W(2,3)=9 proved by checking all 768 colorings;
 2. the Rabung criterion implemented naively and tested against exhaustive
