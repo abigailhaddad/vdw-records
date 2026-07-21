@@ -160,6 +160,10 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
 .scalerow .val { font-variant-numeric: tabular-nums; font-weight: 600; }
 @media (max-width: 560px){ .scalerow { grid-template-columns: 1fr; gap: 3px; } }
 
+.algo { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px;
+  padding: 16px 18px; margin: 14px 0; overflow-x: auto; white-space: pre;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: .84rem; line-height: 1.6; color: var(--ink); tab-size: 2; }
 .callout { background: var(--warn-bg); border: 1px solid var(--ring); border-radius: 12px; padding: 16px 18px; margin: 18px 0; }
 .footer { color: var(--muted); font-size: .86rem; margin-top: 40px; }
 .kbd { border:1px solid var(--hair); border-bottom-width:2px; border-radius:5px; padding:0 5px; font-size:.8em; }
@@ -173,7 +177,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
   <p class="eyebrow">a search problem, explained from scratch</p>
   <h1>Coloring numbers without making a pattern</h1>
   <p class="lede">Here's a game. Color the numbers 1, 2, 3, and so on, using a few colors. One rule: you can't let a set of evenly-spaced numbers — like 3, 6, 9, 12 (each one 3 more than the last), or 5, 9, 13 (going up by 4) — all end up the same color. How far can you get?</p>
-  <p class="intro">That's the whole problem, and it's harder than it sounds. It's also an open question in math — the point where you're finally forced to break the rule is called a <b>van der Waerden number</b>, and for most sizes nobody knows it exactly. What pulled me in is that it's a <b>search problem</b>: you're looking for a coloring that follows the rule for as long as possible. I work in machine learning, where searching a huge space of options is the usual job, so my first instinct was to ask how you'd search this one efficiently. This is the story of why that instinct is wrong, and what works instead.</p>
+  <p class="intro">The point where you're finally forced to break the rule is called a <b>van der Waerden number</b>. I used Fable to search for more of them.</p>
 </header>
 
 <main>
@@ -203,14 +207,14 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
     <p class="readout" id="apReadout"></p>
   </div>
 
-  <p>A run of one color is the obvious trap. The progressions with bigger gaps (heavy outline) are the ones that are easy to miss. More numbers and fewer colors make them harder to avoid — and van der Waerden's theorem says that past a certain point you can't avoid them at all. That cutoff is the number the field is after: <span class="mono">W(r,t)</span> is the smallest count of numbers that forces a monochromatic progression of length <span class="mono">t</span> when you have <span class="mono">r</span> colors. The records here are lower bounds on <span class="mono">W(3,t)</span> — colorings with 3 colors that make it a very long way without one.</p>
+  <p>A run of one color is easy to see the constant gap in (the gap is zero). But the progressions with bigger gaps are the ones that are easy to miss. As the overall length of the line gets longer, and the fewer colors you have, it gets harder to avoid. And van der Waerden's theorem says that past a certain point you can't avoid them at all. That cutoff is the number the field is after: <span class="mono">W(r,t)</span> is the smallest count of numbers that forces a monochromatic progression of length <span class="mono">t</span> when you have <span class="mono">r</span> colors. The records here are lower bounds on <span class="mono">W(3,t)</span> — colorings with 3 colors that make it a very long way without one.</p>
 </section>
 
 <!-- ===================================================================== -->
 <section>
   <p class="eyebrow">Part 2 — the search</p>
   <h2>Too many colorings to search</h2>
-  <p>A <b>lower bound</b> like <span class="mono">W(3,25) > 23,265,537,145</span> is a specific claim: using 3 colors, you can get through the first 23 billion numbers with no monochromatic progression of length 25. To prove it, you need an actual coloring that does this. To find one by brute force, you'd check every possible coloring. There are too many.</p>
+  <p>A <b>lower bound</b> like <span class="mono">W(3,25) > 23,265,537,145</span> is a specific claim: using 3 colors, you can get through the first 23 billion numbers with no monochromatic progression of length 25. To prove it, you need an actual coloring that does this. To find one by brute force, you'd check every possible coloring. </p>
 
   <div class="card">
     <div class="controls">
@@ -223,19 +227,21 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
       </label>
     </div>
     <p class="readout" id="ssReadout"></p>
-    <p class="small">At the real scale, <span class="mono">N</span> is about 23 billion and there are <span class="mono">3<sup>23,000,000,000</sup></span> colorings. That's a number with over <b>11 billion digits</b>. There are about <span class="mono">10⁸⁰</span> atoms in the universe, which is 81 digits. Brute force isn't slow here. It's impossible.</p>
+    <p class="small">At the real scale, <span class="mono">N</span> is about 23 billion and there are <span class="mono">3<sup>23,000,000,000</sup></span> colorings. That's a number with over <b>11 billion digits</b>. There are about <span class="mono">10⁸⁰</span> atoms in the universe, which is 81 digits. Brute force is impossible here.</p>
   </div>
 </section>
 
 <!-- ===================================================================== -->
 <section>
-  <p class="eyebrow">Part 3 — the method</p>
-  <h2>Build one coloring instead</h2>
-  <p>So don't search. Build one coloring you can prove works.</p>
+  <p class="eyebrow">Part 3 — the strategy</p>
+  <h2>Search primes, not colorings</h2>
+  <p>You can't check every coloring — so don't. Restrict to a small, structured family: <b>one coloring for each prime number</b> <span class="mono">p</span>, built by the rule below. Now you're not searching all <span class="mono">3<sup>N</sup></span> colorings, you're searching a plain list of primes — walk them one at a time and keep the best. (If you think in ML terms: you've swapped an impossible search over all functions for a search over one parameter.)</p>
 
-  <p>The recipe uses <b>clock arithmetic</b>. Imagine a clock face with <span class="mono">p</span> hours on it, where <span class="mono">p</span> is a prime number. Whenever a count runs past <span class="mono">p</span>, it wraps back around, and you keep only where the hand lands. (For the math to work, <span class="mono">p</span> has to be one more than a multiple of 3 — like 7, 13, 31, or 61.)</p>
+  <p>The rule is less scary than it sounds. It uses <b>clock arithmetic</b>: you multiply numbers the normal way, but whenever the result runs past <span class="mono">p</span> you wrap around and keep the remainder — the way 14 o'clock is just 2 o'clock on a 12-hour clock. (<span class="mono">p</span> is a prime that's one more than a multiple of 3, like 7, 13, 31, or 61.)</p>
 
-  <p>To pick a number's color, multiply it by itself over and over — <span class="mono">(p−1)/3</span> times — wrapping around the clock at each step. On a clock like this, that always lands on one of exactly <b>three</b> spots. Those three spots are the three colors. Every number sorts into one of them. You don't have to do any of this by hand; the strip below does it for whatever prime you pick. The one thing to hold onto is that the coloring is built out of <b>multiplication</b> — that is what makes it easy to check.</p>
+  <p>Now take one starting number and keep multiplying it by itself, wrapping around the clock each time — it hops to a new spot, then another, then another. With the right starting number, those hops land on <b>every</b> number from 1 to <span class="mono">p−1</span>, each exactly once, before the walk loops back to where it began. So lay the numbers out in the order the walk visits them and count off colors around the loop: <b>A, B, C, A, B, C, …</b> Every third number gets the same color. Three colors, because you're counting in threes.</p>
+
+  <p>That's the whole coloring — the strip below builds it for any prime you pick. The one thing to carry forward: it's made entirely out of multiplying, and that is what makes it cheap to check.</p>
 
   <p>Pick a prime and look at the coloring it produces:</p>
 
@@ -258,6 +264,15 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
   <p>Because the coloring is built out of multiplying, it has a symmetry. Take any evenly-spaced set of numbers and scale the whole thing — multiply every number in it by the same amount — so that it starts at 1. On the clock, multiplying everything by the same amount doesn't change any of their colors. So every evenly-spaced set is just a scaled copy of one that starts at 1.</p>
 
   <p>That collapses the whole check down to looking for <b>runs</b>: stretches of numbers in a row that all came out the same color (the outlined stretch above). If the longest run is shorter than <span class="mono">t</span>, there's no monochromatic progression of length <span class="mono">t</span> anywhere. This is Rabung's criterion, and it's the reason this is cheap: instead of hunting through billions of progressions, you make <b>one pass</b> through the numbers and note the longest run. Do that once per prime. When the run comes up short, the coloring even repeats, tiling outward to cover the first <span class="mono">(t−1)·p</span> numbers.</p>
+
+  <p>Put the two ideas together — a tiny family of candidates, and a cheap check for each — and the whole search is only a few lines:</p>
+  <pre class="algo">for each prime p, working outward to bigger and bigger p:
+    run = longest same-color streak in p's coloring     # one quick pass
+    if run is shorter than t:
+        p works  →  new lower bound   W(3, t) > (t − 1)·p + 1
+keep the largest p that works — that is the record
+</pre>
+  <p>That's the whole strategy: a loop over primes, one cheap pass each, keep the largest winner. And because a bigger prime means a bigger bound, you just push <span class="mono">p</span> as far out as your compute allows — which is exactly why more machines buy bigger records.</p>
 </section>
 
 <!-- ===================================================================== -->

@@ -28,14 +28,8 @@ hero:
     (each one 3 more than the last), or 5, 9, 13 (going up by 4) — all end up
     the same color. How far can you get?
   intro: >-
-    That's the whole problem, and it's harder than it sounds. It's also an open
-    question in math — the point where you're finally forced to break the rule
-    is called a **van der Waerden number**, and for most sizes nobody knows it
-    exactly. What pulled me in is that it's a **search problem**: you're looking
-    for a coloring that follows the rule for as long as possible. I work in
-    machine learning, where searching a huge space of options is the usual job,
-    so my first instinct was to ask how you'd search this one efficiently. This
-    is the story of why that instinct is wrong, and what works instead.
+    The point where you're finally forced to break the rule
+    is called a **van der Waerden number**. I used Fable to search for more of them.
 
 part1:
   eyebrow: Part 1 — the game
@@ -50,9 +44,9 @@ part1:
     watches for monochromatic progressions of the length set by the slider and
     outlines them. See how long you can keep it clean.
   note: >-
-    A run of one color is the obvious trap. The progressions with bigger gaps
-    (heavy outline) are the ones that are easy to miss. More numbers and fewer
-    colors make them harder to avoid — and van der Waerden's theorem says that
+    A run of one color is easy to see the constant gap in (the gap is zero). But the progressions with bigger gaps
+    are the ones that are easy to miss. As the overall length of the line gets longer, and the fewer
+    colors you have, it gets harder to avoid. And van der Waerden's theorem says that
     past a certain point you can't avoid them at all. That cutoff is the number
     the field is after: `W(r,t)` is the smallest count of numbers that forces a
     monochromatic progression of length `t` when you have `r` colors. The
@@ -72,33 +66,44 @@ part2:
     3 colors, you can get through the first 23 billion numbers with no
     monochromatic progression of length 25. To prove it, you need an actual
     coloring that does this. To find one by brute force, you'd check every
-    possible coloring. There are too many.
+    possible coloring. 
   smallprint: >-
     At the real scale, `N` is about 23 billion and there are
     `3<sup>23,000,000,000</sup>` colorings. That's a number with over
     **11 billion digits**. There are about `10⁸⁰` atoms in the universe, which
-    is 81 digits. Brute force isn't slow here. It's impossible.
+    is 81 digits. Brute force is impossible here.
   ui:
     numbers: "numbers colored N:"
     colors: "colors:"
 
 part3:
-  eyebrow: Part 3 — the method
-  h2: Build one coloring instead
-  p1: So don't search. Build one coloring you can prove works.
+  eyebrow: Part 3 — the strategy
+  h2: Search primes, not colorings
+  p1: >-
+    You can't check every coloring — so don't. Restrict to a small, structured
+    family: **one coloring for each prime number** `p`, built by the rule below.
+    Now you're not searching all `3<sup>N</sup>` colorings, you're searching a
+    plain list of primes — walk them one at a time and keep the best. (If you
+    think in ML terms: you've swapped an impossible search over all functions for
+    a search over one parameter.)
   p2: >-
-    The recipe uses **clock arithmetic**. Imagine a clock face with `p` hours on
-    it, where `p` is a prime number. Whenever a count runs past `p`, it wraps
-    back around, and you keep only where the hand lands. (For the math to work,
-    `p` has to be one more than a multiple of 3 — like 7, 13, 31, or 61.)
+    The rule is less scary than it sounds. It uses **clock arithmetic**: you
+    multiply numbers the normal way, but whenever the result runs past `p` you
+    wrap around and keep the remainder — the way 14 o'clock is just 2 o'clock on
+    a 12-hour clock. (`p` is a prime that's one more than a multiple of 3, like
+    7, 13, 31, or 61.)
   p3: >-
-    To pick a number's color, multiply it by itself over and over — `(p−1)/3`
-    times — wrapping around the clock at each step. On a clock like this, that
-    always lands on one of exactly **three** spots. Those three spots are the
-    three colors. Every number sorts into one of them. You don't have to do any
-    of this by hand; the strip below does it for whatever prime you pick. The
-    one thing to hold onto is that the coloring is built out of
-    **multiplication** — that is what makes it easy to check.
+    Now take one starting number and keep multiplying it by itself, wrapping
+    around the clock each time — it hops to a new spot, then another, then
+    another. With the right starting number, those hops land on **every** number
+    from 1 to `p−1`, each exactly once, before the walk loops back to where it
+    began. So lay the numbers out in the order the walk visits them and count off
+    colors around the loop: **A, B, C, A, B, C, …** Every third number gets the
+    same color. Three colors, because you're counting in threes.
+  p3b: >-
+    That's the whole coloring — the strip below builds it for any prime you pick.
+    The one thing to carry forward: it's made entirely out of multiplying, and
+    that is what makes it cheap to check.
   p4: "Pick a prime and look at the coloring it produces:"
   runs_h3: Why you only have to check for runs
   runs_p1: >-
@@ -117,6 +122,20 @@ part3:
     you make **one pass** through the numbers and note the longest run. Do that
     once per prime. When the run comes up short, the coloring even repeats,
     tiling outward to cover the first `(t−1)·p` numbers.
+  algo_intro: >-
+    Put the two ideas together — a tiny family of candidates, and a cheap check
+    for each — and the whole search is only a few lines:
+  algo: |
+    for each prime p, working outward to bigger and bigger p:
+        run = longest same-color streak in p's coloring     # one quick pass
+        if run is shorter than t:
+            p works  →  new lower bound   W(3, t) > (t − 1)·p + 1
+    keep the largest p that works — that is the record
+  algo_note: >-
+    That's the whole strategy: a loop over primes, one cheap pass each, keep the
+    largest winner. And because a bigger prime means a bigger bound, you just push
+    `p` as far out as your compute allows — which is exactly why more machines buy
+    bigger records.
   ui:
     prime: "prime p:"
     length: "required length t:"

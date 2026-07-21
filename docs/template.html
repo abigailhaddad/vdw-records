@@ -159,6 +159,10 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
 .scalerow .val { font-variant-numeric: tabular-nums; font-weight: 600; }
 @media (max-width: 560px){ .scalerow { grid-template-columns: 1fr; gap: 3px; } }
 
+.algo { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px;
+  padding: 16px 18px; margin: 14px 0; overflow-x: auto; white-space: pre;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: .84rem; line-height: 1.6; color: var(--ink); tab-size: 2; }
 .callout { background: var(--warn-bg); border: 1px solid var(--ring); border-radius: 12px; padding: 16px 18px; margin: 18px 0; }
 .footer { color: var(--muted); font-size: .86rem; margin-top: 40px; }
 .kbd { border:1px solid var(--hair); border-bottom-width:2px; border-radius:5px; padding:0 5px; font-size:.8em; }
@@ -236,6 +240,8 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
 
   <p>{{part3.p3}}</p>
 
+  <p>{{part3.p3b}}</p>
+
   <p>{{part3.p4}}</p>
 
   <div class="card">
@@ -257,6 +263,10 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
   <p>{{part3.runs_p1}}</p>
 
   <p>{{part3.runs_p2}}</p>
+
+  <p>{{part3.algo_intro}}</p>
+  <pre class="algo">{{part3.algo}}</pre>
+  <p>{{part3.algo_note}}</p>
 </section>
 
 <!-- ===================================================================== -->

@@ -1,0 +1,99 @@
+name: vdw-scan
+
+# Sharded van der Waerden reach scan. Manual trigger only (workflow_dispatch) --
+# it is compute-heavy, so run it deliberately, not on a tight schedule.
+#
+# Public repo: GitHub-hosted minutes are free. Private repo: each shard-hour
+# counts against the monthly budget (2,000 min free), so a big matrix x long
+# timeout can burn it fast -- size accordingly, or make the repo public.
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "top magnitude to scan down from (e.g. 3e10)"
+        default: "3e10"
+      nshards:
+        description: "parallel shards (concurrency cap ~20 on free tier)"
+        default: "20"
+      count:
+        description: "primes each shard scans"
+        default: "15"
+      timeout:
+        description: "per-shard minutes (<= 350)"
+        default: "300"
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.gen.outputs.shards }}
+    steps:
+      - id: gen
+        run: |
+          echo "shards=$(python3 -c "import json;print(json.dumps(list(range(${{ inputs.nshards }}))))")" >> "$GITHUB_OUTPUT"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # Override the crate's target-cpu=native: the scan runners may have a
+      # different CPU than this build runner, so pin a safe baseline ISA to
+      # avoid SIGILL when the prebuilt binary lands on another machine.
+      - name: Build scanner
+        env:
+          RUSTFLAGS: "-C target-cpu=x86-64-v2"
+        run: cd code/vdw_rust && cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vdw_scan
+          path: code/vdw_rust/target/release/vdw_scan
+
+  scan:
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.timeout) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.setup.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: vdw_scan
+          path: bin
+      - run: chmod +x bin/vdw_scan
+      - name: Scan shard ${{ matrix.shard }}
+        run: |
+          python3 code/scan_shard.py \
+            --start ${{ inputs.start }} \
+            --count ${{ inputs.count }} \
+            --shard ${{ matrix.shard }} \
+            --nshards ${{ inputs.nshards }} \
+            --binary bin/vdw_scan \
+            --out hits-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hits-${{ matrix.shard }}
+          path: hits-${{ matrix.shard }}.json
+
+  collect:
+    needs: scan
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hits-*
+          path: hits
+          merge-multiple: true
+      - name: Summarize
+        run: |
+          python3 code/collect_hits.py hits | tee "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: hits/
