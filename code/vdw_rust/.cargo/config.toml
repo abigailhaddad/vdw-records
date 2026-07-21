@@ -1,0 +1,5 @@
+# Build for the host CPU (enables its full instruction set, ~5-15% on the
+# Montgomery hot loop). Safe here because the binary is always built and run
+# on the same machine; drop this if you ever distribute it.
+[build]
+rustflags = ["-C", "target-cpu=native"]

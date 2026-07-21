@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{meta.title}}</title>
+<style>
+:root {
+  color-scheme: light;
+  --plane:      #f9f9f7;
+  --surface:    #fcfcfb;
+  --ink:        #0b0b0b;
+  --ink-2:      #52514e;
+  --muted:      #898781;
+  --hair:       #e1e0d9;
+  --ring:       rgba(11,11,11,0.10);
+  --c0:         #2a78d6;  /* class 0 — blue   */
+  --c1:         #008300;  /* class 1 — green  */
+  --c2:         #e87ba4;  /* class 2 — magenta*/
+  --accent:     #2a78d6;
+  --good:       #006300;
+  --warn-bg:    #fff4e5;
+  --maxw:       960px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --plane:   #0d0d0d;
+    --surface: #1a1a19;
+    --ink:     #ffffff;
+    --ink-2:   #c3c2b7;
+    --muted:   #898781;
+    --hair:    #2c2c2a;
+    --ring:    rgba(255,255,255,0.10);
+    --c0:      #3987e5;
+    --c1:      #008300;
+    --c2:      #d55181;
+    --accent:  #3987e5;
+    --good:    #0ca30c;
+    --warn-bg: #2a2113;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane:   #0d0d0d;
+  --surface: #1a1a19;
+  --ink:     #ffffff;
+  --ink-2:   #c3c2b7;
+  --muted:   #898781;
+  --hair:    #2c2c2a;
+  --ring:    rgba(255,255,255,0.10);
+  --c0:      #3987e5;
+  --c1:      #008300;
+  --c2:      #d55181;
+  --accent:  #3987e5;
+  --good:    #0ca30c;
+  --warn-bg: #2a2113;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--plane);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.6;
+  font-size: 17px;
+}
+main { max-width: var(--maxw); margin: 0 auto; padding: 0 20px 96px; }
+h1, h2, h3 { line-height: 1.2; letter-spacing: -0.01em; }
+h1 { font-size: clamp(1.9rem, 5vw, 3rem); margin: 0 0 .3em; }
+h2 { font-size: clamp(1.4rem, 3.5vw, 2rem); margin: 2.6em 0 .5em; }
+h3 { font-size: 1.15rem; margin: 1.8em 0 .4em; }
+p { margin: 0 0 1em; }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.92em; }
+.lede { font-size: clamp(1.05rem, 2.2vw, 1.3rem); color: var(--ink-2); max-width: 46ch; }
+.intro { max-width: 62ch; margin-top: 22px; }
+.muted { color: var(--muted); }
+section { border-top: 1px solid var(--hair); }
+.eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: .74rem; font-weight: 700;
+  color: var(--accent); margin: 0 0 .6em; }
+
+/* header */
+header { padding: 72px 20px 40px; max-width: var(--maxw); margin: 0 auto; }
+.theme-toggle { position: fixed; top: 14px; right: 14px; z-index: 20;
+  background: var(--surface); color: var(--ink-2); border: 1px solid var(--hair);
+  border-radius: 999px; padding: 6px 12px; font: inherit; font-size: .82rem; cursor: pointer; }
+.theme-toggle:hover { color: var(--ink); }
+
+/* headline stat band */
+.records-hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px; margin: 28px 0 8px; }
+.stat { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px 18px; }
+.stat .k { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat .l { font-size: .82rem; color: var(--ink-2); margin-top: 2px; }
+
+/* generic card */
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 14px;
+  padding: 20px; margin: 18px 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 16px; }
+.controls label { font-size: .9rem; color: var(--ink-2); display: inline-flex; align-items: center; gap: 8px; }
+button.btn, select {
+  font: inherit; font-size: .9rem; background: var(--plane); color: var(--ink);
+  border: 1px solid var(--hair); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button.btn:hover { border-color: var(--accent); }
+input[type=range] { accent-color: var(--accent); vertical-align: middle; }
+
+/* legend */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .85rem; color: var(--ink-2); margin: 4px 0 0; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--ring); display: inline-block; }
+
+/* integer strip (AP game) — clickable cells with class letters */
+.strip { display: grid; gap: 4px; margin: 6px 0 2px; }
+.cell {
+  aspect-ratio: 1 / 1; border-radius: 6px; border: 1px solid var(--ring);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .8rem; font-weight: 700; color: rgba(255,255,255,.92);
+  cursor: pointer; user-select: none; position: relative; transition: transform .05s;
+  font-variant-numeric: tabular-nums;
+}
+.cell:active { transform: scale(.92); }
+.cell.k0 { background: var(--c0); }
+.cell.k1 { background: var(--c1); }
+.cell.k2 { background: var(--c2); }
+.cell .idx { position: absolute; bottom: 1px; right: 3px; font-size: .58rem; font-weight: 500;
+  color: rgba(255,255,255,.75); }
+.cell.hit { outline: 3px solid var(--ink); outline-offset: 1px; z-index: 2; }
+
+/* dense residue strip */
+.dstrip { display: flex; flex-wrap: wrap; gap: 2px; margin: 8px 0; }
+.dcell { width: 16px; height: 22px; border-radius: 3px; }
+.dcell.k0 { background: var(--c0); } .dcell.k1 { background: var(--c1); } .dcell.k2 { background: var(--c2); }
+.dcell.run { outline: 2px solid var(--ink); outline-offset: 1px; }
+.readout { font-size: .95rem; margin-top: 10px; }
+.readout b { font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .82rem; font-weight: 600; }
+.pill.ok { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+.pill.no { background: color-mix(in srgb, #d03b3b 18%, transparent); color: #d03b3b; }
+:root[data-theme="dark"] .pill.no, @media (prefers-color-scheme: dark){ .pill.no { color:#e66767; } }
+
+/* table */
+table { width: 100%; border-collapse: collapse; font-size: .92rem; margin: 12px 0; }
+th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--hair);
+  font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+thead th { color: var(--ink-2); font-weight: 600; border-bottom: 1px solid var(--ring); }
+tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.delta { color: var(--good); font-weight: 600; }
+
+/* number-scale visual */
+.scaleviz { display: grid; gap: 10px; margin: 14px 0; }
+.scalerow { display: grid; grid-template-columns: 190px 1fr; gap: 12px; align-items: center; font-size: .88rem; }
+.scalebar { height: 22px; border-radius: 6px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 40%, var(--surface)));
+  position: relative; min-width: 3px; }
+.scalerow .lab { color: var(--ink-2); }
+.scalerow .val { font-variant-numeric: tabular-nums; font-weight: 600; }
+@media (max-width: 560px){ .scalerow { grid-template-columns: 1fr; gap: 3px; } }
+
+.callout { background: var(--warn-bg); border: 1px solid var(--ring); border-radius: 12px; padding: 16px 18px; margin: 18px 0; }
+.footer { color: var(--muted); font-size: .86rem; margin-top: 40px; }
+.kbd { border:1px solid var(--hair); border-bottom-width:2px; border-radius:5px; padding:0 5px; font-size:.8em; }
+.small { font-size: .88rem; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle light and dark">{{meta.theme_button}}</button>
+
+<header>
+  <p class="eyebrow">{{hero.eyebrow}}</p>
+  <h1>{{hero.h1}}</h1>
+  <p class="lede">{{hero.lede}}</p>
+  <p class="intro">{{hero.intro}}</p>
+</header>
+
+<main>
+
+<!-- ===================================================================== -->
+<section>
+  <p class="eyebrow" style="margin-top:2.6em">{{part1.eyebrow}}</p>
+  <h2>{{part1.h2}}</h2>
+  <p>{{part1.p1}}</p>
+
+  <p>{{part1.p2}}</p>
+
+  <div class="card">
+    <div class="controls">
+      <label>{{part1.ui.colors}}
+        <select id="apColors"><option value="2">2</option><option value="3" selected>3</option></select>
+      </label>
+      <label>{{part1.ui.length}}
+        <input type="range" id="apT" min="3" max="5" value="4" style="width:120px">
+        <span class="mono" id="apTval">4</span>
+      </label>
+      <button class="btn" id="apRandom">{{part1.ui.random}}</button>
+      <button class="btn" id="apReset">{{part1.ui.reset}}</button>
+    </div>
+    <div class="strip" id="apStrip"></div>
+    <div class="legend" id="apLegend"></div>
+    <p class="readout" id="apReadout"></p>
+  </div>
+
+  <p>{{part1.note}}</p>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+  <p class="eyebrow">{{part2.eyebrow}}</p>
+  <h2>{{part2.h2}}</h2>
+  <p>{{part2.p1}}</p>
+
+  <div class="card">
+    <div class="controls">
+      <label>{{part2.ui.numbers}}
+        <input type="range" id="ssN" min="10" max="70" value="30" style="width:180px">
+        <span class="mono" id="ssNval">30</span>
+      </label>
+      <label>{{part2.ui.colors}}
+        <select id="ssR"><option>2</option><option selected>3</option></select>
+      </label>
+    </div>
+    <p class="readout" id="ssReadout"></p>
+    <p class="small">{{part2.smallprint}}</p>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+  <p class="eyebrow">{{part3.eyebrow}}</p>
+  <h2>{{part3.h2}}</h2>
+  <p>{{part3.p1}}</p>
+
+  <p>{{part3.p2}}</p>
+
+  <p>{{part3.p3}}</p>
+
+  <p>{{part3.p4}}</p>
+
+  <div class="card">
+    <div class="controls">
+      <label>{{part3.ui.prime}}
+        <select id="rpPrime"></select>
+      </label>
+      <label>{{part3.ui.length}}
+        <input type="range" id="rpT" min="3" max="12" value="5" style="width:120px">
+        <span class="mono" id="rpTval">5</span>
+      </label>
+    </div>
+    <div class="legend" id="rpLegend"></div>
+    <div class="dstrip" id="rpStrip"></div>
+    <p class="readout" id="rpReadout"></p>
+  </div>
+
+  <h3>{{part3.runs_h3}}</h3>
+  <p>{{part3.runs_p1}}</p>
+
+  <p>{{part3.runs_p2}}</p>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+  <p class="eyebrow">{{part4.eyebrow}}</p>
+  <h2>{{part4.h2}}</h2>
+  <p>{{part4.p1}}</p>
+
+  <p style="text-align:center"><span class="mono" style="font-size:1.05rem">
+  {{part4.formula}}</span> &nbsp; {{part4.formula_suffix}}</p>
+
+  <p>{{part4.p2}}</p>
+
+  <div class="card">
+    <div class="controls">
+      <label>{{part4.ui.prime}}
+        <input type="range" id="lvP" min="6" max="13" value="9" step="0.05" style="width:220px">
+        <span class="mono" id="lvPval"></span>
+      </label>
+    </div>
+    <div class="scaleviz" id="lvViz"></div>
+    <p class="readout small" id="lvReadout"></p>
+  </div>
+
+  <div class="callout">
+    {{part4.callout}}
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+  <p class="eyebrow">{{part5.eyebrow}}</p>
+  <h2>{{part5.h2}}</h2>
+  <p>{{part5.p1}}</p>
+  <div class="records-hero" id="recordsHero"></div>
+
+  <table id="recTable">
+    <thead><tr><th>{{part5.th.name}}</th><th>{{part5.th.prev}}</th><th>{{part5.th.new}}</th><th>{{part5.th.gain}}</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <p class="small">{{part5.smallprint}}</p>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+  <p class="eyebrow">{{part6.eyebrow}}</p>
+  <h2>{{part6.h2}}</h2>
+  <p>{{part6.p1}}</p>
+  <p>{{part6.p2}}</p>
+
+  <p class="footer">
+  {{part6.footer}}
+  </p>
+</section>
+
+</main>
+
+<script>
+"use strict";
+
+/* Copy for the live (slider/click) readouts. Injected from content.yaml at
+   build time (docs/build.py) — edit the text there, not here. {curly} bits are
+   filled in at runtime. */
+var CONTENT = {{__CONTENT_JSON__}};
+function fill(t, o) { return t.replace(/\{(\w+)\}/g, function (m, k) { return String(o[k]); }); }
+
+/* ---------- theme toggle ---------- */
+(function () {
+  var btn = document.getElementById("themeToggle");
+  btn.addEventListener("click", function () {
+    var root = document.documentElement;
+    var cur = root.getAttribute("data-theme");
+    var dark = cur ? cur === "dark"
+                   : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.setAttribute("data-theme", dark ? "light" : "dark");
+  });
+})();
+
+/* ---------- shared helpers ---------- */
+var CLASS_NAMES = ["A", "B", "C"];
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function fmt(n) { return n.toLocaleString("en-US"); }
+
+/* modular exponentiation for small p (p*p fits in a double) */
+function powmod(a, e, p) {
+  var r = 1; a = a % p;
+  while (e > 0) { if (e & 1) r = (r * a) % p; a = (a * a) % p; e = Math.floor(e / 2); }
+  return r;
+}
+function primeFactors(m) {
+  var f = [], d = 2;
+  while (d * d <= m) { if (m % d === 0) { f.push(d); while (m % d === 0) m /= d; } d++; }
+  if (m > 1) f.push(m);
+  return f;
+}
+function primitiveRoot(p) {
+  var fac = primeFactors(p - 1);
+  for (var g = 2; g < p; g++) {
+    var ok = true;
+    for (var i = 0; i < fac.length; i++) if (powmod(g, (p - 1) / fac[i], p) === 1) { ok = false; break; }
+    if (ok) return g;
+  }
+  return 2;
+}
+/* cubic-residue coloring of 1..p-1 via the generator walk: class = exponent mod 3 */
+function residueColoring(p) {
+  var g = primitiveRoot(p), color = new Array(p), v = 1;
+  for (var i = 0; i < p - 1; i++) { color[v] = i % 3; v = (v * g) % p; }
+  var arr = new Array(p - 1);
+  for (var n = 1; n <= p - 1; n++) arr[n - 1] = color[n];
+  return arr;
+}
+/* longest run + its [start,end); also the leading run length */
+function runStats(arr) {
+  var best = 1, bestStart = 0, cur = 1, curStart = 0, lead = 1, leadOpen = true;
+  for (var i = 1; i < arr.length; i++) {
+    if (arr[i] === arr[i - 1]) { cur++; if (cur > best) { best = cur; bestStart = curStart; } }
+    else { curStart = i; cur = 1; leadOpen = false; }
+    if (leadOpen) lead = cur;
+  }
+  return { best: best, start: bestStart, end: bestStart + best, lead: lead };
+}
+
+/* ---------- records data ---------- */
+var P_REC = 969397381, P_PREV = { 19:969397381-0, 20:0,21:0,22:0,23:0,24:0,25:0 };
+var PREV_BOUND = { /* Monroe 2025 previous lower bounds */
+  19: 17449137523, 20: 18418533254, 21: 19387932141, 22: 20357316652,
+  23: 21326716247, 24: 22296077664, 25: 23265085993
+};
+function newBound(t) { return (t - 1) * P_REC + 1; }
+
+(function fillHero() {
+  var el = document.getElementById("recordsHero");
+  el.innerHTML = CONTENT.hero_stats.map(function (it) {
+    return '<div class="stat"><div class="k">' + it.k + '</div><div class="l">' + it.l + '</div></div>';
+  }).join("");
+})();
+
+(function fillRecTable() {
+  var tb = document.querySelector("#recTable tbody"), rows = "";
+  for (var t = 19; t <= 25; t++) {
+    var nb = newBound(t), pb = PREV_BOUND[t], gain = nb - pb;
+    rows += "<tr><td>W(3," + t + ")</td><td>&gt; " + fmt(pb) + "</td><td>&gt; " + fmt(nb) +
+            '</td><td class="delta">+' + fmt(gain) + "</td></tr>";
+  }
+  tb.innerHTML = rows;
+})();
+
+/* ---------- Part 1: AP game ---------- */
+(function apGame() {
+  var N = 27;
+  var stripEl = document.getElementById("apStrip");
+  var readoutEl = document.getElementById("apReadout");
+  var legendEl = document.getElementById("apLegend");
+  var tSlider = document.getElementById("apT");
+  var tVal = document.getElementById("apTval");
+  var colorsSel = document.getElementById("apColors");
+  var colors = new Array(N).fill(0);
+  var nColors = 3;
+
+  function drawLegend() {
+    var s = "";
+    for (var k = 0; k < nColors; k++) {
+      s += '<span><span class="swatch" style="background:var(--c' + k + ')"></span>class ' +
+           CLASS_NAMES[k] + "</span>";
+    }
+    legendEl.innerHTML = s;
+  }
+  function build() {
+    stripEl.style.gridTemplateColumns = "repeat(" + N + ", 1fr)";
+    var s = "";
+    for (var i = 0; i < N; i++) {
+      s += '<div class="cell k' + colors[i] + '" data-i="' + i + '">' + CLASS_NAMES[colors[i]] +
+           '<span class="idx">' + (i + 1) + "</span></div>";
+    }
+    stripEl.innerHTML = s;
+  }
+  /* find every monochromatic AP of length t; return set of hit indices + count */
+  function findAPs(t) {
+    var hits = new Set(), count = 0;
+    for (var a = 0; a < N; a++) {
+      for (var d = 1; a + (t - 1) * d < N; d++) {
+        var c = colors[a], ok = true;
+        for (var j = 1; j < t; j++) if (colors[a + j * d] !== c) { ok = false; break; }
+        if (ok) { count++; for (var j2 = 0; j2 < t; j2++) hits.add(a + j2 * d); }
+      }
+    }
+    return { hits: hits, count: count };
+  }
+  function refresh() {
+    var t = +tSlider.value;
+    tVal.textContent = t;
+    var r = findAPs(t);
+    var cells = stripEl.children;
+    for (var i = 0; i < cells.length; i++) cells[i].classList.toggle("hit", r.hits.has(i));
+    if (r.count === 0) {
+      readoutEl.innerHTML = '<span class="pill ok">' + CONTENT.ap_clean_pill + '</span> &nbsp;' +
+        fill(CONTENT.ap_clean, { t: t });
+    } else {
+      readoutEl.innerHTML = '<span class="pill no">' + fill(CONTENT.ap_found_pill, { count: r.count }) +
+        '</span> &nbsp;' + fill(CONTENT.ap_found, {
+          count: r.count, s: r.count > 1 ? "s" : "", t: t, them: r.count > 1 ? "them" : "it"
+        });
+    }
+  }
+  stripEl.addEventListener("click", function (e) {
+    var cell = e.target.closest(".cell"); if (!cell) return;
+    var i = +cell.dataset.i;
+    colors[i] = (colors[i] + 1) % nColors;
+    cell.className = "cell k" + colors[i];
+    cell.firstChild.nodeValue = CLASS_NAMES[colors[i]];
+    refresh();
+  });
+  tSlider.addEventListener("input", refresh);
+  colorsSel.addEventListener("change", function () {
+    nColors = +colorsSel.value;
+    for (var i = 0; i < N; i++) colors[i] = colors[i] % nColors;
+    drawLegend(); build(); refresh();
+  });
+  document.getElementById("apRandom").addEventListener("click", function () {
+    for (var i = 0; i < N; i++) colors[i] = Math.floor(Math.random() * nColors);
+    build(); refresh();
+  });
+  document.getElementById("apReset").addEventListener("click", function () {
+    colors.fill(0); build(); refresh();
+  });
+  drawLegend(); build();
+  /* a deliberately interesting start: a coloring with one hidden AP */
+  var seed = [0,1,2,0,1,2,0,1,2,1,0,2,1,0,2,2,1,0,0,2,1,1,2,0,2,0,1];
+  for (var i = 0; i < N; i++) colors[i] = seed[i] % nColors;
+  build(); refresh();
+})();
+
+/* ---------- Part 2: search-space size ---------- */
+(function searchSpace() {
+  var nS = document.getElementById("ssN"), nV = document.getElementById("ssNval");
+  var rS = document.getElementById("ssR"), out = document.getElementById("ssReadout");
+  function digits(base, exp) { return exp * Math.log10(base); } // # decimal digits of base^exp
+  function refresh() {
+    var N = +nS.value, r = +rS.value; nV.textContent = N;
+    var d = digits(r, N);
+    var count;
+    if (N * Math.log10(r) < 15) count = fmt(Math.round(Math.pow(r, N)));
+    else count = fill(CONTENT.ss_bignum, { r: r, N: N, digits: Math.floor(d + 1) });
+    out.innerHTML = fill(CONTENT.ss_line, { N: N, r: r, count: count }) + " " +
+      (d > 81 ? CONTENT.ss_over : CONTENT.ss_under);
+  }
+  nS.addEventListener("input", refresh); rS.addEventListener("change", refresh);
+  refresh();
+})();
+
+/* ---------- Part 3: residue coloring viewer ---------- */
+(function residueViewer() {
+  var primes = [13, 31, 61, 127, 271, 631, 1093];
+  var sel = document.getElementById("rpPrime");
+  sel.innerHTML = primes.map(function (p) { return "<option>" + p + "</option>"; }).join("");
+  sel.value = "61";
+  var stripEl = document.getElementById("rpStrip");
+  var readoutEl = document.getElementById("rpReadout");
+  var legendEl = document.getElementById("rpLegend");
+  var tS = document.getElementById("rpT"), tV = document.getElementById("rpTval");
+
+  legendEl.innerHTML = [0,1,2].map(function (k) {
+    return '<span><span class="swatch" style="background:var(--c' + k + ')"></span>' +
+           CONTENT.legend_class + " " + CLASS_NAMES[k] + "</span>";
+  }).join("") + '<span class="muted">' + CONTENT.rp_legend_note + "</span>";
+
+  function refresh() {
+    var p = +sel.value, t = +tS.value; tV.textContent = t;
+    var arr = residueColoring(p), rs = runStats(arr);
+    /* size cells to fit narrow p; wider for small p */
+    var w = p <= 130 ? 16 : (p <= 320 ? 10 : 6);
+    stripEl.innerHTML = arr.map(function (c, i) {
+      var run = (i >= rs.start && i < rs.end) ? " run" : "";
+      return '<div class="dcell k' + c + run + '" style="width:' + w + 'px;height:' +
+             (w < 10 ? 16 : 22) + 'px" title="n=' + (i + 1) + ' → class ' + CLASS_NAMES[c] + '"></div>';
+    }).join("");
+    var valid = rs.best < t;
+    var pill = valid
+      ? '<span class="pill ok">' + fill(CONTENT.rp_pill_ok, { t: t }) + "</span>"
+      : '<span class="pill no">' + fill(CONTENT.rp_pill_no, { t: t }) + "</span>";
+    var tail = valid
+      ? fill(CONTENT.rp_valid, { t: t, bound: fmt((t - 1) * p + 1) })
+      : fill(CONTENT.rp_invalid, { t: t });
+    readoutEl.innerHTML =
+      fill(CONTENT.rp_prefix, { max: p - 1, best: rs.best }) + " &nbsp; " + pill + " &nbsp;" + tail;
+  }
+  sel.addEventListener("change", refresh);
+  tS.addEventListener("input", refresh);
+  refresh();
+})();
+
+/* ---------- Part 4: leverage slider ---------- */
+(function leverage() {
+  var pS = document.getElementById("lvP"), pV = document.getElementById("lvPval");
+  var viz = document.getElementById("lvViz"), out = document.getElementById("lvReadout");
+  function refresh() {
+    var exp = +pS.value, p = Math.pow(10, exp);
+    pV.textContent = "10^" + exp.toFixed(2) + " ≈ " + fmt(Math.round(p));
+    var run = Math.round(Math.log(p) / Math.log(3)); // ~ log_3 p
+    var rows = [
+      { lab: CONTENT.lv_row_run, val: String(run), frac: run / 30 },
+      { lab: CONTENT.lv_row_record, val: fmt(Math.round(24 * p)), frac: exp / 13 },
+      { lab: CONTENT.lv_row_primes, val: "1", frac: 0.02 }
+    ];
+    viz.innerHTML = rows.map(function (r) {
+      return '<div class="scalerow"><span class="lab">' + r.lab +
+        '</span><div><div class="scalebar" style="width:' +
+        Math.max(2, Math.min(100, r.frac * 100)) + '%"></div>' +
+        '<span class="val">' + r.val + "</span></div></div>";
+    }).join("");
+    out.innerHTML = fill(CONTENT.lv_readout, { p: fmt(Math.round(p)), run: run });
+  }
+  pS.addEventListener("input", refresh);
+  refresh();
+})();
+</script>
+</body>
+</html>

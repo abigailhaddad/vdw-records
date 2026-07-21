@@ -287,12 +287,118 @@ passed). Recommended outreach: email Monroe (contact on arXiv
 1603.03301 / github.com/hmonroe/vdw) with notebook + VDW_RECORDS.json;
 Heule (CMU) as second reader.
 
+### vdw_reach.py efficiency pass (2026-07-20, later same day)
+
+Made `code/vdw_reach.py` (the outward-reach scanner for large-p records)
+substantially faster. Three changes, all validated byte-for-byte against
+the previous committed version before trusting:
+
+1. **Barrett modular multiply** replaces the hi/lo-split `mulmod` used
+   above SAFE_MUL (p > 3e9). `q = floor(a*b/p)` via float64 (exact — the
+   quotient is < p < 2^40 and float64 carries 53 bits), then `r = a*b -
+   q*p` in wrapping int64 with two branchless corrections. No int64
+   division anywhere. ~2x the per-element throughput of the split
+   (0.65 → 1.04 M elem/s single-core on the M2).
+2. **Process-pool parallelism** on both scan paths (`--workers`, default
+   cores−2 = 6 here). Streaming path computes independent blocks in
+   parallel but yields them strictly in order, so the run accumulator
+   stays sequential and results are bit-identical to serial. Group-walk
+   path scatters into a `multiprocessing.SharedMemory` coloring buffer;
+   walk blocks hit disjoint positions so workers never collide.
+3. **Doubling for the powers table** (`_powers_table`): log2(block)
+   vectorized multiplies instead of a block-long Python loop (1.7s →
+   0.05s per table; a fixed per-block overhead in the group walk).
+
+Net: a full p≈3e10 streaming scan drops from ~12.8h (old serial split)
+to ~4.4h measured. Group-walk record prime (p=969,397,381) scans+verifies
+in ~95s. **Memory is unchanged** — group walk still ~p bytes (the shared
+buffer is the same array, not a copy), streaming still ~block bytes flat.
+The parallel speedup is sub-linear (~1.8x on 6 cores) because numpy
+allocates fresh 64MB temporaries per op and the cross-process
+mmap/munmap churn is the bottleneck, not CPU — a buffered/out= kernel
+was drafted to test this but not adopted (correctness-first; the current
+kernel is the one validated against the old code).
+
+**Latent bug caught in passing:** the old `_RunAccumulator` computed the
+*leading run* wrong when the first fed block was entirely one color and
+the color changed only in a later block (it reported the offset within
+the second block, ignoring the uniform prefix — e.g. 2 instead of 12).
+This only affects the streaming path (p > MEM_CAP), and **no saved record
+was affected** (every recorded prime has leading run 1, which resolves
+inside the first block; the overnight streaming run had crashed on an
+unrelated IndexError before saving anything). Fixed by tracking total
+elements fed; verified with a 3000-case fuzz vs a naive scanner plus a
+crafted regression case. Also fixed that same IndexError crash: a
+float-rounded cube-root residue could land `searchsorted` past the array
+end — now clamped, with the existing `roots[pos] == acc` guard still
+catching any genuine non-root.
+
+Validation harness: `scratchpad/validate_reach.py` — 9 checks (mulmod
+both branches + adversarial edges, powers table incl. p>SAFE_MUL, serial
+coloring byte-identical to old, parallel==serial on both paths, stream
+block above SAFE_MUL vs scalar pow, accumulator fuzz, record prime
+end-to-end + verify). All pass. (Scratchpad is session-tmp; the harness
+is disposable — the code changes are the deliverable.)
+
+### Rust port + numpy tuning + web explainer (2026-07-21)
+
+The "C/Rust port" open move is DONE (Rust). `code/vdw_rust/` — a
+streaming-only scanner (constant memory, the reach regime) invoked as a
+standalone binary; `vdw_reach.py` shells out to it via `--engine
+{auto,numpy,rust}` (auto uses Rust for p>MEM_CAP if the binary is built,
+keeps the numpy group walk for small p where 1 modmul/elem still wins).
+
+- Three speedups, each validated byte-for-byte against numpy before
+  trusting: (1) **Montgomery multiplication** (REDC, division-free) — the
+  real lever, since a naive `u128 %` modmul merely TIES numpy's Barrett
+  trick (both ~54s on the record prime; the bottleneck was the u128
+  division, exactly as the efficiency note predicted). (2) **4-lane ILP**:
+  a modpow is a latency-bound dependency chain, so `pow4` runs four
+  independent bases in lockstep (same exponent e ⇒ identical
+  square/multiply schedule, no per-lane branch) and fills the pipeline.
+  (3) `target-cpu=native`. Record prime (p=969,397,381, full scan):
+  **11.0s** vs numpy streaming 54s ≈ **4.9x**. Breakdown: u128 53s →
+  Montgomery 30s → +ILP/native 11s.
+- Validation: identical (max_run, lead, first, last) to the numpy stream
+  path over 276 primes; chunk-invariance + tail/batch stress (chunk sizes
+  1,2,3). The Rust labeling is the canonical sorted-cube-root labeling =
+  numpy stream path exactly. Verify path varies the CHUNK size (canonical
+  labels make a different generator a no-op; the only nontrivial logic is
+  the parallel run-carry stitch).
+- **numpy tuning**: measured block-size sweep on the stream path (p≈1e9
+  full scan): 2^21 = 79.8s beats the old 2^23 = 92.4s default by ~14%.
+  Changed the stream block default 2^23→2^21. The in-place `out=` kernel
+  was NOT adopted — marginal + bug-risk, and numpy is now only the
+  fallback.
+- Reality check: near the frontier (p up to ~3e10) typical max_run is
+  18–22, BELOW the 25 abort, so every scan is a FULL scan — throughput is
+  the cost driver, not abort (the abort is effectively dormant until
+  p~3^25~8e11). This is why the port matters.
+- Machine has 16GB RAM, so a Rust GROUP WALK (1 modmul/elem, needs ~p
+  bytes) is not viable past ~1.4e10; streaming (modpow/elem) is the right
+  call for reach. Next single-core lever if ever needed: nothing cheap
+  left (windowing is a dead end for fixed-exp/varying-base; NEON SIMD is
+  the only remaining ~2x and it's a big lift on ARM).
+
+Web explainer: `docs/` (GitHub Pages, Settings→Pages→main /docs). Built
+from `docs/content.yaml` (all copy, markdown-lite) + `docs/template.html`
+(markup + vanilla-JS interactives) via `python3 docs/build.py` →
+`docs/index.html` (generated, has a do-not-edit banner). Six parts, three
+live visuals (coloring game, cubic-residue coloring w/ longest-run
+outline, leverage slider), records table computed live and matching
+VDW_RECORDS.json. Written for a newcomer: opens with the game, frames it
+as a search problem, explains the method as "clock arithmetic," records
+are the payoff at the end. Colorblind-safe validated palette.
+
 ### Remaining open moves (if we continue)
 - W(3,17) and W(3,18) cells not yet beaten (need a frontier prime with
   max run <= 16 / 17; our best had 18). More scanning could hit one.
 - Continued r=3 scanning only nudges the same cells up marginally —
   the frontier jump has been made; diminishing returns per prime.
-- C port of the scanner for throughput (user's suggestion, still valid).
+- C/Rust port: DONE (Rust, ~4.9x — see the 2026-07-21 subsection above).
+  Real bottleneck turned out to be the modmul division, not numpy
+  allocation churn; Montgomery + ILP fixed it. No cheap single-core lever
+  left beyond a hard NEON-SIMD rewrite.
 - Write-up: a short note in Monroe's format (method, primes, bounds,
   certificate data) would make these citable; his tables cite exactly
   this kind of result. Data + code all in this repo.
@@ -315,8 +421,22 @@ Heule (CMU) as second reader.
 ## How to resume after /clear
 
 Everything needed is in this repo: this file + `code/` + `seeds/`.
-Scratchpad (session-tmp, will vanish): venv `satenv/`, task outputs.
+Scratchpad (session-tmp, will vanish): venv `satenv/`, task outputs, and
+the `validate_reach.py` harness (disposable — code changes are committed).
 To re-run anything: scripts are self-contained CLIs, see docstrings.
-Check whether background jobs finished; their key results are (or will be)
-recorded above. Next actions: (1) ingest vdW research when agent returns,
-(2) build prime-scan engine, (3) scan beyond known frontiers.
+
+State as of last update: the 7 records (W(3,19)..W(3,25)) are set,
+verified, and written up in the notebook + VDW_RECORDS.json. The reach
+scanner `code/vdw_reach.py` has had its efficiency pass (Barrett mulmod,
+process-pool parallelism, doubling powers table — see the 2026-07-20
+efficiency subsection above); ~4.4h for a p≈3e10 streaming scan, ~95s for
+the record prime. Run it with:
+  python3 code/vdw_reach.py --near 5e9              # one prime just below
+  python3 code/vdw_reach.py --sweep 2e9,4e9,8e9     # several magnitudes
+  python3 code/vdw_reach.py --hours 8               # overnight reach+hunt
+  python3 code/vdw_reach.py --near 3e10 --workers 4 # cap the pool width
+
+Next actions if resuming: (1) actually run a long reach/hunt scan to try
+for a bigger frontier prime or a max-run<=17 prime (would beat W(3,17/18));
+(2) the Monroe-format write-up + outreach email (see outreach package
+above); (3) if throughput still matters, the C/Rust port (see open moves).

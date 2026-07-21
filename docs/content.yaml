@@ -1,0 +1,217 @@
+# ─────────────────────────────────────────────────────────────────────────
+#  Copy for the van der Waerden explainer.
+#
+#  Edit the text here, then rebuild the page:
+#      python3 docs/build.py
+#  and refresh your browser. The HTML structure and the interactive code live
+#  in docs/template.html; you shouldn't need to touch that.
+#
+#  Formatting: write plain text. Use **double asterisks** for bold and
+#  `backticks` for code-style bits (primes, formulas, W(3,t)). Raw HTML also
+#  works if you need it (e.g. <sup>2</sup> for a superscript).
+#
+#  In the "dynamic" section at the bottom, things in {curly braces} are filled
+#  in live by the page (counts, the prime you picked, the record it sets). Keep
+#  those placeholders; reword the text around them however you like.
+# ─────────────────────────────────────────────────────────────────────────
+
+meta:
+  title: Coloring numbers without making a pattern
+  theme_button: "◐ theme"
+
+hero:
+  eyebrow: a search problem, explained from scratch
+  h1: Coloring numbers without making a pattern
+  lede: >-
+    Here's a game. Color the numbers 1, 2, 3, and so on, using a few colors.
+    One rule: you can't let a set of evenly-spaced numbers — like 3, 6, 9, 12
+    (each one 3 more than the last), or 5, 9, 13 (going up by 4) — all end up
+    the same color. How far can you get?
+  intro: >-
+    That's the whole problem, and it's harder than it sounds. It's also an open
+    question in math — the point where you're finally forced to break the rule
+    is called a **van der Waerden number**, and for most sizes nobody knows it
+    exactly. What pulled me in is that it's a **search problem**: you're looking
+    for a coloring that follows the rule for as long as possible. I work in
+    machine learning, where searching a huge space of options is the usual job,
+    so my first instinct was to ask how you'd search this one efficiently. This
+    is the story of why that instinct is wrong, and what works instead.
+
+part1:
+  eyebrow: Part 1 — the game
+  h2: Try it yourself
+  p1: >-
+    The evenly-spaced sets have a name: an **arithmetic progression** is a set
+    of numbers with a constant gap, like 2, 5, 8, 11 (gap of 3). It's
+    **monochromatic** when they're all the same color — that's the thing you're
+    trying to avoid.
+  p2: >-
+    Below is a row of numbers. **Click a cell to change its color.** The strip
+    watches for monochromatic progressions of the length set by the slider and
+    outlines them. See how long you can keep it clean.
+  note: >-
+    A run of one color is the obvious trap. The progressions with bigger gaps
+    (heavy outline) are the ones that are easy to miss. More numbers and fewer
+    colors make them harder to avoid — and van der Waerden's theorem says that
+    past a certain point you can't avoid them at all. That cutoff is the number
+    the field is after: `W(r,t)` is the smallest count of numbers that forces a
+    monochromatic progression of length `t` when you have `r` colors. The
+    records here are lower bounds on `W(3,t)` — colorings with 3 colors that
+    make it a very long way without one.
+  ui:
+    colors: "colors:"
+    length: "length t:"
+    random: Random coloring
+    reset: All one color
+
+part2:
+  eyebrow: Part 2 — the search
+  h2: Too many colorings to search
+  p1: >-
+    A **lower bound** like `W(3,25) > 23,265,537,145` is a specific claim: using
+    3 colors, you can get through the first 23 billion numbers with no
+    monochromatic progression of length 25. To prove it, you need an actual
+    coloring that does this. To find one by brute force, you'd check every
+    possible coloring. There are too many.
+  smallprint: >-
+    At the real scale, `N` is about 23 billion and there are
+    `3<sup>23,000,000,000</sup>` colorings. That's a number with over
+    **11 billion digits**. There are about `10⁸⁰` atoms in the universe, which
+    is 81 digits. Brute force isn't slow here. It's impossible.
+  ui:
+    numbers: "numbers colored N:"
+    colors: "colors:"
+
+part3:
+  eyebrow: Part 3 — the method
+  h2: Build one coloring instead
+  p1: So don't search. Build one coloring you can prove works.
+  p2: >-
+    The recipe uses **clock arithmetic**. Imagine a clock face with `p` hours on
+    it, where `p` is a prime number. Whenever a count runs past `p`, it wraps
+    back around, and you keep only where the hand lands. (For the math to work,
+    `p` has to be one more than a multiple of 3 — like 7, 13, 31, or 61.)
+  p3: >-
+    To pick a number's color, multiply it by itself over and over — `(p−1)/3`
+    times — wrapping around the clock at each step. On a clock like this, that
+    always lands on one of exactly **three** spots. Those three spots are the
+    three colors. Every number sorts into one of them. You don't have to do any
+    of this by hand; the strip below does it for whatever prime you pick. The
+    one thing to hold onto is that the coloring is built out of
+    **multiplication** — that is what makes it easy to check.
+  p4: "Pick a prime and look at the coloring it produces:"
+  runs_h3: Why you only have to check for runs
+  runs_p1: >-
+    Because the coloring is built out of multiplying, it has a symmetry. Take
+    any evenly-spaced set of numbers and scale the whole thing — multiply every
+    number in it by the same amount — so that it starts at 1. On the clock,
+    multiplying everything by the same amount doesn't change any of their
+    colors. So every evenly-spaced set is just a scaled copy of one that starts
+    at 1.
+  runs_p2: >-
+    That collapses the whole check down to looking for **runs**: stretches of
+    numbers in a row that all came out the same color (the outlined stretch
+    above). If the longest run is shorter than `t`, there's no monochromatic
+    progression of length `t` anywhere. This is Rabung's criterion, and it's the
+    reason this is cheap: instead of hunting through billions of progressions,
+    you make **one pass** through the numbers and note the longest run. Do that
+    once per prime. When the run comes up short, the coloring even repeats,
+    tiling outward to cover the first `(t−1)·p` numbers.
+  ui:
+    prime: "prime p:"
+    length: "required length t:"
+
+part4:
+  eyebrow: Part 4 — the leverage
+  h2: One test, not a billion
+  p1: >-
+    The run-check is the whole method, and it has a useful property. As the
+    prime gets bigger, its longest run barely grows — it creeps up like a
+    logarithm, only reaching about 19 even when the prime is near a billion. But
+    the record you get out grows in lockstep with the prime itself:
+  formula: "W(3, t) &nbsp;&gt;&nbsp; (t − 1) · p + 1"
+  formula_suffix: "for every `t` past the longest run."
+  p2: >-
+    So one prime doesn't set one record. It sets every record for `t` past its
+    longest run, all at once. A prime ten times bigger makes each of those
+    records about ten times bigger. Move the prime out and the bounds move with
+    it. Drag the slider:
+  callout: >-
+    Brute force asks which of the astronomically many colorings works, and
+    there's no way to answer that. This method asks a different question — which
+    primes have a short longest run — and that one you can answer, one prime at a
+    time, with a single pass through the numbers. Near the frontier a lot of
+    primes qualify. That's the whole thing.
+  ui:
+    prime: "prime size p:"
+
+part5:
+  eyebrow: Part 5 — the records
+  h2: Seven records from one prime
+  p1: >-
+    The last exhaustive search stopped in 2019 at about `p = 969,396,749`. We
+    scanned primes just past it. `p = 969,397,381` has a longest run of **18**.
+    That one prime beats the previous best lower bound for every length from 19
+    to 25:
+  th:
+    name: "W(3, t)"
+    prev: previous lower bound
+    new: new lower bound
+    gain: gain
+  smallprint: >-
+    Each record is `(t−1) × 969,397,381 + 1`. The previous values are Monroe's
+    (JCMCC 128, Dec 2025). The whole certificate is just the prime plus the
+    coloring rule. We double-checked each one two independent ways: a second,
+    unrelated way of building the same coloring, and a slow, direct check for
+    progressions at small scale.
+
+part6:
+  eyebrow: Part 6 — check it
+  h2: The certificate is one number
+  p1: >-
+    None of this asks you to trust us. To check `W(3,25) > 23,265,537,145`,
+    rebuild the coloring of the numbers `1` through `969,397,380` using the
+    clock-arithmetic rule from Part 3, scan it once for the longest run, and
+    confirm it's under 25. That's the proof — the same pass this page runs on
+    the small primes above, just with a bigger prime.
+  p2: >-
+    The code, the certificates, and the full notebook are in the repository. You
+    can re-run it in an afternoon.
+  footer: >-
+    An explainer for the van der Waerden lower-bound work in this repo. The
+    colors are a colorblind-safe set; class is also shown by the legend and by
+    letters, not color alone. No libraries. Everything runs in your browser.
+
+# ─── live readouts (the page fills the {curly} bits in as you interact) ───
+dynamic:
+  hero_stats:
+    - { k: "7",    l: "new lower bounds, W(3,19)–W(3,25)" }
+    - { k: "1",    l: "prime does all seven" }
+    - { k: "18",   l: "longest run in its coloring" }
+    - { k: "O(p)", l: "work to verify each" }
+
+  ap_clean_pill: clean
+  ap_clean: "No monochromatic progression of length {t}. Drop to 2 colors and it gets much harder."
+  ap_found_pill: "{count} found"
+  ap_found: "{count} monochromatic progression{s} of length {t}, outlined. Recolor an outlined cell to break {them}."
+
+  ss_line: "Colorings of the first **{N}** numbers with **{r}** colors: `{count}`."
+  ss_bignum: "{r}<sup>{N}</sup> ≈ a {digits}-digit number"
+  ss_over: "That's already bigger than the number of atoms in the universe (81 digits)."
+  ss_under: "There are about 10⁸⁰ atoms in the universe, an 81-digit number."
+
+  legend_class: class
+  rp_legend_note: "— outline = longest run"
+  rp_prefix: "Coloring of **1…{max}** &nbsp;·&nbsp; longest run = **{best}**"
+  rp_pill_ok: "run &lt; {t} ✓"
+  rp_pill_no: "run ≥ {t}"
+  rp_valid: "short enough for length {t}. Proves `W(3,{t}) > {bound}`."
+  rp_invalid: "too long for length {t}. Raise the length or try a bigger prime."
+
+  lv_row_run: longest run
+  lv_row_record: W(3,25) record it sets
+  lv_row_primes: primes you have to test
+  lv_readout: >-
+    A prime near `{p}` has a longest run around **{run}**, so it sets a record
+    for every length past {run} at once. The record scales with the prime; the
+    run barely moves. Ten times the prime, ten times every record.
