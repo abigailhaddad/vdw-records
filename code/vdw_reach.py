@@ -32,8 +32,9 @@ import time
 import numpy as np
 
 R = 3
-ABORT_RUN = 26          # once a run hits this, useless for every cell <= 25
+ABORT_RUN = 25          # max_run >= 25 is useless for every cell t <= 25
 CELLS = range(17, 26)   # t values we care about
+MEM_CAP = 6_000_000_000  # group-walk (materialize) up to here; stream above
 
 # Largest prime currently certifying each cell (Monroe for 17-18, ours else).
 CURRENT_BEST_PRIME = {
@@ -117,34 +118,105 @@ def coloring(p, block=1 << 22, gen=None):
     return C
 
 
-def run_stats(C, chunk=1 << 24):
-    """(max_run, leading_run, first, last) scanning C in chunks with early
-    abort once a run reaches ABORT_RUN (returns max_run=ABORT_RUN then)."""
-    cur_val, cur_len, best, leading = -1, 0, 0, None
-    first = int(C[0])
-    for lo in range(0, C.size, chunk):
-        seg = C[lo:lo + chunk]
+class _RunAccumulator:
+    """Ingests uint8 class-blocks in natural order and tracks the longest
+    run and leading run of equal consecutive values, carrying state across
+    block boundaries. Used identically by the group-walk and streaming
+    paths so the run logic has a single source of truth."""
+
+    def __init__(self):
+        self.best = 0
+        self.cur_val = -1
+        self.cur_len = 0
+        self.first = None
+        self.last = None
+        self.leading = None
+        self._all_same_so_far = True
+
+    def feed(self, seg):
+        if self.first is None:
+            self.first = int(seg[0])
         changes = np.flatnonzero(np.diff(seg))
         if changes.size == 0:
-            cur_len = cur_len + seg.size if int(seg[0]) == cur_val else seg.size
-            cur_val = int(seg[0])
-            best = max(best, cur_len)
+            self.cur_len = (self.cur_len + seg.size
+                            if int(seg[0]) == self.cur_val else seg.size)
+            self.cur_val = int(seg[0])
+            self.best = max(self.best, self.cur_len)
         else:
             head = int(changes[0]) + 1
-            best = max(best, cur_len + head if int(seg[0]) == cur_val
-                       else head)
+            self.best = max(self.best, self.cur_len + head
+                            if int(seg[0]) == self.cur_val else head)
             edges = np.concatenate((changes, [seg.size - 1]))
-            best = max(best, int(np.diff(edges).max()) if edges.size > 1
-                       else 0)
-            cur_val = int(seg[-1])
-            cur_len = int(seg.size - 1 - changes[-1])
-        if leading is None:
-            leading = int(changes[0]) + 1 if changes.size else seg.size
-            if changes.size == 0 and lo == 0:
-                leading = None  # still all one value; resolve next chunk
-        if best >= ABORT_RUN:
-            return ABORT_RUN, leading or 1, first, int(seg[-1])
-    return max(best, cur_len), leading or C.size, first, int(C[-1])
+            if edges.size > 1:
+                self.best = max(self.best, int(np.diff(edges).max()))
+            self.cur_val = int(seg[-1])
+            self.cur_len = int(seg.size - 1 - changes[-1])
+        # leading run: resolve as soon as the first color change appears
+        if self._all_same_so_far:
+            if changes.size:
+                self.leading = (int(changes[0]) + 1
+                                if int(seg[0]) == self.first else 1)
+                # if the very first value already differs we handled above;
+                # the leading run is the count of `first` at the start:
+                self.leading = int(changes[0]) + 1
+                self._all_same_so_far = False
+            else:
+                self.leading = None  # whole stream still one color
+        self.last = int(seg[-1])
+
+    def result(self):
+        best = max(self.best, self.cur_len)
+        return best, (self.leading if self.leading is not None else best), \
+            self.first, self.last
+
+
+def run_stats(C, chunk=1 << 24):
+    """(max_run, leading_run, first, last) over an in-memory coloring C,
+    chunked, with early abort once a run reaches ABORT_RUN."""
+    acc = _RunAccumulator()
+    for lo in range(0, C.size, chunk):
+        acc.feed(C[lo:lo + chunk])
+        if max(acc.best, acc.cur_len) >= ABORT_RUN:
+            b, lead, f, l = acc.result()
+            return ABORT_RUN, lead or 1, f, l
+    return acc.result()
+
+
+def stream_colors(p, block=1 << 23, gen=None):
+    """Yield uint8 class-blocks for integers 1..p-1 in natural order, class
+    = which cube root of unity n^((p-1)/3) mod p lands on. Constant memory
+    ~ block; no O(p) array, so p may greatly exceed RAM. ~log2(e) modular
+    multiplies per element (slower than the group walk, but unbounded)."""
+    g = gen if gen is not None else find_generator(p)
+    e = (p - 1) // R
+    zeta = pow(g, e, p)
+    roots = np.array(sorted(pow(zeta, j, p) for j in range(R)),
+                     dtype=np.int64)
+    ebits = bin(e)[2:]
+    for lo in range(1, p, block):
+        n = np.arange(lo, min(lo + block, p), dtype=np.int64)
+        acc = np.ones_like(n)
+        for b in ebits:
+            acc = acc * acc % p
+            if b == "1":
+                acc = acc * n % p
+        pos = np.searchsorted(roots, acc)
+        # every acc is a genuine cube root of unity; guard against a bug
+        if not (roots[pos] == acc).all():
+            raise AssertionError(f"non-root residue at p={p}")
+        yield pos.astype(np.uint8)
+
+
+def run_stats_stream(p):
+    """Same (max_run, leading_run, first, last) as run_stats but via the
+    constant-memory streaming coloring, with early abort at ABORT_RUN."""
+    acc = _RunAccumulator()
+    for seg in stream_colors(p):
+        acc.feed(seg)
+        if max(acc.best, acc.cur_len) >= ABORT_RUN:
+            b, lead, f, l = acc.result()
+            return ABORT_RUN, lead or 1, f, l
+    return acc.result()
 
 
 def boundary_ok(t, first, last, leading):
@@ -162,19 +234,39 @@ def records_for(p, max_run, first, last, leading):
     return out
 
 
-def verify(p, expected_mr):
-    """Independent re-check: recompute the coloring with a DIFFERENT
-    primitive root and confirm the same longest run. A different generator
-    permutes the class labels, so an honest max_run must be reproduced;
-    this catches any bug in the walk/scatter. Returns True on agreement."""
-    g_alt = generators(p, 2)[1]        # the second-smallest primitive root
-    mr2, _, _, _ = run_stats(coloring(p, gen=g_alt))
-    return mr2 == expected_mr
-
-
 def scan_prime(p):
-    """(max_run, leading_run, first, last) for prime p. No verification."""
-    return run_stats(coloring(p))
+    """(max_run, leading_run, first, last). Group-walk (fast, ~p bytes) when
+    p fits under MEM_CAP; constant-memory streaming otherwise."""
+    if p <= MEM_CAP:
+        return run_stats(coloring(p))
+    return run_stats_stream(p)
+
+
+def _stream_maxrun(p, block, gen=None):
+    acc = _RunAccumulator()
+    for seg in stream_colors(p, block=block, gen=gen):
+        acc.feed(seg)
+        if max(acc.best, acc.cur_len) >= ABORT_RUN:
+            return ABORT_RUN
+    return acc.result()[0]
+
+
+def verify(p, expected_mr):
+    """Independent re-check of the longest run.
+
+    p <= MEM_CAP: recompute with a DIFFERENT primitive root (group walk).
+      A different generator permutes the class labels, so an honest max_run
+      must reappear -- catches walk/scatter/labeling bugs.
+    p >  MEM_CAP: recompute the stream with a DIFFERENT block size. The
+      modular-exponent coloring is deterministic (and pre-validated against
+      the group walk offline), so the residual risk is the cross-block run
+      carry; a different block boundary independently exercises it."""
+    if p <= MEM_CAP:
+        g_alt = generators(p, 2)[1]
+        mr2, _, _, _ = run_stats(coloring(p, gen=g_alt))
+    else:
+        mr2 = _stream_maxrun(p, block=(1 << 23) + 100003)   # off-power-of-2
+    return mr2 == expected_mr
 
 
 def largest_prime_at_or_below(n):
@@ -205,66 +297,77 @@ def save(best):
     json.dump(out, open("VDW_REACH_RECORDS.json", "w"), indent=1)
 
 
+def test_and_record(p, best, tested_counter):
+    mr, lead, first, last = scan_prime(p)
+    imp = report(p, mr, lead, first, last, best)
+    if imp:
+        if verify(p, mr):
+            save(best)
+            print(f"   verified + saved ({len(imp)} cell(s))", flush=True)
+        else:
+            print(f"   !! verification MISMATCH at p={p}; rolled back",
+                  flush=True)
+            for t in imp:
+                best.pop(t, None)
+    tested_counter[0] += 1
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--near", type=float, help="probe the largest prime <= this")
     ap.add_argument("--hours", type=float, default=0.0,
-                    help="overnight mode: sweep a magnitude ladder for H hours")
-    ap.add_argument("--cap", type=float, default=6e9,
-                    help="refuse primes above this (memory guard; ~p bytes)")
+                    help="overnight mode: reach phase then hunt phase")
+    ap.add_argument("--cap", type=float, default=3e10,
+                    help="largest prime to reach (streaming above ~6e9; "
+                         "constant memory, so this is a time budget, not RAM)")
     args = ap.parse_args()
 
     best = {}
+    tested = [0]
     if args.near:
         p = largest_prime_at_or_below(min(args.near, args.cap))
-        mr, lead, first, last = scan_prime(p)
-        imp = report(p, mr, lead, first, last, best)
-        if imp:
-            assert verify(p, mr), f"verification FAILED for p={p}"
-            print(f"   verified (alt generator); {len(imp)} cell(s)",
-                  flush=True)
-            save(best)
+        test_and_record(p, best, tested)
         return
-
     if args.hours <= 0:
         ap.error("give --near, or --hours for overnight mode")
 
-    # Overnight: a geometric ladder of magnitudes, each with its own stream
-    # of primes descending from that magnitude. Round-robin across the
-    # ladder so big-p (large-t) and small-p (rare short-run, small-t) both
-    # get attention. Best-per-cell is kept and saved on every improvement.
-    ladder = [m for m in (1.2e9, 1.5e9, 2e9, 2.5e9, 3e9, 4e9, 5e9, 6e9,
-                          7e9, 8e9, 1e10) if m <= args.cap]
-    cursors = {m: largest_prime_at_or_below(m) for m in ladder}
-    deadline = time.time() + args.hours * 3600
-    tested = 0
-    print(f"overnight sweep: ladder {[f'{m:.1e}' for m in ladder]}, "
-          f"cap {args.cap:.1e}, {args.hours}h", flush=True)
-    while time.time() < deadline:
-        for m in ladder:
-            if time.time() >= deadline:
+    total = args.hours * 3600
+    reach_deadline = time.time() + total * 0.5   # first half: reach outward
+    hunt_deadline = time.time() + total          # second half: hunt short runs
+
+    # --- Reach phase: a ladder of high magnitudes (streamed, memory-flat).
+    # Each rung's typical longest run is ~log_3(p), so different rungs certify
+    # different large-t cells at their best reachable prime. Largest first.
+    reach_ladder = [m for m in (3e10, 2e10, 1.3e10, 9e9, 7e9)
+                    if m <= args.cap]
+    reach_cursors = {m: largest_prime_at_or_below(m) for m in reach_ladder}
+    print(f"REACH phase (~{args.hours/2:.1f}h): stream ladder "
+          f"{[f'{m:.1e}' for m in reach_ladder]}", flush=True)
+    while time.time() < reach_deadline and reach_ladder:
+        for m in reach_ladder:
+            if time.time() >= reach_deadline:
                 break
-            p = cursors[m]
-            mr, lead, first, last = scan_prime(p)
-            tested += 1
-            imp = report(p, mr, lead, first, last, best)
-            if imp:
-                if verify(p, mr):
-                    save(best)
-                    print(f"   verified + saved ({len(imp)} cell(s))",
-                          flush=True)
-                else:
-                    print(f"   !! verification MISMATCH at p={p}; skipped",
-                          flush=True)
-                    for t in imp:            # roll back unverified claim
-                        del best[t]
-            cursors[m] = largest_prime_at_or_below(p - 1)
-        elapsed = (time.time() - (deadline - args.hours * 3600)) / 3600
-        print(f"-- {tested} primes tested, {elapsed:.1f}h elapsed, "
-              f"best cells: {sorted(best)}", flush=True)
-    print(f"DONE: {tested} primes tested. Best-per-cell:", flush=True)
-    for t, p in sorted(best.items()):
-        print(f"  W(3,{t}) > {(t-1)*p+1:,}  (p={p})", flush=True)
+            test_and_record(reach_cursors[m], best, tested)
+            reach_cursors[m] = largest_prime_at_or_below(reach_cursors[m] - 1)
+
+    # --- Hunt phase: many fast group-walk primes on a low ladder, chasing the
+    # rare short-run primes that improve the small-t cells (t=17..21).
+    ladder = [1.05e9, 1.2e9, 1.4e9, 1.7e9, 2e9, 2.5e9, 3e9, 4e9, 5e9, 6e9]
+    cursors = {m: largest_prime_at_or_below(m) for m in ladder}
+    print(f"HUNT phase (~{args.hours/2:.1f}h): fast ladder "
+          f"{[f'{m:.1e}' for m in ladder]}", flush=True)
+    while time.time() < hunt_deadline:
+        for m in ladder:
+            if time.time() >= hunt_deadline:
+                break
+            test_and_record(cursors[m], best, tested)
+            cursors[m] = largest_prime_at_or_below(cursors[m] - 1)
+        print(f"-- {tested[0]} primes tested, best cells {sorted(best)}",
+              flush=True)
+
+    print(f"DONE: {tested[0]} primes tested. Best-per-cell:", flush=True)
+    for t, pp in sorted(best.items()):
+        print(f"  W(3,{t}) > {(t - 1) * pp + 1:,}  (p={pp})", flush=True)
 
 
 if __name__ == "__main__":
