@@ -10,18 +10,23 @@ name: vdw-scan
 on:
   workflow_dispatch:
     inputs:
+      # Defaults are a small, cheap validation run (~a handful of billed
+      # minutes) so an accidental "Run workflow" can't burn the budget. For a
+      # real push, override: start 3e10, nshards 20, count 15, timeout 300 --
+      # but note that on a PRIVATE repo that costs ~4,500 billed minutes (matrix
+      # shards bill in parallel), well over the 2,000-min free tier.
       start:
         description: "top magnitude to scan down from (e.g. 3e10)"
-        default: "3e10"
+        default: "2e9"
       nshards:
         description: "parallel shards (concurrency cap ~20 on free tier)"
-        default: "20"
+        default: "4"
       count:
         description: "primes each shard scans"
-        default: "15"
+        default: "3"
       timeout:
         description: "per-shard minutes (<= 350)"
-        default: "300"
+        default: "60"
 
 jobs:
   setup:
