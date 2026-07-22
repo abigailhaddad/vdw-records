@@ -474,6 +474,65 @@ def do_prove(t, N, outdir, march_opts, cap):
             "proof_path": os.path.relpath(proof, REPO_ROOT)}
 
 
+def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed):
+    """Sample K cubes uniformly (fixed seed -> reproducible), solve each with
+    a small cap, and project the full instance's cost BEFORE fanning out to
+    dozens of jobs. The t=26 -d16 dispatch burned ~15 job-hours before a human
+    realised the split was wrong; a 200-cube pilot is minutes and catches it.
+
+    The projection (capped mean cube time x ncubes) is a LOWER BOUND whenever
+    any sampled cube timed out -- a timed-out cube really took longer than the
+    cap, and the heavy tail is exactly where cube-and-conquer cost hides, so a
+    nonzero timeout fraction is the signal to split deeper (or budget more)."""
+    import random
+    nvars, clause_lines = read_cnf(cnf_path)
+    cubes = read_cube_lits(cubes_path)
+    ncubes = len(cubes)
+    k = min(k, ncubes)
+    sample = sorted(random.Random(seed).sample(range(ncubes), k))
+    workdir = os.path.join(outdir, "pilot")
+    os.makedirs(workdir, exist_ok=True)
+    print(f"  pilot: {k} of {ncubes} cubes, cap {cap}s, seed {seed}",
+          flush=True)
+
+    times, n_timeout, n_sat = [], 0, 0
+    for gidx in sample:
+        status, secs, _ = solve_lits(clause_lines, cubes[gidx], cap, workdir,
+                                     f"pilot{gidx}", False)
+        times.append(secs)
+        if status == "TIMEOUT":
+            n_timeout += 1
+        elif status == "SAT":
+            n_sat += 1
+    times.sort()
+    n = len(times)
+
+    def pct(p):
+        return times[min(n - 1, int(n * p))]
+
+    mean = sum(times) / n
+    proj_core_hours = mean * ncubes / 3600.0
+    lower_bound = n_timeout > 0
+    res = {"ncubes": ncubes, "n_sampled": k, "cap_seconds": cap, "seed": seed,
+           "timeout_fraction": n_timeout / n, "n_sat_in_sample": n_sat,
+           "median_seconds": pct(0.5), "p90_seconds": pct(0.9),
+           "max_seconds": times[-1], "mean_seconds": mean,
+           "projected_core_hours": proj_core_hours,
+           "projection_is_lower_bound": lower_bound}
+    print(f"  pilot: timeout {100 * res['timeout_fraction']:.1f}% "
+          f"({n_timeout}/{n}), median {res['median_seconds']:.3f}s, "
+          f"p90 {res['p90_seconds']:.3f}s, max {res['max_seconds']:.3f}s",
+          flush=True)
+    print(f"  projected total: {proj_core_hours:.2f} core-hours"
+          + ("  (LOWER BOUND -- sampled cubes timed out; real cost higher)"
+             if lower_bound else ""), flush=True)
+    if n_sat:
+        print(f"  NOTE: {n_sat} sampled cube(s) SAT -> this point is likely "
+              f"SATISFIABLE (a good partition exists), not a UNSAT target",
+              flush=True)
+    return res
+
+
 def conjectured_pair(t):
     """Best published (p, q) guess for pdw(2;3,t): AKS Table 6 (exact, t<=27)
     or Table 7 (conjectured, t>=28), or None."""
@@ -728,7 +787,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode",
                      choices=["split", "conquer", "local", "aggregate",
-                              "prove", "solve"])
+                              "prove", "solve", "pilot"])
     ap.add_argument("--t", type=int)
     ap.add_argument("--N", type=int)
     ap.add_argument("--outdir", default=os.path.join(REPO_ROOT, "cnc_out"))
@@ -786,6 +845,20 @@ def main():
                      help="solve: high end of the N sweep (default: "
                           "conjectured q + 2)")
     ap.add_argument("--json-out", default=None)
+    ap.add_argument("--pilot-k", type=int, default=200,
+                     help="pilot: how many cubes to sample (default 200)")
+    ap.add_argument("--pilot-cap-seconds", type=float, default=5.0,
+                     help="pilot: per-sampled-cube cap (default 5)")
+    ap.add_argument("--seed", type=int, default=0,
+                     help="pilot: RNG seed for the cube sample (default 0, "
+                          "for reproducible projections)")
+    ap.add_argument("--budget-core-hours", type=float, default=None,
+                     help="pilot: if the projection exceeds this, exit non-zero "
+                          "(blocks a fan-out that would blow the budget) unless "
+                          "--force is given")
+    ap.add_argument("--force", action="store_true",
+                     help="pilot: run the projection but do NOT fail on an "
+                          "over-budget result")
     args = ap.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
 
@@ -848,6 +921,26 @@ def main():
         if args.json_out:
             json.dump({"aggregate": agg, "shards": shard_results},
                       open(args.json_out, "w"), indent=2)
+        return
+
+    if args.mode == "pilot":
+        if not args.cnf or not args.cubes:
+            ap.error("pilot needs --cnf and --cubes (from a prior split)")
+        res = do_pilot(args.cnf, args.cubes, args.outdir, args.pilot_k,
+                       args.pilot_cap_seconds, args.seed)
+        over = (args.budget_core_hours is not None
+                and res["projected_core_hours"] > args.budget_core_hours)
+        res["budget_core_hours"] = args.budget_core_hours
+        res["over_budget"] = over
+        if args.json_out:
+            json.dump(res, open(args.json_out, "w"), indent=2)
+        if over and not args.force:
+            sys.stderr.write(
+                f"PILOT BLOCK: projected {res['projected_core_hours']:.2f} "
+                f"core-hours > budget {args.budget_core_hours} "
+                f"({'lower bound, real cost higher' if res['projection_is_lower_bound'] else 'estimate'}). "
+                f"Split deeper, raise --budget-core-hours, or pass force=true.\n")
+            sys.exit(2)
         return
 
     if args.mode == "prove":

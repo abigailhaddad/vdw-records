@@ -31,8 +31,8 @@ on:
         description: "length N to decide (SAT = good partition exists; UNSAT = none)"
         default: "635"
       nshards:
-        description: "number of parallel conquer jobs to split the cubes across"
-        default: "20"
+        description: "number of parallel conquer jobs to split the cubes across (16 keeps a slot free under the free concurrent-job cap so regression et al. aren't queued behind a big run)"
+        default: "16"
       cube_indices:
         description: "re-dispatch: comma-separated GLOBAL cube indices to solve (leave empty for a full round-robin run). Split contiguously across nshards jobs."
         default: ""
@@ -51,6 +51,14 @@ on:
       batch_size:
         description: "cubes per iglucose call (one process solves the whole batch, reusing learned clauses; SAT/timeout falls back to per-cube). 1 = exact per-cube path."
         default: "200"
+      budget_core_hours:
+        description: "pilot gate: block the fan-out if the projected total exceeds this many core-hours (set force=true to override)"
+        default: "40"
+      force:
+        description: "skip the pilot budget gate and fan out regardless"
+        default: "false"
+        type: choice
+        options: ["false", "true"]
       timeout_minutes:
         description: "per-shard job timeout (<=360 on standard public runners)"
         default: "350"
@@ -101,9 +109,24 @@ jobs:
   build_tools:
     runs-on: ubuntu-latest
     steps:
+      # Key the cache on upstream CnC's current commit + runner OS: the
+      # binaries only change when upstream does, so most runs restore them and
+      # skip the clone+make entirely.
+      - id: rev
+        run: |
+          sha=$(git ls-remote https://github.com/marijnheule/CnC.git HEAD | cut -f1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "upstream CnC HEAD: $sha"
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: pkg/cncbin
+          key: cnc-tools-${{ runner.os }}-${{ steps.rev.outputs.sha }}
       - name: apt prerequisites
+        if: steps.cache.outputs.cache-hit != 'true'
         run: sudo apt-get update -y && sudo apt-get install -y build-essential git
       - name: clone + build march_cu and iglucose
+        if: steps.cache.outputs.cache-hit != 'true'
         # march_cu is old C with globals declared in a shared header; GCC 10+
         # defaults to -fno-common, which turns those into "multiple
         # definition" link errors. CC="gcc -fcommon" restores the old
@@ -113,11 +136,12 @@ jobs:
           git clone --depth 1 https://github.com/marijnheule/CnC.git /tmp/CnC
           ( cd /tmp/CnC/march_cu && make CC="gcc -fcommon" )
           ( cd /tmp/CnC/iglucose/core && make )
-      - name: package binaries
-        run: |
           mkdir -p pkg/cncbin
           cp /tmp/CnC/march_cu/march_cu pkg/cncbin/
           cp /tmp/CnC/iglucose/core/iglucose pkg/cncbin/
+          chmod +x pkg/cncbin/*
+      - name: package binaries (from cache or fresh build)
+        run: |
           chmod +x pkg/cncbin/*
           tar -C pkg -czf cnc-tools.tar.gz cncbin
       - uses: actions/upload-artifact@v4
@@ -147,6 +171,24 @@ jobs:
             --march-opts "${{ inputs.march_opts }}" \
             --outdir cnc_out --json-out cnc_out/split.json \
             | tee cnc_out/split.log
+      # Pilot BEFORE the fan-out: sample cubes, project the total core-hours,
+      # and FAIL this job (so conquer, which needs split, is skipped) if the
+      # projection blows the budget -- unless force=true. This is the guard the
+      # killed t=26 -d16 run (~15 job-hours wasted) needed. Runs in the same
+      # job so a block prevents the artifact upload too.
+      - name: pilot -- project cost, gate the fan-out
+        env:
+          MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
+          IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
+        run: |
+          forceflag=""
+          [ "${{ inputs.force }}" = "true" ] && forceflag="--force"
+          python3 code/vdw_cnc.py pilot \
+            --cnf cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cnf \
+            --cubes cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cubes \
+            --budget-core-hours ${{ inputs.budget_core_hours }} $forceflag \
+            --outdir cnc_out --json-out cnc_out/pilot.json \
+            | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: cnc-instance
@@ -155,6 +197,7 @@ jobs:
             cnc_out/*.cubes
             cnc_out/split.json
             cnc_out/split.log
+            cnc_out/pilot.json
 
   conquer:
     needs: [setup, split, build_tools]
