@@ -68,9 +68,14 @@ jobs:
       - name: apt prerequisites
         run: sudo apt-get update -y && sudo apt-get install -y build-essential git
       - name: clone + build march_cu and iglucose
+        # march_cu is old C with globals declared in a shared header; GCC 10+
+        # defaults to -fno-common, which turns those into "multiple
+        # definition" link errors. CC="gcc -fcommon" restores the old
+        # behaviour (Apple clang tolerates it, which is why it builds on a
+        # mac). Command-line CC overrides the Makefile's `CC = gcc`.
         run: |
           git clone --depth 1 https://github.com/marijnheule/CnC.git /tmp/CnC
-          ( cd /tmp/CnC/march_cu && make )
+          ( cd /tmp/CnC/march_cu && make CC="gcc -fcommon" )
           ( cd /tmp/CnC/iglucose/core && make )
       - name: package binaries
         run: |
