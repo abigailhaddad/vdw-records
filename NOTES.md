@@ -660,13 +660,30 @@ captures per-cube proofs).
    don't have it. This is the piece to research before betting a night on a
    frontier proof.
 
-2. **march_cu split-depth tuning.** `-d 16` on t=26 produced a large cube
+2. **Reading exact (p,q) off the sweep map (the math subtlety).** The new
+   `vdw_cnc.py solve` mode sweeps N over a window and CnC-decides each point.
+   On t=15 (conjectured pdw = (200,205)) it produced:
+       N:  197 198 199 200 | 201 202 203 204 205 | 206 207
+           S   S   S   S   |  U   S   U   S   U   |  U   U
+   i.e. below 201 all SAT, then a PARITY alternation -- odd N (201,203,205)
+   UNSAT, even N (202,204) SAT -- until it's permanently UNSAT from 206. So
+   the two pdw values (200,205) live in/at this alternation, and existence
+   is non-monotone exactly as the encoder docstring warned. I produce the
+   full map correctly, but I do NOT know the precise AKS rule that reads the
+   canonical (p, q) off a parity-alternating pattern (is p the last-all-SAT,
+   q the first-permanently-UNSAT? per-parity thresholds? something else?).
+   `solve` currently reports raw SAT->UNSAT transitions as *candidates* and
+   the conjectured pair, and stops short of asserting the exact value. This
+   is the rule to nail down (from AKS Section 5.2 / the Table 6 definition)
+   before the orchestrator can claim "pdw(2;3,t) = (p,q)" for a NEW t.
+
+3. **march_cu split-depth tuning.** `-d 16` on t=26 produced a large cube
    set and the shards ran long (>20 min, still healthy). No principled way
    yet to pick `-d` / cube count vs. nshards vs. per-cube cap for a given t.
    A short calibration (cube count and max-cube-time vs -d at fixed t) would
    let `pdw_difficulty.py` recommend settings instead of guessing.
 
-3. **nshards vs the free concurrency limit.** nshards=20 saturates GitHub's
+4. **nshards vs the free concurrency limit.** nshards=20 saturates GitHub's
    ~20-job free ceiling, so everything else (regression, other runs) queues.
    Is it worth capping nshards at ~16 to leave headroom, or chaining shard
    batches? Minor, but affects overnight throughput.

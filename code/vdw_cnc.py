@@ -42,6 +42,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vdw_sat import (encode_palindromic, write_dimacs,  # noqa: E402
                      decode_palindromic)
 from vdw_sat_validate import independent_ap_check, TIME_CAP  # noqa: E402
+from vdw_pdw_validate import AKS_TABLE_6  # noqa: E402
+try:
+    from vdw_pdw_attack import AKS_TABLE_7_CONJECTURED  # noqa: E402
+except Exception:  # pragma: no cover - attack import is optional
+    AKS_TABLE_7_CONJECTURED = {}
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # tools/CnC is an embedded upstream checkout (github.com/marijnheule/CnC),
@@ -334,6 +339,61 @@ def do_prove(t, N, outdir, march_opts, cap):
             "proof_path": os.path.relpath(proof, REPO_ROOT)}
 
 
+def conjectured_pair(t):
+    """Best published (p, q) guess for pdw(2;3,t): AKS Table 6 (exact, t<=27)
+    or Table 7 (conjectured, t>=28), or None."""
+    if t in AKS_TABLE_6:
+        return AKS_TABLE_6[t], "AKS Table 6 (exact)"
+    if t in AKS_TABLE_7_CONJECTURED:
+        return AKS_TABLE_7_CONJECTURED[t], "AKS Table 7 (conjectured)"
+    return None, None
+
+
+def do_solve(t, n_lo, n_hi, outdir, march_opts, cap, resplit_opts, max_depth):
+    """SWEEP N over [n_lo, n_hi], deciding each point SAT/UNSAT with a
+    one-process cube-and-conquer (split + conquer, adaptive re-splitting),
+    and report the full pattern. A sweep -- not a binary search -- because
+    palindromic existence is NOT monotone in N: between the two pdw values
+    it alternates, so a bisection can land on an interior alternation point
+    (see vdw_pdw_attack.locate_boundary's soundness note). The full map is
+    unambiguous; reading the exact (p, q) OFF that map per the AKS
+    definition is the subtle part -- see the open question in NOTES.md."""
+    pair, src = conjectured_pair(t)
+    print(f"=== solving pdw(2;3,{t}); conjectured {pair} [{src}] ===\n"
+          f"    sweeping N={n_lo}..{n_hi}", flush=True)
+    smap = {}
+    for N in range(n_lo, n_hi + 1):
+        cnf = os.path.join(outdir, f"solve_t{t}_N{N}.cnf")
+        cubes = os.path.join(outdir, f"solve_t{t}_N{N}.cubes")
+        meta = do_split(t, N, cnf, cubes, march_opts)
+        nvars, clause_lines = read_cnf(cnf)
+        cube_lits = read_cube_lits(cubes)
+        r = conquer_slice(meta, nvars, clause_lines, cube_lits, 0, 1, cap,
+                          outdir, False, resplit_opts, max_depth)
+        smap[N] = r["status"]
+        wok = r["witness"]["witness_ok"] if r["witness"] else None
+        print(f"  N={N}: {r['status']}"
+              + (f" (witness_ok={wok})" if r["status"] == "SAT" else ""),
+              flush=True)
+        for p in (cnf, cubes):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+    # SAT->UNSAT transitions (a candidate pdw threshold sits at the last SAT
+    # before an UNSAT run). Reported as candidates only; exact (p,q) TBD.
+    transitions = [N for N in range(n_lo + 1, n_hi + 1)
+                   if smap.get(N - 1) == "SAT" and smap.get(N) == "UNSAT"]
+    print(f"\n  map: " + "  ".join(f"{N}:{smap[N][:1]}" for N in
+                                   range(n_lo, n_hi + 1)), flush=True)
+    print(f"  SAT->UNSAT transitions at N in {transitions} "
+          f"(candidate thresholds; conjectured pair {pair})", flush=True)
+    return {"t": t, "window": [n_lo, n_hi], "map": smap,
+            "sat_unsat_transitions": transitions, "conjectured": pair,
+            "conjecture_source": src}
+
+
 def aggregate(shard_results):
     """Combine shard verdicts into an instance verdict."""
     sat = [r for r in shard_results if r["status"] == "SAT"]
@@ -359,7 +419,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode",
                      choices=["split", "conquer", "local", "aggregate",
-                              "prove"])
+                              "prove", "solve"])
     ap.add_argument("--t", type=int)
     ap.add_argument("--N", type=int)
     ap.add_argument("--outdir", default=os.path.join(REPO_ROOT, "cnc_out"))
@@ -389,9 +449,31 @@ def main():
                           "(default '-d 6' -- a modest extra split per level)")
     ap.add_argument("--results-dir", default=None,
                      help="aggregate: directory of per-shard conquer JSONs")
+    ap.add_argument("--n-lo", type=int, default=None,
+                     help="solve: low end of the N sweep (default: "
+                          "conjectured p - 2)")
+    ap.add_argument("--n-hi", type=int, default=None,
+                     help="solve: high end of the N sweep (default: "
+                          "conjectured q + 2)")
     ap.add_argument("--json-out", default=None)
     args = ap.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
+
+    if args.mode == "solve":
+        pair, _ = conjectured_pair(args.t)
+        n_lo = args.n_lo if args.n_lo is not None else (
+            (pair[0] - 2) if pair else None)
+        n_hi = args.n_hi if args.n_hi is not None else (
+            (pair[1] + 2) if pair else None)
+        if n_lo is None or n_hi is None:
+            ap.error("solve needs --n-lo/--n-hi (no conjectured pair for "
+                     f"t={args.t} to default from)")
+        res = do_solve(args.t, n_lo, n_hi, args.outdir, args.march_opts,
+                       args.cap_seconds, args.resplit_march_opts,
+                       args.max_resplit_depth)
+        if args.json_out:
+            json.dump(res, open(args.json_out, "w"), indent=2)
+        return
 
     if args.mode == "aggregate":
         shard_results = []
