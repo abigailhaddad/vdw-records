@@ -74,7 +74,14 @@ def is_palindrome(colors, N):
 
 def do_split(t, N, cnf_path, cubes_path, march_opts):
     """Encode pdw(2;3,t) at length N (palindromic, expect the caller is
-    probing UNSAT) and split it into cubes with march_cu."""
+    probing UNSAT) and split it into cubes with march_cu.
+
+    march_cu can also DECIDE the instance during look-ahead instead of
+    emitting cubes -- it exits 10 (SATISFIABLE) or 20 (UNSATISFIABLE), like
+    a CDCL solver, and writes no cube file. We surface that as meta["solved"]
+    ("SAT"/"UNSAT", else None) with ncubes 0. Callers MUST honour it: a
+    0-cube split fed to conquer would otherwise be read as a vacuous UNSAT
+    (no cubes to refute), which for a rc=10 SAT short-circuit is dead wrong."""
     lengths = [3, t]
     clauses, nvars = encode_palindromic(lengths, N)
     write_dimacs(clauses, nvars, cnf_path,
@@ -84,14 +91,19 @@ def do_split(t, N, cnf_path, cubes_path, march_opts):
     t0 = time.time()
     proc = subprocess.run(cmd, capture_output=True, text=True)
     split_time = time.time() - t0
-    if proc.returncode != 0:
+    solved = {10: "SAT", 20: "UNSAT"}.get(proc.returncode)
+    if proc.returncode != 0 and solved is None:
         sys.stderr.write(proc.stdout + proc.stderr)
         raise RuntimeError(f"march_cu failed (rc={proc.returncode})")
-    ncubes = sum(1 for ln in open(cubes_path) if ln.startswith("a "))
+    ncubes = (sum(1 for ln in open(cubes_path) if ln.startswith("a "))
+              if os.path.exists(cubes_path) else 0)
     print(f"  split: {nvars} vars, {len(clauses)} clauses -> {ncubes} cubes "
-          f"in {split_time:.1f}s", flush=True)
+          f"in {split_time:.1f}s"
+          + (f" (march_cu decided {solved} during look-ahead)" if solved
+             else ""), flush=True)
     return {"t": t, "N": N, "nvars": nvars, "nclauses": len(clauses),
             "cnf": cnf_path, "cubes": cubes_path, "ncubes": ncubes,
+            "solved": solved,
             "march_opts": march_opts, "split_seconds": split_time}
 
 
@@ -543,8 +555,44 @@ def conjectured_pair(t):
     return None, None
 
 
+def _solve_point(t, N, base_outdir, march_opts, cap, resplit_opts, max_depth,
+                 batch_size):
+    """Decide ONE sweep point (split + conquer) in its OWN work directory, so
+    parallel workers never collide on the shared shard-0.jsonl / workdir names.
+    Module-level (not a closure) so ProcessPoolExecutor can pickle it. Returns
+    (N, status, witness_ok)."""
+    import shutil
+    outdir = os.path.join(base_outdir, f"solve_t{t}_N{N}")
+    os.makedirs(outdir, exist_ok=True)
+    cnf = os.path.join(outdir, "i.cnf")
+    cubes = os.path.join(outdir, "i.cubes")
+    meta = do_split(t, N, cnf, cubes, march_opts)
+    nvars, clause_lines = read_cnf(cnf)
+    if meta["solved"] == "UNSAT":
+        shutil.rmtree(outdir, ignore_errors=True)
+        return N, "UNSAT", None
+    if meta["solved"] == "SAT":
+        # march_cu decided SAT during look-ahead but emits no model; recover a
+        # real witness by solving the base CNF directly, then validate it.
+        status, _, model = solve_lits(clause_lines, [], cap, outdir, "satwit",
+                                      False)
+        wok = None
+        if status == "SAT" and model is not None:
+            colors = decode_palindromic(model, N, 2)
+            wok = independent_ap_check(colors, [3, t], N) is None
+        shutil.rmtree(outdir, ignore_errors=True)
+        return N, "SAT", wok
+    cube_lits = read_cube_lits(cubes)
+    r = conquer_slice(meta, nvars, clause_lines, cube_lits, 0, 1, cap,
+                      outdir, False, resplit_opts, max_depth,
+                      batch_size=batch_size)
+    wok = r["witness"]["witness_ok"] if r["witness"] else None
+    shutil.rmtree(outdir, ignore_errors=True)
+    return N, r["status"], wok
+
+
 def do_solve(t, n_lo, n_hi, outdir, march_opts, cap, resplit_opts, max_depth,
-             batch_size=1):
+             batch_size=1, sweep_workers=1):
     """SWEEP N over [n_lo, n_hi], deciding each point SAT/UNSAT with a
     one-process cube-and-conquer (split + conquer, adaptive re-splitting),
     and report the full pattern. A sweep -- not a binary search -- because
@@ -552,30 +600,34 @@ def do_solve(t, n_lo, n_hi, outdir, march_opts, cap, resplit_opts, max_depth,
     it alternates, so a bisection can land on an interior alternation point
     (see vdw_pdw_attack.locate_boundary's soundness note). The full map is
     unambiguous; reading the exact (p, q) OFF that map per the AKS
-    definition is the subtle part -- see the open question in NOTES.md."""
+    definition is the subtle part -- see the open question in NOTES.md.
+
+    Points are independent, so sweep_workers>1 decides them concurrently in a
+    process pool (march_cu/iglucose are subprocesses -- the GIL is irrelevant;
+    each point works in its own directory). Results are collected by N, so the
+    printed map is identical regardless of worker count or finish order."""
     pair, src = conjectured_pair(t)
     print(f"=== solving pdw(2;3,{t}); conjectured {pair} [{src}] ===\n"
-          f"    sweeping N={n_lo}..{n_hi}", flush=True)
+          f"    sweeping N={n_lo}..{n_hi} (workers={sweep_workers})", flush=True)
     smap = {}
-    for N in range(n_lo, n_hi + 1):
-        cnf = os.path.join(outdir, f"solve_t{t}_N{N}.cnf")
-        cubes = os.path.join(outdir, f"solve_t{t}_N{N}.cubes")
-        meta = do_split(t, N, cnf, cubes, march_opts)
-        nvars, clause_lines = read_cnf(cnf)
-        cube_lits = read_cube_lits(cubes)
-        r = conquer_slice(meta, nvars, clause_lines, cube_lits, 0, 1, cap,
-                          outdir, False, resplit_opts, max_depth,
-                          batch_size=batch_size)
-        smap[N] = r["status"]
-        wok = r["witness"]["witness_ok"] if r["witness"] else None
-        print(f"  N={N}: {r['status']}"
-              + (f" (witness_ok={wok})" if r["status"] == "SAT" else ""),
-              flush=True)
-        for p in (cnf, cubes):
-            try:
-                os.remove(p)
-            except OSError:
-                pass
+
+    def note(N, status, wok):
+        smap[N] = status
+        print(f"  N={N}: {status}"
+              + (f" (witness_ok={wok})" if status == "SAT" else ""), flush=True)
+
+    ns = list(range(n_lo, n_hi + 1))
+    if sweep_workers > 1:
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        with ProcessPoolExecutor(max_workers=sweep_workers) as ex:
+            futs = [ex.submit(_solve_point, t, N, outdir, march_opts, cap,
+                              resplit_opts, max_depth, batch_size) for N in ns]
+            for f in as_completed(futs):
+                note(*f.result())
+    else:
+        for N in ns:
+            note(*_solve_point(t, N, outdir, march_opts, cap, resplit_opts,
+                               max_depth, batch_size))
 
     # SAT->UNSAT transitions (a candidate pdw threshold sits at the last SAT
     # before an UNSAT run). Reported as candidates only; exact (p,q) TBD.
@@ -762,6 +814,11 @@ def aggregate(shard_results, expected_nshards):
 
     if sat:
         verdict = "SAT"
+    elif ncubes == 0:
+        # no cubes at all -> nothing was refuted. march_cu decided the
+        # instance during the split (see do_split "solved"); an empty cube
+        # set must NOT read as a vacuous UNSAT. Check split.json.
+        verdict = "UNDETERMINED"
     elif not missing_shards and not unresolved and not uncovered:
         verdict = "UNSAT"
     else:
@@ -844,6 +901,10 @@ def main():
     ap.add_argument("--n-hi", type=int, default=None,
                      help="solve: high end of the N sweep (default: "
                           "conjectured q + 2)")
+    ap.add_argument("--sweep-workers", type=int, default=1,
+                     help="solve: decide this many sweep points concurrently "
+                          "in a process pool (points are independent; default "
+                          "1 = serial)")
     ap.add_argument("--json-out", default=None)
     ap.add_argument("--pilot-k", type=int, default=200,
                      help="pilot: how many cubes to sample (default 200)")
@@ -873,7 +934,8 @@ def main():
                      f"t={args.t} to default from)")
         res = do_solve(args.t, n_lo, n_hi, args.outdir, args.march_opts,
                        args.cap_seconds, args.resplit_march_opts,
-                       args.max_resplit_depth, batch_size=args.batch_size)
+                       args.max_resplit_depth, batch_size=args.batch_size,
+                       sweep_workers=args.sweep_workers)
         if args.json_out:
             json.dump(res, open(args.json_out, "w"), indent=2)
         return
@@ -986,6 +1048,16 @@ def main():
     cnf = os.path.join(args.outdir, f"cnc_t{args.t}_N{args.N}.cnf")
     cubes = os.path.join(args.outdir, f"cnc_t{args.t}_N{args.N}.cubes")
     meta = do_split(args.t, args.N, cnf, cubes, args.march_opts)
+    if meta["solved"]:
+        # march_cu decided the instance during the split -> no cubes to
+        # conquer; report its verdict directly rather than "conquering" an
+        # empty cube set (which would read as a vacuous UNSAT).
+        print(f"\n=== pdw(2;3,{args.t}) N={args.N}: {meta['solved']} "
+              f"(decided by march_cu during split, 0 cubes) ===", flush=True)
+        if args.json_out:
+            json.dump({"meta": meta, "verdict": meta["solved"]},
+                      open(args.json_out, "w"), indent=2)
+        return
     nvars, clause_lines = read_cnf(cnf)
     cube_lits = read_cube_lits(cubes)
     shard_results = []

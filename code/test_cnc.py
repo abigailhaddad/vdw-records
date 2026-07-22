@@ -192,6 +192,15 @@ def test_merge_undetermined_when_a_cube_still_missing():
     assert m["cubes_without_unsat"] == [2, 6], m
 
 
+def test_zero_cube_instance_is_not_vacuous_unsat():
+    # march_cu can DECIDE an instance during the split (rc 10/20) and emit no
+    # cubes. A 0-cube shard set must NOT read as a vacuous UNSAT.
+    shards = [{"t": 15, "N": 197, "shard": 0, "status": "UNSAT", "n_unsat": 0,
+               "ncubes": 0, "members": [], "unresolved_cubes": []}]
+    agg = aggregate(shards, expected_nshards=1)
+    assert agg["verdict"] == "UNDETERMINED", agg
+
+
 def test_merge_sat_cube_decides():
     with tempfile.TemporaryDirectory() as d:
         _write_jsonl(d, 0, 4, 1, {0: "UNSAT", 1: "SAT"})
