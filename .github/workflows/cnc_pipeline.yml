@@ -1,0 +1,207 @@
+name: vdw-cnc-pipeline
+
+# Cube-and-conquer for ONE palindromic pdw(2;3,t) instance at length N.
+# Splits the formula into cubes with march_cu (a look-ahead solver), then
+# shards the cubes across many parallel jobs, each running iglucose on its
+# slice. This is how the exact van der Waerden / Schur / Pythagorean-triple
+# numbers were settled, and it is what turns an instance that a single 6h
+# job can't finish into thousands of independent sub-second solves. See
+# code/vdw_cnc.py for the soundness argument (all cubes UNSAT => UNSAT; any
+# cube SAT => SAT + a verified palindromic witness).
+#
+# tools/CnC is an embedded upstream checkout of github.com/marijnheule/CnC
+# that is NOT tracked in this repo, so build_tools clones and builds
+# march_cu + iglucose fresh on the Linux runner and ships them as an
+# artifact; the split/conquer jobs point $MARCH_CU / $IGLUCOSE at them.
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      t:
+        description: "t in pdw(2;3,t)"
+        default: "26"
+      N:
+        description: "length N to decide (SAT = good partition exists; UNSAT = none)"
+        default: "635"
+      nshards:
+        description: "number of parallel conquer jobs to split the cubes across"
+        default: "20"
+      march_opts:
+        description: "march_cu split options (deeper -d or -l limit = more, smaller cubes)"
+        default: "-d 16"
+      cap_seconds:
+        description: "per-CUBE solver timeout in seconds (a cube should be easy)"
+        default: "1800"
+      timeout_minutes:
+        description: "per-shard job timeout (<=360 on standard public runners)"
+        default: "350"
+      certified:
+        description: "have each cube emit its DRAT proof (for later stitching)"
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - id: gen
+        env:
+          NSHARDS: ${{ inputs.nshards }}
+        run: |
+          matrix=$(python3 -c "import json,os; n=int(os.environ['NSHARDS']); print(json.dumps([{'shard': i} for i in range(n)]))")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix"
+
+  build_tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: apt prerequisites
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential git
+      - name: clone + build march_cu and iglucose
+        run: |
+          git clone --depth 1 https://github.com/marijnheule/CnC.git /tmp/CnC
+          ( cd /tmp/CnC/march_cu && make )
+          ( cd /tmp/CnC/iglucose/core && make )
+      - name: package binaries
+        run: |
+          mkdir -p pkg/cncbin
+          cp /tmp/CnC/march_cu/march_cu pkg/cncbin/
+          cp /tmp/CnC/iglucose/core/iglucose pkg/cncbin/
+          chmod +x pkg/cncbin/*
+          tar -C pkg -czf cnc-tools.tar.gz cncbin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnc-tools
+          path: cnc-tools.tar.gz
+
+  split:
+    needs: build_tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-tools
+      - name: unpack tools
+        run: |
+          tar -xzf cnc-tools.tar.gz
+          chmod +x cncbin/*
+      - name: split into cubes
+        env:
+          MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
+          IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
+        run: |
+          mkdir -p cnc_out
+          python3 code/vdw_cnc.py split --t ${{ inputs.t }} --N ${{ inputs.N }} \
+            --march-opts "${{ inputs.march_opts }}" \
+            --outdir cnc_out --json-out cnc_out/split.json \
+            | tee cnc_out/split.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnc-instance
+          path: |
+            cnc_out/*.cnf
+            cnc_out/*.cubes
+            cnc_out/split.json
+            cnc_out/split.log
+
+  conquer:
+    needs: [setup, split, build_tools]
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-tools
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-instance
+          path: cnc_out
+      - name: unpack tools
+        run: |
+          tar -xzf cnc-tools.tar.gz
+          chmod +x cncbin/*
+      - name: conquer this shard's cube slice
+        env:
+          MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
+          IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
+        run: |
+          certflag=""
+          [ "${{ inputs.certified }}" = "true" ] && certflag="--certified"
+          python3 code/vdw_cnc.py conquer --t ${{ inputs.t }} --N ${{ inputs.N }} \
+            --cnf cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cnf \
+            --cubes cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cubes \
+            --shard ${{ matrix.shard }} --nshards ${{ inputs.nshards }} \
+            --cap-seconds ${{ inputs.cap_seconds }} $certflag \
+            --outdir cnc_out --json-out cnc_out/shard-${{ matrix.shard }}.json \
+            | tee cnc_out/shard-${{ matrix.shard }}.log
+      # always(): a shard that hits the job wall still uploads its log (each
+      # cube result is flushed as it lands), so partial progress and which
+      # cubes remain unresolved is never lost.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-shard-${{ matrix.shard }}
+          path: |
+            cnc_out/shard-${{ matrix.shard }}.json
+            cnc_out/shard-${{ matrix.shard }}.log
+
+  collect:
+    needs: conquer
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-shard-*
+          path: results
+          merge-multiple: true
+      - name: aggregate the shard verdicts
+        run: |
+          python3 code/vdw_cnc.py aggregate --results-dir results \
+            --outdir results --json-out results/verdict.json \
+            | tee "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat results/verdict.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnc-verdict
+          path: results/
+      - name: commit results back to the repo
+        run: |
+          git config user.name "vdw-cnc-pipeline[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          dir="gh_actions_results/cnc-run-${{ github.run_id }}"
+          mkdir -p "$dir"
+          cp -r results/* "$dir/" 2>/dev/null || true
+          git add "$dir"
+          if git diff --cached --quiet; then
+            echo "nothing to commit"; exit 0
+          fi
+          git commit -m "GH Actions: vdw-cnc-pipeline pdw(2;3,${{ inputs.t }}) N=${{ inputs.N }} (run ${{ github.run_id }})"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main && break
+            echo "push attempt $i failed, retrying..."; sleep 5
+          done
