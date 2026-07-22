@@ -189,8 +189,33 @@ def collect_cnc(paths):
     return runs
 
 
-def report_cnc(runs, wall_seconds):
-    if not runs:
+def collect_pilots(paths):
+    """Harvest `vdw_cnc.py pilot` projections (JSON with projected_core_hours
+    + timeout_fraction). A pilot samples cubes and projects total cube-work
+    for a (t, N) BEFORE a full run, so it's an early -- and, when it saw
+    timeouts, a LOWER-BOUND -- data point for the same cube-work-vs-t model
+    the finished runs feed. Returns [(t, projected_total_seconds, ncubes,
+    max_seconds, is_lower_bound), ...] for entries that carry a t."""
+    out = []
+    for p in paths:
+        if not p.endswith(".json"):
+            continue
+        try:
+            obj = json.load(open(p))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if "projected_core_hours" not in obj or "timeout_fraction" not in obj:
+            continue
+        if obj.get("t") is None:
+            continue  # older pilot JSON without t -- can't place it on a t
+        out.append((obj["t"], obj["projected_core_hours"] * 3600.0,
+                    obj.get("ncubes", 0), obj.get("max_seconds", 0.0),
+                    bool(obj.get("projection_is_lower_bound"))))
+    return out
+
+
+def report_cnc(runs, wall_seconds, pilots=None):
+    if not runs and not pilots:
         return
     print("=== CUBE-AND-CONQUER runs ===")
     growth = []
@@ -220,11 +245,26 @@ def report_cnc(runs, wall_seconds):
     for t, total, _, _ in growth:
         if t is not None:
             by_t[t] = max(by_t.get(t, 0.0), total)
+
+    # Fold in pilot projections: cheap pre-run estimates of total cube-work,
+    # so the reach model can use a t that has only been PILOTED (not yet fully
+    # run). A pilot that saw timeouts is a lower bound, so it can only pull the
+    # projected reach DOWN (conservative) -- never inflate it.
+    maxes = {t: mx for t, _, _, mx in growth if t is not None}
+    if pilots:
+        print("  pilot projections (pre-run cube-work; lower bound when "
+              "timeouts seen):")
+        for t, total, ncubes, mx, lb in sorted(pilots):
+            print(f"    t={t}: ~{total / 3600:.2f} core-hours over {ncubes} "
+                  f"cubes, max sampled cube {mx:.1f}s"
+                  + ("  (LOWER BOUND)" if lb else ""))
+            by_t[t] = max(by_t.get(t, 0.0), total)
+            maxes[t] = max(maxes.get(t, 0.0), mx)
+
     if len(by_t) >= 2:
         ts = sorted(by_t)
         b, a = np.polyfit(np.array(ts, float),
                           np.log(np.array([by_t[t] for t in ts], float)), 1)
-        maxes = {t: mx for t, _, _, mx in growth if t is not None}
         print(f"  total cube-work grows ~x{np.exp(b):.2f} per +1 t; "
               f"hardest single cube stays ~{max(maxes.values()):.1f}s "
               f"(bounded by re-splitting)")
@@ -299,7 +339,8 @@ def main():
         print("  (projection is a log-linear extrapolation; trust it only "
               "as far as the finished-point spread above.)\n")
 
-    report_cnc(collect_cnc(sorted(set(paths))), wall)
+    report_cnc(collect_cnc(sorted(set(paths))), wall,
+               pilots=collect_pilots(sorted(set(paths))))
 
 
 if __name__ == "__main__":

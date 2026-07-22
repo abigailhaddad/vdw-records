@@ -486,7 +486,7 @@ def do_prove(t, N, outdir, march_opts, cap):
             "proof_path": os.path.relpath(proof, REPO_ROOT)}
 
 
-def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed):
+def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, t=None, N=None):
     """Sample K cubes uniformly (fixed seed -> reproducible), solve each with
     a small cap, and project the full instance's cost BEFORE fanning out to
     dozens of jobs. The t=26 -d16 dispatch burned ~15 job-hours before a human
@@ -525,7 +525,8 @@ def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed):
     mean = sum(times) / n
     proj_core_hours = mean * ncubes / 3600.0
     lower_bound = n_timeout > 0
-    res = {"ncubes": ncubes, "n_sampled": k, "cap_seconds": cap, "seed": seed,
+    res = {"t": t, "N": N,
+           "ncubes": ncubes, "n_sampled": k, "cap_seconds": cap, "seed": seed,
            "timeout_fraction": n_timeout / n, "n_sat_in_sample": n_sat,
            "median_seconds": pct(0.5), "p90_seconds": pct(0.9),
            "max_seconds": times[-1], "mean_seconds": mean,
@@ -989,7 +990,7 @@ def main():
         if not args.cnf or not args.cubes:
             ap.error("pilot needs --cnf and --cubes (from a prior split)")
         res = do_pilot(args.cnf, args.cubes, args.outdir, args.pilot_k,
-                       args.pilot_cap_seconds, args.seed)
+                       args.pilot_cap_seconds, args.seed, t=args.t, N=args.N)
         over = (args.budget_core_hours is not None
                 and res["projected_core_hours"] > args.budget_core_hours)
         res["budget_core_hours"] = args.budget_core_hours

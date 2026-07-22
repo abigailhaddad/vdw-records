@@ -183,7 +183,7 @@ jobs:
         run: |
           forceflag=""
           [ "${{ inputs.force }}" = "true" ] && forceflag="--force"
-          python3 code/vdw_cnc.py pilot \
+          python3 code/vdw_cnc.py pilot --t ${{ inputs.t }} --N ${{ inputs.N }} \
             --cnf cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cnf \
             --cubes cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cubes \
             --budget-core-hours ${{ inputs.budget_core_hours }} $forceflag \
