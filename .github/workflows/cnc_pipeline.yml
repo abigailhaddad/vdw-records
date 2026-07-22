@@ -172,6 +172,7 @@ jobs:
           name: results-shard-${{ matrix.shard }}
           path: |
             cnc_out/shard-${{ matrix.shard }}.json
+            cnc_out/shard-${{ matrix.shard }}.jsonl
             cnc_out/shard-${{ matrix.shard }}.log
 
   collect:

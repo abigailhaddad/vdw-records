@@ -117,6 +117,14 @@ def read_cube_lits(cubes_path):
     return cubes
 
 
+def slice_members(ncubes, nshards, shard):
+    """Global cube indices this shard owns under round-robin (cube i -> shard
+    i % nshards). Defined once here so the conquer path (which cubes to solve)
+    and the aggregate path (which cubes a dead shard still owed) can never
+    disagree about slice membership."""
+    return [i for i in range(ncubes) if i % nshards == shard]
+
+
 def solve_lits(clause_lines, cube_lits, cap, workdir, tag, certified):
     """Solve (CNF and the cube's literals) as a single-cube inccnf with
     iglucose. Returns (status, seconds, model_or_None); status in
@@ -229,10 +237,21 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     t, N = meta["t"], meta["N"]
     workdir = os.path.join(outdir, f"cnc_t{t}_N{N}_shard{shard}")
     os.makedirs(workdir, exist_ok=True)
-    mine = [(i, c) for i, c in enumerate(cubes) if i % nshards == shard]
+    mine = [(i, cubes[i]) for i in slice_members(len(cubes), nshards, shard)]
     print(f"  shard {shard}/{nshards}: {len(mine)} of {len(cubes)} cubes, "
           f"per-cube cap {cap}s, re-split depth {max_resplit_depth}",
           flush=True)
+
+    # Per-cube JSONL checkpoint, flushed after every top-level cube: if the
+    # job hits the wall mid-slice, aggregate can recover exactly which cubes
+    # were already refuted and re-dispatch only the rest. The meta line's
+    # ncubes lets aggregate reconstruct this shard's slice membership without
+    # the cube file. See read_shard_jsonl / reconstruct_shard_from_jsonl.
+    jsonl_path = os.path.join(outdir, f"shard-{shard}.jsonl")
+    jf = open(jsonl_path, "w")
+    jf.write(json.dumps({"meta": True, "t": t, "N": N, "shard": shard,
+                         "nshards": nshards, "ncubes": len(cubes)}) + "\n")
+    jf.flush()
 
     records = []
     n_unsat = 0
@@ -241,9 +260,13 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     witness = None
     t0 = time.time()
     for gidx, cube_lits in mine:
+        c0 = time.time()
         verdict, model = conquer_cube(nvars, clause_lines, cube_lits, cap,
                                       workdir, str(gidx), resplit_opts,
                                       max_resplit_depth, 0, certified, records)
+        jf.write(json.dumps({"gidx": gidx, "verdict": verdict,
+                             "seconds": round(time.time() - c0, 3)}) + "\n")
+        jf.flush()
         if verdict == "SAT":
             colors = decode_palindromic(model, N, 2)
             bad = independent_ap_check(colors, [3, t], N)
@@ -258,6 +281,7 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
             n_unsat += 1
         else:
             unresolved.append(gidx)
+    jf.close()
 
     if sat_gidx is not None:
         status = "SAT"
@@ -394,6 +418,92 @@ def do_solve(t, n_lo, n_hi, outdir, march_opts, cap, resplit_opts, max_depth):
             "conjecture_source": src}
 
 
+def read_shard_jsonl(path):
+    """Parse a shard's per-cube JSONL checkpoint. Returns (meta, verdicts)
+    where meta is the first-line meta record (or None) and verdicts maps
+    gidx -> verdict. A torn final line (job killed mid-write) is skipped."""
+    meta = None
+    verdicts = {}
+    for ln in open(path):
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            obj = json.loads(ln)
+        except json.JSONDecodeError:
+            continue  # partial line from a kill mid-flush
+        if obj.get("meta"):
+            meta = obj
+        elif "gidx" in obj:
+            verdicts[obj["gidx"]] = obj["verdict"]
+    return meta, verdicts
+
+
+def reconstruct_shard_from_jsonl(meta, verdicts):
+    """Rebuild a partial shard-result from a killed shard's JSONL checkpoint.
+    A cube logged UNSAT is done; any SAT decides the whole shard; every cube
+    this shard owned but never logged as UNSAT is unresolved and must be
+    re-run. Slice membership comes from the meta line's ncubes/nshards, so no
+    cube file is needed."""
+    shard = meta["shard"]
+    members = slice_members(meta["ncubes"], meta["nshards"], shard)
+    base = {"t": meta.get("t"), "N": meta.get("N"), "shard": shard,
+            "nshards": meta["nshards"], "recovered_from": "jsonl",
+            "n_cubes_in_slice": len(members)}
+    sat = [g for g, v in verdicts.items() if v == "SAT"]
+    if sat:
+        return {**base, "status": "SAT", "sat_cube": sat[0],
+                "n_unsat": sum(1 for v in verdicts.values() if v == "UNSAT"),
+                "unresolved_cubes": []}
+    n_unsat = sum(1 for g in members if verdicts.get(g) == "UNSAT")
+    unresolved = [g for g in members if verdicts.get(g) != "UNSAT"]
+    return {**base, "status": "UNRESOLVED" if unresolved else "UNSAT",
+            "n_unsat": n_unsat, "unresolved_cubes": unresolved}
+
+
+def collect_shard_results(results_dir, expected_nshards):
+    """Gather one result per expected shard from a results directory, in this
+    order of trust: the shard's final conquer JSON; else its JSONL checkpoint
+    (partial, recovered); else -- if any JSONL told us the total cube count --
+    a fully-missing shard whose entire slice is unresolved. A shard with no
+    evidence at all and no known ncubes is left out (aggregate flags it as a
+    missing shard, so the verdict can't be UNSAT)."""
+    finals = {}
+    for p in sorted(glob.glob(os.path.join(results_dir, "**", "*.json"),
+                              recursive=True)):
+        try:
+            obj = json.load(open(p))
+        except json.JSONDecodeError:
+            continue
+        if "shard" in obj and "status" in obj and "unresolved_cubes" in obj:
+            finals[obj["shard"]] = obj
+
+    jsonls = {}
+    ncubes = None
+    for p in sorted(glob.glob(os.path.join(results_dir, "**", "shard-*.jsonl"),
+                              recursive=True)):
+        meta, verdicts = read_shard_jsonl(p)
+        if meta is not None:
+            jsonls[meta["shard"]] = (meta, verdicts)
+            ncubes = meta["ncubes"]
+
+    results = []
+    for s in range(expected_nshards):
+        if s in finals:
+            results.append(finals[s])
+        elif s in jsonls:
+            results.append(reconstruct_shard_from_jsonl(*jsonls[s]))
+        elif ncubes is not None:
+            members = slice_members(ncubes, expected_nshards, s)
+            results.append({"shard": s, "nshards": expected_nshards,
+                            "status": "UNRESOLVED", "n_unsat": 0,
+                            "unresolved_cubes": members, "recovered_from":
+                            "missing (no result), whole slice re-dispatched"})
+        # else: no evidence and no ncubes -> genuinely missing, aggregate
+        # reports it as such (UNDETERMINED, listed in missing_shards).
+    return results
+
+
 def aggregate(shard_results, expected_nshards):
     """Combine shard verdicts into an instance verdict.
 
@@ -501,15 +611,8 @@ def main():
             ap.error("aggregate needs --expected-nshards (the shard count the "
                      "run dispatched) so a missing shard can't be read as "
                      "vacuous UNSAT")
-        shard_results = []
-        for p in sorted(glob.glob(os.path.join(args.results_dir, "**",
-                                               "*.json"), recursive=True)):
-            try:
-                obj = json.load(open(p))
-            except json.JSONDecodeError:
-                continue
-            if "shard" in obj and "status" in obj:  # a conquer result
-                shard_results.append(obj)
+        shard_results = collect_shard_results(args.results_dir,
+                                              args.expected_nshards)
         agg = aggregate(shard_results, args.expected_nshards)
         t = shard_results[0]["t"] if shard_results else "?"
         N = shard_results[0]["N"] if shard_results else "?"
