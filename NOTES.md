@@ -629,13 +629,41 @@ Note: nshards=20 saturates the free 20-job concurrency limit, so other
 workflows queue behind it. First real target: t=26 N=635 (AKS Table-6 p+1
 UNSAT cell that timed out monolithically), then the t=28/29 frontier.
 
-Status as of this update: first GitHub CnC run (t=26 N=635) dispatched and
-its 20 conquer shards running. Not yet confirmed green end-to-end on GH.
-NEXT after it lands: (1) the "solve t" orchestrator (binary-search N with
-CnC on the UNSAT side + cheap SAT witness side -> the exact value);
-(2) combined machine-checked proof (stitch per-cube DRAT + march_cu
-tautology proof -> one drat-trim-checkable certificate; --certified already
-captures per-cube proofs).
+### STATUS SNAPSHOT (2026-07-22, end of CnC build session)
+
+Component status:
+- CnC decision pipeline (`cnc_pipeline.yml` + `vdw_cnc.py` conquer/aggregate)
+  -- BUILT + GREEN ON GITHUB. Confirmed end-to-end: t=20 N=381 run
+  29918948801 returned UNSAT, 8 shards, 2285 cubes, 0 unresolved (matches
+  the local result exactly). gh_actions_results/cnc-run-29918948801/.
+- Adaptive re-splitting (`vdw_cnc.py` conquer, --max-resplit-depth) -- BUILT,
+  proven locally (coarse split + tiny cap on t=20 -> hard cubes re-split
+  into ~60 children, all resolve, UNSAT, 0 unresolved). Not yet exercised on
+  a GH run that actually needed it.
+- Single-job certified proof (`vdw_cnc.py prove` + `cnc_prove.yml`) -- BUILT,
+  drat-trim VERIFIED locally on t=15/t=20. Not yet run on GH.
+- "solve t" orchestrator (`vdw_cnc.py solve`) -- BUILT (sweep N + CnC-decide
+  each -> SAT/UNSAT map). Validated locally on t=15 (reproduces the
+  conjectured (200,205) parity alternation). Reports candidate thresholds
+  only; exact (p,q) extraction is open question #2.
+- CnC difficulty analytics (`pdw_difficulty.py`) -- BUILT, ingests CnC runs,
+  models cube-work growth + parallel reach.
+- Regression harness (`test_known_values.py` + `regression.yml`) -- BUILT,
+  small cells certify in <1s locally. GH run was queued behind t=26; re-runs
+  on the next SAT-code push.
+
+Build gotchas locked in: march_cu needs `-fcommon` on GCC10+ (Linux);
+tools/CnC is an untracked upstream clone so CI clones+builds it; nshards=20
+saturates the free 20-job limit and blocks other workflows.
+
+Killed run: t=26 N=635 at -d 16 (run 29917066464) -- cancelled after ~45min,
+-d 16 made too large a cube set (open question #3, split tuning). Re-run
+t=26 with a shallower split.
+
+NEXT: (1) resolve Fable's two math/proof questions (exact (p,q) rule;
+parallel certified proof); (2) re-run t=26 with tuned -d, then the t=28/29
+frontier; (3) once a frontier point is UNSAT, decide whether the single-job
+`prove` sweep fits in 6h or the parallel proof is needed.
 
 ### Open questions for Fable (things I'm not sure about)
 
