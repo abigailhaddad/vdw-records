@@ -48,6 +48,9 @@ on:
       resplit_march_opts:
         description: "march_cu options for re-splitting a hard cube"
         default: "-d 6"
+      batch_size:
+        description: "cubes per iglucose call (one process solves the whole batch, reusing learned clauses; SAT/timeout falls back to per-cube). 1 = exact per-cube path."
+        default: "200"
       timeout_minutes:
         description: "per-shard job timeout (<=360 on standard public runners)"
         default: "350"
@@ -190,6 +193,7 @@ jobs:
             --cap-seconds ${{ inputs.cap_seconds }} $certflag $ciflag \
             --max-resplit-depth ${{ inputs.max_resplit_depth }} \
             --resplit-march-opts "${{ inputs.resplit_march_opts }}" \
+            --batch-size ${{ inputs.batch_size }} \
             --outdir cnc_out --json-out cnc_out/shard-${{ matrix.shard }}.json \
             | tee cnc_out/shard-${{ matrix.shard }}.log
       # always(): a shard that hits the job wall still uploads its log (each

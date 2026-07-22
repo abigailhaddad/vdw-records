@@ -21,8 +21,9 @@ shard to come back UNSAT.
 Three modes:
   split    encode pdw(2;3,t) at length N -> CNF, run march_cu -> cube file
   conquer  given CNF + cube file, solve THIS shard's round-robin slice of
-           cubes one at a time (so a timeout costs one cube, not the slice,
-           and every cube gets its own logged solve time)
+           cubes -- by default in batches through one iglucose process each
+           (learned-clause reuse; a SAT or timed-out batch falls back to
+           per-cube solving so a timeout still costs one cube, not the slice)
   local    split + conquer all shards in-process (for local testing)
 
 This produces a sound DECISION. A single combined machine-checked proof of
@@ -59,6 +60,12 @@ IGLUCOSE = os.environ.get(
     os.path.join(REPO_ROOT, "tools", "CnC", "iglucose", "core", "iglucose"))
 DRAT_TRIM = os.environ.get(
     "DRAT_TRIM", os.path.join(REPO_ROOT, "tools", "drat-trim", "drat-trim"))
+
+
+# A batch is one iglucose call over many cubes; if the batch times out we
+# re-solve it per cube, so its wall cap is bounded to keep that worst-case
+# waste tolerable even when batch_size * per_cube_cap would be huge.
+BATCH_WALL_CAP_MAX = 900
 
 
 def is_palindrome(colors, N):
@@ -161,6 +168,54 @@ def solve_lits(clause_lines, cube_lits, cap, workdir, tag, certified):
     return f"ERR(rc={proc.returncode})", el, None
 
 
+def solve_batch(clause_lines, cube_lits_list, wall_cap, workdir, tag):
+    """Solve a whole BATCH of cubes in ONE iglucose call over a single
+    p-inccnf (all the batch's `a ...` assumption lines), so learned clauses
+    carry from each cube's refutation to the next -- the reuse a fresh
+    per-cube process throws away. Returns (status, seconds, model_or_None):
+      - UNSAT: iglucose refuted the formula under EVERY assumption in the
+        batch, so every cube in the batch is individually UNSAT. (Verified
+        empirically: iglucose reports SATISFIABLE if ANY cube is SAT -- it
+        short-circuits on the first SAT and never lets a later assumption
+        override an earlier SAT -- so `s UNSATISFIABLE` is decisive for the
+        whole batch. This is the soundness hinge of batching.)
+      - SAT: at least one cube is SAT; iglucose stopped at the first one and
+        emitted its model. No per-cube attribution is available from stdout
+        (confirmed), so the caller must re-solve the batch per cube to find
+        which cube (and to keep re-split behaviour).
+      - TIMEOUT / ERR: caller falls back to the per-cube path for the batch.
+    No --certified here: per-cube DRAT proofs need one process per cube, so
+    the certified path forces batch size 1."""
+    icnf = os.path.join(workdir, f"{tag}.icnf")
+    with open(icnf, "w") as f:
+        f.write("p inccnf\n")
+        f.writelines(clause_lines)
+        for cl in cube_lits_list:
+            f.write("a " + " ".join(str(l) for l in cl) + " 0\n")
+    t0 = time.time()
+    try:
+        proc = subprocess.run([IGLUCOSE, icnf, "-verb=0"], capture_output=True,
+                              text=True, timeout=wall_cap)
+    except subprocess.TimeoutExpired:
+        return "TIMEOUT", time.time() - t0, None
+    finally:
+        try:
+            os.remove(icnf)
+        except OSError:
+            pass
+    el = time.time() - t0
+    out = proc.stdout
+    if "s SATISFIABLE" in out:
+        model = []
+        for ln in out.splitlines():
+            if ln.startswith("v "):
+                model.extend(int(x) for x in ln[2:].split())
+        return "SAT", el, [l for l in model if l != 0]
+    if "s UNSATISFIABLE" in out:
+        return "UNSAT", el, None
+    return f"ERR(rc={proc.returncode})", el, None
+
+
 def split_residual(nvars, clause_lines, cube_lits, workdir, tag, march_opts):
     """Re-split a hard cube: build the residual CNF (base clauses + the
     cube's literals as unit clauses), run march_cu on it, and return the
@@ -229,7 +284,7 @@ def conquer_cube(nvars, clause_lines, cube_lits, cap, workdir, tag,
 
 def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
                   outdir, certified, resplit_opts, max_resplit_depth,
-                  cube_indices=None):
+                  cube_indices=None, batch_size=1):
     """Solve this shard's cubes: normally its round-robin slice (cube i goes
     to shard i%nshards), but if cube_indices is given, exactly those global
     cube indices instead (the re-dispatch path -- re-run only the cubes a
@@ -265,18 +320,27 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
 
     records = []
     n_unsat = 0
+    n_batched = 0
     unresolved = []
     sat_gidx = None
     witness = None
-    t0 = time.time()
-    for gidx, cube_lits in mine:
+
+    def record(gidx, verdict, secs, batched=False):
+        rec = {"gidx": gidx, "verdict": verdict, "seconds": round(secs, 3)}
+        if batched:
+            rec["batched"] = True
+        jf.write(json.dumps(rec) + "\n")
+        jf.flush()
+
+    def per_cube(gidx, cube_lits):
+        """Solve one cube via the adaptive per-cube path (re-split aware),
+        record it, and return True if SAT (the shard short-circuits)."""
+        nonlocal n_unsat, sat_gidx, witness
         c0 = time.time()
         verdict, model = conquer_cube(nvars, clause_lines, cube_lits, cap,
                                       workdir, str(gidx), resplit_opts,
                                       max_resplit_depth, 0, certified, records)
-        jf.write(json.dumps({"gidx": gidx, "verdict": verdict,
-                             "seconds": round(time.time() - c0, 3)}) + "\n")
-        jf.flush()
+        record(gidx, verdict, time.time() - c0)
         if verdict == "SAT":
             colors = decode_palindromic(model, N, 2)
             bad = independent_ap_check(colors, [3, t], N)
@@ -286,11 +350,46 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
             print(f"    -> SAT witness at cube {gidx}: "
                   f"witness_ok={witness['witness_ok']} "
                   f"palindrome={witness['is_palindrome']}", flush=True)
-            break
+            return True
         if verdict == "UNSAT":
             n_unsat += 1
         else:
             unresolved.append(gidx)
+        return False
+
+    # certified needs one process per cube (per-cube DRAT); otherwise batch.
+    eff_batch = 1 if (certified or batch_size < 1) else batch_size
+    t0 = time.time()
+    stop = False
+    for start in range(0, len(mine), eff_batch):
+        batch = mine[start:start + eff_batch]
+        if eff_batch == 1:
+            if per_cube(batch[0][0], batch[0][1]):
+                break
+            continue
+        wall = min(len(batch) * cap, BATCH_WALL_CAP_MAX)
+        status, secs, _ = solve_batch(clause_lines, [c for _, c in batch],
+                                      wall, workdir, f"batch{start}")
+        if status == "UNSAT":
+            # sound: batch UNSAT => every cube in the batch is UNSAT (see
+            # solve_batch). Attribute each; timing is the batch mean (flagged).
+            mean = secs / len(batch)
+            for gidx, _ in batch:
+                record(gidx, "UNSAT", mean, batched=True)
+                n_unsat += 1
+                n_batched += 1
+        else:
+            # SAT / TIMEOUT / ERR: no per-cube attribution, so re-solve the
+            # batch one cube at a time (finds the SAT cube, re-splits the hard
+            # ones). Only this batch pays; trivial cubes are still instant.
+            print(f"    batch [{batch[0][0]}..{batch[-1][0]}] {status} in "
+                  f"{secs:.1f}s -> per-cube fallback", flush=True)
+            for gidx, cube_lits in batch:
+                if per_cube(gidx, cube_lits):
+                    stop = True
+                    break
+        if stop:
+            break
     jf.close()
 
     if sat_gidx is not None:
@@ -302,6 +401,7 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     return {"t": t, "N": N, "shard": shard, "nshards": nshards, "mode": mode,
             "ncubes": len(cubes), "members": members,
             "cap_seconds": cap, "max_resplit_depth": max_resplit_depth,
+            "batch_size": eff_batch, "n_batched_unsat": n_batched,
             "n_cubes_in_slice": len(mine), "n_unsat": n_unsat,
             "unresolved_cubes": unresolved, "sat_cube": sat_gidx,
             "witness": witness, "status": status,
@@ -384,7 +484,8 @@ def conjectured_pair(t):
     return None, None
 
 
-def do_solve(t, n_lo, n_hi, outdir, march_opts, cap, resplit_opts, max_depth):
+def do_solve(t, n_lo, n_hi, outdir, march_opts, cap, resplit_opts, max_depth,
+             batch_size=1):
     """SWEEP N over [n_lo, n_hi], deciding each point SAT/UNSAT with a
     one-process cube-and-conquer (split + conquer, adaptive re-splitting),
     and report the full pattern. A sweep -- not a binary search -- because
@@ -404,7 +505,8 @@ def do_solve(t, n_lo, n_hi, outdir, march_opts, cap, resplit_opts, max_depth):
         nvars, clause_lines = read_cnf(cnf)
         cube_lits = read_cube_lits(cubes)
         r = conquer_slice(meta, nvars, clause_lines, cube_lits, 0, 1, cap,
-                          outdir, False, resplit_opts, max_depth)
+                          outdir, False, resplit_opts, max_depth,
+                          batch_size=batch_size)
         smap[N] = r["status"]
         wok = r["witness"]["witness_ok"] if r["witness"] else None
         print(f"  N={N}: {r['status']}"
@@ -655,6 +757,12 @@ def main():
     ap.add_argument("--resplit-march-opts", default="-d 6",
                      help="march_cu options for re-splitting a hard cube "
                           "(default '-d 6' -- a modest extra split per level)")
+    ap.add_argument("--batch-size", type=int, default=200,
+                     help="conquer/local/solve: cubes per iglucose call "
+                          "(default 200). One process solves the whole batch, "
+                          "reusing learned clauses across cubes; a batch that "
+                          "is SAT or times out falls back to per-cube solving. "
+                          "1 = the exact per-cube path (forced by --certified).")
     ap.add_argument("--cube-indices", default=None,
                      help="conquer: comma-separated GLOBAL cube indices to "
                           "solve instead of this shard's round-robin slice "
@@ -692,7 +800,7 @@ def main():
                      f"t={args.t} to default from)")
         res = do_solve(args.t, n_lo, n_hi, args.outdir, args.march_opts,
                        args.cap_seconds, args.resplit_march_opts,
-                       args.max_resplit_depth)
+                       args.max_resplit_depth, batch_size=args.batch_size)
         if args.json_out:
             json.dump(res, open(args.json_out, "w"), indent=2)
         return
@@ -772,7 +880,8 @@ def main():
         res = conquer_slice(meta, nvars, clause_lines, cubes, args.shard,
                             args.nshards, args.cap_seconds, args.outdir,
                             args.certified, args.resplit_march_opts,
-                            args.max_resplit_depth, cube_indices=cube_indices)
+                            args.max_resplit_depth, cube_indices=cube_indices,
+                            batch_size=args.batch_size)
         print(f"\n  shard {args.shard} verdict: {res['status']} "
               f"({res['n_unsat']} UNSAT, {len(res['unresolved_cubes'])} "
               f"unresolved) in {res['slice_seconds']:.1f}s", flush=True)
@@ -792,7 +901,7 @@ def main():
             conquer_slice(meta, nvars, clause_lines, cube_lits, s,
                           args.nshards, args.cap_seconds, args.outdir,
                           args.certified, args.resplit_march_opts,
-                          args.max_resplit_depth))
+                          args.max_resplit_depth, batch_size=args.batch_size))
     agg = aggregate(shard_results, args.nshards)
     print(f"\n=== pdw(2;3,{args.t}) N={args.N}: {agg['verdict']} "
           f"({agg['total_cubes_solved']}/{meta['ncubes']} cubes decided) ===",

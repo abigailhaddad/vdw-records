@@ -14,6 +14,7 @@ on:
       - "code/vdw_pdw_validate.py"
       - "code/vdw_cnc.py"
       - "code/test_known_values.py"
+      - "code/test_cnc.py"
       - ".github/workflows/regression.yml"
   workflow_dispatch:
     inputs:
@@ -27,6 +28,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: cube-and-conquer aggregation unit tests (no solver needed)
+        # Fast, hermetic guard on the load-bearing UNSAT logic: vacuous-UNSAT,
+        # killed-shard recovery, coverage/merge. Runs before the solver build
+        # so a broken aggregate fails in seconds.
+        run: python3 code/test_cnc.py
       - name: build solvers (kissat + cadical + drat-trim)
         run: |
           sudo apt-get update -y && sudo apt-get install -y build-essential git
