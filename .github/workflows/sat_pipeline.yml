@@ -1,0 +1,223 @@
+name: vdw-sat-pipeline
+
+# Runs the phase-1 SAT pipeline (code/vdw_pdw_validate.py,
+# code/vdw_pdw_attack.py) on GitHub-hosted runners instead of a laptop.
+# Manual trigger only -- this is compute-heavy (some single instances
+# take 30+ minutes even on a fast machine; see the t=26/27 validation
+# cells). Public repo: GitHub-hosted minutes are free, no monthly cap
+# to worry about (see .github/workflows/scan.yml's note on this).
+#
+# Sharded one job per t value, matching scan.yml's build-once/run-many
+# pattern: a single job builds kissat + cadical + drat-trim from source
+# and packages them as an artifact; every shard job downloads that
+# instead of rebuilding, then runs one t value's worth of work.
+
+# contents: write so the collect job can commit results back to main
+# with the default GITHUB_TOKEN (no extra setup needed for that part).
+# A broader-scoped PAT is also stashed as the repo secret GH_PAT (same
+# token this machine's `gh` CLI uses -- repo+workflow scopes) for
+# anything GITHUB_TOKEN can't do, e.g. triggering ANOTHER workflow run
+# from within this one (GITHUB_TOKEN-triggered events deliberately don't
+# cascade into other workflows, to prevent accidental infinite loops).
+# See the optional "chain" job at the bottom.
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "validate (AKS Table 6 cells) or attack (t=28/29 frontier)"
+        default: "validate"
+        type: choice
+        options: ["validate", "attack"]
+      ts:
+        description: "space-separated t values to run as separate shards"
+        default: "26 27"
+      lrat:
+        description: "attack mode only: use cadical native LRAT instead of kissat+DRAT"
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+      timeout_minutes:
+        description: "per-shard job timeout (<=360 on standard public runners)"
+        default: "340"
+      chain_next:
+        description: "after this run finishes, auto-dispatch this same workflow again with a different mode/ts (chaining). Empty = don't chain."
+        default: ""
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      ts: ${{ steps.gen.outputs.ts }}
+    steps:
+      - id: gen
+        run: |
+          echo "ts=$(python3 -c "import json,sys; print(json.dumps('${{ inputs.ts }}'.split()))")" >> "$GITHUB_OUTPUT"
+
+  build_tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: apt prerequisites
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential git
+      - name: build kissat
+        run: |
+          git clone --depth 1 https://github.com/arminbiere/kissat.git /tmp/kissat
+          ( cd /tmp/kissat && ./configure && make -j"$(nproc)" )
+      - name: build cadical
+        run: |
+          git clone --depth 1 https://github.com/arminbiere/cadical.git /tmp/cadical
+          ( cd /tmp/cadical && ./configure && make -j"$(nproc)" )
+      - name: build drat-trim (incl. lrat-check)
+        run: |
+          git clone --depth 1 https://github.com/marijnheule/drat-trim.git /tmp/drat-trim
+          ( cd /tmp/drat-trim && make )
+      - name: package tools/ layout matching the local dev tree
+        run: |
+          mkdir -p pkg/bin pkg/tools/drat-trim
+          cp /tmp/kissat/build/kissat pkg/bin/
+          cp /tmp/cadical/build/cadical pkg/bin/
+          cp /tmp/drat-trim/drat-trim /tmp/drat-trim/lrat-check pkg/tools/drat-trim/
+          chmod +x pkg/bin/* pkg/tools/drat-trim/*
+          tar -C pkg -czf sat-tools.tar.gz bin tools
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sat-tools
+          path: sat-tools.tar.gz
+
+  run:
+    needs: [setup, build_tools]
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        t: ${{ fromJSON(needs.setup.outputs.ts) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: sat-tools
+      - name: unpack tools
+        run: |
+          tar -xzf sat-tools.tar.gz
+          chmod +x bin/* tools/drat-trim/*
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+      - name: sanity-check binaries
+        run: |
+          kissat --version || true
+          cadical --version || true
+          ./tools/drat-trim/drat-trim --help || true
+      - name: run validate shard
+        if: ${{ inputs.mode == 'validate' }}
+        run: |
+          mkdir -p out
+          python3 code/vdw_pdw_validate.py --ts ${{ matrix.t }} \
+            --outdir out --json-out out/t${{ matrix.t }}.json \
+            | tee out/t${{ matrix.t }}.log
+      - name: run attack shard
+        if: ${{ inputs.mode == 'attack' }}
+        run: |
+          mkdir -p out
+          args=(--ts ${{ matrix.t }} --outdir out --json-out "out/t${{ matrix.t }}.json")
+          if [ "${{ inputs.lrat }}" = "true" ]; then
+            args+=(--lrat)
+          fi
+          python3 code/vdw_pdw_attack.py "${args[@]}" | tee "out/t${{ matrix.t }}.log"
+      # if: always() is the whole point here: if this shard hits its
+      # timeout-minutes cap (or is cancelled), GitHub Actions still runs
+      # always()-steps before tearing the job down, so whatever the
+      # scripts had already printed to out/*.log (they flush=True every
+      # line as they go) gets uploaded rather than lost. out/*.json only
+      # exists if the script reached its own final json.dump(), which
+      # won't happen on a mid-shard kill -- the log is the durable record
+      # in that case, which is why the collect step below reads logs, not
+      # just JSON.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-t${{ matrix.t }}
+          # CNF/proof files can be large (100s of MB); only ship the
+          # logs and JSON summaries by default, not the raw artifacts.
+          path: |
+            out/*.log
+            out/*.json
+          if-no-files-found: warn
+
+  collect:
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # default GITHUB_TOKEN is enough for a same-repo push given
+          # permissions.contents=write above; actions/checkout wires it
+          # into the local git credential helper automatically.
+          persist-credentials: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-t*
+          path: results
+          merge-multiple: true
+      - name: summarize
+        run: |
+          {
+            echo "# vdw-sat-pipeline results (mode=${{ inputs.mode }}, ts=${{ inputs.ts }}, run ${{ github.run_id }})"
+            echo
+            for f in results/*.log; do
+              echo "## $(basename "$f")"
+              echo '```'
+              tail -60 "$f"
+              echo '```'
+            done
+          } | tee "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: results/
+      - name: commit results back to the repo
+        run: |
+          git config user.name "vdw-sat-pipeline[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          mkdir -p "gh_actions_results/run-${{ github.run_id }}"
+          cp -r results/* "gh_actions_results/run-${{ github.run_id }}/" 2>/dev/null || true
+          git add "gh_actions_results/run-${{ github.run_id }}"
+          if git diff --cached --quiet; then
+            echo "nothing to commit (no result files produced)"
+            exit 0
+          fi
+          git commit -m "GH Actions: vdw-sat-pipeline results (mode=${{ inputs.mode }}, ts=${{ inputs.ts }}, run ${{ github.run_id }})"
+          # retry a few times in case main moved under us during the run
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main && break
+            echo "push attempt $i failed, retrying..."; sleep 5
+          done
+
+  # Optional chaining: only runs if the dispatch set chain_next to a
+  # non-empty "mode ts" string (e.g. "attack 28 29"). Uses GH_PAT, not
+  # GITHUB_TOKEN, because GITHUB_TOKEN-triggered workflow_dispatch calls
+  # from within a running workflow are blocked by GitHub's loop
+  # prevention; a real token is required to actually kick off the next
+  # run.
+  chain:
+    needs: collect
+    if: ${{ inputs.chain_next != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: dispatch next run
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -- ${{ inputs.chain_next }}
+          next_mode="$1"; shift
+          next_ts="$*"
+          gh workflow run sat_pipeline.yml \
+            --repo ${{ github.repository }} \
+            -f mode="$next_mode" \
+            -f ts="$next_ts" \
+            -f lrat=${{ inputs.lrat }} \
+            -f timeout_minutes=${{ inputs.timeout_minutes }}
