@@ -6,6 +6,54 @@ conjecture was disproven 2026-07-19 by a counterexample found by Claude
 (announced by Levent Alpöge, Lean-verified by Paul Lezeau); user asked what
 other open problems we'd like to try.
 
+## CURRENT STATE (2026-07-22) — read this first
+
+**What we're doing now:** proving exact palindromic van der Waerden values
+pdw(2;3,t) with a machine-checkable cube-and-conquer SAT pipeline. The live
+frontier is t=26 and up. Earlier phases — Ramsey phase 1, the vdW zip
+campaign, the reach/records lower bounds — are concluded and archived at the
+bottom of this file. Full builder spec for the current pipeline work:
+`PLAN_pipeline_improvements.md` (repo root).
+
+**Pipeline state:** the sharded CnC decision pipeline (`cnc_pipeline.yml` +
+`code/vdw_cnc.py`) is green on GitHub (t=20 N=381 -> UNSAT, run
+29918948801). PLAN tasks 1-7 landed 2026-07-22 (commits 98b6ca8..67be420,
+detailed in the builder-pass note in the Phase-3 section below): the
+vacuous-UNSAT bug is fixed and coverage is now VERIFIED, killed shards
+checkpoint + recover via per-cube JSONL, unresolved cubes re-dispatch by
+index, cubes batch through one iglucose (1.9x faster), and a pilot gate
+projects cost before fanning out. `test_cnc.py` (14 tests) + `regression.yml`
+green.
+
+**READY TO FIRE (not yet run on GH) — tuned t=26 dispatch:**
+```
+gh workflow run cnc_pipeline.yml -f t=26 -f N=635 -f march_opts="-d 12"
+```
+Pilot on that split (4022 cubes, vs 51k at the bad -d 16): projected >=1.88
+core-hours (< 40 budget, so the gate passes), with a 22.5% heavy tail that
+re-split (depth 3) + batching must clear. If it lands UNSAT with full
+coverage, that's the pdw(2;3,26) upper-bound half.
+
+**Next actions:**
+1. Fire the t=26 dispatch above; if UNSAT, move to the t=28/29 frontier.
+2. PLAN task 9 — stitched PARALLEL certificate (open question #1): the
+   sharded pipeline DECIDES but does not yet emit one drat-trim-checkable
+   proof. Needed to CERTIFY a frontier value whose monolithic sweep exceeds
+   6h. Its own session; research Heule's tooling first.
+3. PLAN task 8 — parallelize the `solve` sweep (independent N per worker).
+4. Nail the exact (p,q) reading rule off the sweep map (open question #2)
+   before claiming a value for a NEW t.
+5. Deferred: task 6.3 (fold pilot JSON into pdw_difficulty.py reach model).
+
+**Resume basics:** every script is a self-contained CLI (see docstrings).
+Fast local sanity before any commit:
+```
+python3 code/vdw_cnc.py local --t 20 --N 381 --nshards 4 --march-opts "-d 12"   # expect UNSAT 2285/2285
+python3 code/test_cnc.py && python3 code/test_known_values.py
+```
+Open questions and methodology lessons are below; concluded campaigns are in
+the Archive at the very bottom.
+
 ## Problem status intel (verified by web research 2026-07-20)
 
 Still open: Hadamard matrix of order 668; 3×3 magic square of squares
@@ -21,6 +69,379 @@ Buzzard summary post: "Human mathematicians are being outcounterexampled"
 (xenaproject, 2026-07-20). Jacobian fallout: Mathieu conjecture for SU(3),
 Zhao vanishing, Gaussian moments, Image conjecture all fall; Dixmier falsity
 in dim ≥ 3 is an unclaimed immediate corollary.
+
+## Exact-values campaign (phase 3 — starting 2026-07-21)
+
+Pivot, after a mathematician's reality check (see memory
+vdw-lower-bounds-are-minor): our records are easy-direction lower bounds;
+the genuinely hard/interesting direction is EXACT values = an UNSAT proof
+that every coloring of [1,N+1] contains a mono AP. Target: the mixed
+table w(2;3,t), stalled since Ahmed–Kullmann–Snevily 2014 (2013-era
+solvers) — small instances (hundreds of vars), 12 years of solver
+progress, nobody pushing. NOT W(2,7) (Kouril's "NEVER" stands).
+Division of labor: Fable plans/specs/reviews; sonnet agents build.
+
+Plan: (1) pipeline — install kissat/CaDiCaL/drat-trim(/march_cu), CNF
+encoder for mixed vdW, validate by re-deriving known exact values (SAT
+at W−1 with witness brute-checked by vdw.py, proof-checked UNSAT at W);
+(2) calibration — re-prove the deepest known cells, measure the
+cell-to-cell time growth curve, extrapolate the first unknown cell's
+cost BEFORE committing (if it extrapolates to years, publish the curve
+and stop — honest negative); (3) attack — incremental SAT to push the
+lower bound until witnesses dry up, then cube-and-conquer UNSAT sharded
+on GitHub Actions (same skeleton as the scan workflow), per-cube DRAT
+proofs, all machine-checked.
+
+### Frontier intel (research agent, 2026-07-21 — full report w/ URLs in
+### session transcript; key sources: arXiv:1102.5433, Wikipedia vdW table,
+### OEIS A007783, IOS Press ebooks 42692)
+
+- AKS 2014 (Ahmed–Kullmann–Snevily, DAM 174): exact w(2;3,t) through
+  t=19 (=349, their new result: ~196 CPU-years on 2011 solvers, but
+  their own estimate says tawSolver-2.6 (2014) needed only ~1.4
+  CPU-years — a >100x software gain in 3 years). Conjectured values
+  t=20..30 (389, 416, 464, 516, 593, 656, 727, 770, 827, 868, 903;
+  "pretty safe" ≤28), weak lower bounds t=31..39.
+- **The frontier moved ONCE since 2014, and it's shaky: Kouril 2015
+  (FPGA cluster, IOS Press, paywalled) claims w(2;3,20)=389 plus three
+  small mixed cells. Unreplicated, no proof artifact; OEIS A007783 and
+  the smallnumbers verification project still stop at t=19.** Kouril's
+  same abstract promised W(5,3) in 6-9 months; it never appeared.
+- Nobody has ever attacked w(2;3,21). No AI system has touched vdW
+  exact values (2026 wave checked). Fox–Hunter arXiv:2606.02541 (June
+  2026) is theory only.
+- Cube-and-conquer was INVENTED on these exact instances (AKS fn. 6,
+  Heule–Kullmann–Wieringa–Biere). Modern stack: march_cu (or learned
+  cubing) → CaDiCaL 2.0 (native LRAT) / kissat → verified checker
+  (cake_lpr), embarrassingly parallel across cubes.
+- Other family frontiers (last exact / next): w(2;4,9)=309 (Ahmed
+  2012); w(2;5,7)=260 (Ahmed 2013, ~200 CPU-years, author asked in
+  print for independent verification — never done); w(3;3,3,6)=107;
+  w(3;2,3,14)=202 (Kouril 2012).
+
+### TARGET SELECTED: w(2;3,20) — prove =389 with machine-checkable proof
+
+Why: genuine frontier cell with a live discrepancy (Wikipedia says
+exact via one unreplicated FPGA run with no artifact; OEIS says
+unknown). Either outcome is a real result: first proof-logged
+confirmation, or refutation of a standing claim. Instance is tiny (389
+vars); cost extrapolation says ~1.5-5 CPU-years modern ≈ 1-3 weeks on
+free GitHub Actions (20 jobs × 4 cores). Sets up w(2;3,21)=416? as the
+genuinely-new follow-on (~10x harder, borderline feasible).
+Calibration ladder before committing: t=17 (=279, should be hours),
+t=18 (=312), measure the growth factor, extrapolate t=20; abort and
+publish the curve if it points past ~3000 core-days.
+Side quests (value per CPU): palindromic pdw(2;3,t) past t=27 (AKS
+stopped there; C&C strongest on palindromic instances; laptop-scale;
+QUEUED 2026-07-21 as builder task 4 — easiest genuinely hard-direction
+result on the board; NB the pdw definition is a PAIR, palindromicity
+is not monotone — definition to be taken from arXiv:1102.5433/OEIS
+A198684/5, not from memory); verify w(2;5,7)=260 (13-year-old standing
+request); modern local search on the t=31..39 lower bounds (days of
+compute, 2014-era records).
+
+### Efficiency watch (standing — user asked us to keep hunting)
+
+Levers identified so far, roughly by leverage:
+- Palindrome VARIABLE FOLDING (not equality clauses): halves vars on
+  pdw instances. In the task-4 spec.
+- Proof logging only at the boundary: bracket transitions with cheap
+  no-proof SAT calls; re-run only the final UNSAT with proofs on.
+- cadical >= 2.0 native LRAT skips the kissat->drat-trim post-pass;
+  builder measuring the delta on one cell.
+- Warm-start phases from nearby-n witnesses (sat_full.py pattern).
+- For the t=20 campaign: cube-depth tuning is THE knob (AKS split at
+  DLL depth 8 for 256 subtrees); measure cube-size distribution on
+  t=17/18 before picking t=20's depth. march_cu didn't have to build
+  for phase 1 — becomes required for phase 3.
+- Not yet explored: AKS report tawSolver (special-purpose, their 85x)
+  beat general CDCL on these instances — if calibration disappoints,
+  try building tawSolver (Kullmann's GitHub, OKlibrary) before buying
+  compute; also SAT-Comp-2025-winner kissat variants are public.
+
+### Phase-3 results — pipeline BUILT & VALIDATED (2026-07-21 night)
+
+Built in code/ (mostly by a sonnet build subagent, to spec):
+- `code/vdw_sat.py` — mixed-vdW CNF encoder (r=2: one boolean/integer;
+  r>=3: one-hot; one clause per AP; NO symmetry breaking — unsound on
+  mixed instances). CLI + importable.
+- `code/vdw_sat_validate.py` — validates the encoder by re-deriving known
+  exact values both directions (SAT at W-1 with witness brute-checked;
+  proof-logged UNSAT at W via drat-trim).
+- `code/vdw_pdw_validate.py` / `code/vdw_pdw_attack.py` — palindromic
+  path pdw(2;3,t): variable folding (mirror positions share a var).
+- Toolchain: kissat + cadical (Homebrew), drat-trim + march_cu/CnC built
+  from source in `tools/`; `satenv/` = pysat venv.
+
+RESULT: **pdw(2;3,20) = (380,389) fully REPRODUCED with machine-checked
+proofs, both components** — SAT witnesses at N=379/388 verified &
+confirmed palindromic; UNSAT at N=381 (116 MB cert) and N=390 (281 MB
+cert), both drat-trim-checked. Calibration curve: t=15 UNSAT sub-second
+(~1 MB cert) -> t=20 UNSAT 45-112s (116-281 MB cert). The machinery
+works end-to-end in the HARD (UNSAT/exact) direction.
+
+GitHub Actions: `.github/workflows/sat_pipeline.yml` (Abigail's standard
+self-chaining PAT-secret pattern; `GH_PAT` secret; repo PUBLIC for free
+minutes) shards by t: mode=validate (26 27) / mode=attack (28 29); runs
+dispatched. **NEXT REAL TARGET: pdw(2;3,28)/(29)** — genuinely-new values
+past AKS's t=27 ceiling. NB: a 2026-07-21-night session mixup (main
+assistant misread a user-directed build subagent as rogue, briefly
+reverted/disabled things) was fully resolved — repo public, workflow
+enabled, GH_PAT intact, runs re-dispatched; see memory
+incident-misread-user-directed-agent.
+
+### Phase-3 run 2026-07-22 (overnight) — what landed, and the timeout fix
+
+First real GH-Actions overnight run of validate 26/27 + attack 28/29.
+Results committed to gh_actions_results/run-29885808402 (26/27) and
+run-29885809480 (28/29).
+
+What we got:
+- SAT direction (a good palindromic partition exists = lower bound):
+  solves fine. New verified palindromic witnesses from the attack walk:
+  t=28 SAT up to N=725 (p-side) and N=740 (q-side); t=29 SAT up to N=808
+  (p-side). All witness-checked and confirmed palindromic. These are
+  honest lower bounds, nothing more.
+- UNSAT direction (no partition = the upper bound, the mathematically
+  interesting half): EVERY point timed out. Both engines — kissat+DRAT
+  and cadical+LRAT — hit the cap on the t=27 comparison cells. Zero
+  proofs generated. So NOTHING certified: not the 26/27 Table-6 cells,
+  not any 28/29 frontier value.
+
+Root cause, and it was NOT the chain: the per-instance cap was 30 min
+(TIME_CAP), a job ran many instances/probes back-to-back, and the job's
+own timeout-minutes wall (340) killed it mid-instance. GitHub reports a
+timeout-minutes kill as conclusion=cancelled — which is why 28/29 looked
+"cancelled" (its run jobs ended at exactly start+340min; the chain job
+was skipped). The earlier six cancels were just re-dispatched batches
+superseding each other.
+
+The fix (this session): these UNSAT instances need HOURS, not 30 min, and
+a public runner caps a job at 360 min (6h) — so the only way to give one
+instance hours is ONE INSTANCE PER JOB.
+- code/vdw_pdw_validate.py: added --cap-seconds (threaded all the way to
+  the solver AND the drat/lrat proof check), --only {p-1,q-1,p+1,q+1} to
+  run a single certification cell, and --point T N {sat,unsat} to hammer
+  one arbitrary point (e.g. a frontier ceiling) proof-logged in its own
+  job. Partial shards report certified=None (undetermined), not False.
+- code/vdw_pdw_attack.py: added --cap-seconds (per-probe).
+- .github/workflows/sat_pipeline.yml: rewritten to a shards model. You
+  pass shards=<JSON array of arg-strings>, one job each, fanned out as a
+  matrix; runner=validate|attack; cap_seconds (default 18000=5h);
+  timeout_minutes (default 350, must stay > cap/60 and <=360). Chain job
+  now guards against overlap (won't dispatch if another run is active)
+  and a run-level concurrency group serializes runs. KEEP cap_seconds
+  BELOW timeout_minutes*60 or the job wall bites again.
+
+Next overnight target: prove one frontier ceiling UNSAT with a checked
+proof, each in its own 5h job, e.g.
+  runner=validate cap_seconds=18000 timeout_minutes=350
+  shards=["--point 28 728 unsat","--point 29 810 unsat",
+          "--ts 26 --only p+1","--ts 26 --only q+1"]
+A single checked UNSAT at a t=28/29 point is a genuinely-new pdw value.
+Open question if 5h still isn't enough: cube-and-conquer (march_cu is
+already built in tools/CnC) rather than a single monolithic solve.
+
+### Phase-3: cube-and-conquer built (2026-07-22)
+
+Answered the "5h isn't enough" question by building the cube-and-conquer
+path -- the standard method for hard UNSAT combinatorics (how the exact
+vdW / Schur / Pythagorean-triple numbers were settled). Split one instance
+into cubes with march_cu (look-ahead), solve the cubes independently with
+iglucose, shard them across parallel GitHub jobs. This flattens a
+monolithic multi-hour exponential solve into thousands of independent
+sub-second cubes, sidestepping the 6h single-job wall.
+
+Why it works / soundness: march_cu's cubes are a complete case split, so
+all-cubes-UNSAT => formula UNSAT; any cube SAT => a full model (decoded and
+independently verified as a good palindrome). Demonstrated locally: t=20
+N=381 (45-112s monolithic) split into 5254 cubes, hardest single cube
+0.20s.
+
+New pieces:
+- `code/vdw_cnc.py` -- split / conquer / aggregate / local modes. conquer
+  solves its round-robin cube slice one cube at a time (a timeout costs one
+  cube, logged by global index for re-dispatch). ADAPTIVE RE-SPLITTING: a
+  timed-out cube is re-split with march_cu (residual CNF = base + cube lits
+  as units) and recursed on, up to --max-resplit-depth -- this clears the
+  hard tail of stubborn cubes near the frontier instead of stalling
+  (verified: coarse split + 1s cap on t=20 leaves 5 cubes timing out, each
+  re-splits into ~60 children that all solve -> UNSAT, 0 unresolved).
+  Solver paths overridable via $MARCH_CU / $IGLUCOSE.
+- `.github/workflows/cnc_pipeline.yml` -- build_tools clones+builds
+  march_cu + iglucose from github.com/marijnheule/CnC (NOT tracked here;
+  binaries are platform-specific). BUILD GOTCHA: march_cu is old C with
+  header globals; GCC 10+ defaults to -fno-common -> "multiple definition"
+  link errors. Fixed with `make CC="gcc -fcommon"` (Apple clang tolerates
+  it, so it builds on a mac but not on the ubuntu runner without the flag).
+  Then split -> conquer matrix (nshards jobs) -> collect aggregates the
+  verdict and commits it. Inputs: t, N, nshards, march_opts, cap_seconds
+  (per-cube), max_resplit_depth, timeout_minutes.
+- `code/test_known_values.py` + `.github/workflows/regression.yml` --
+  recompute small AKS Table-6 cells both directions on every SAT-code
+  change; tripwire so an encoder/toolchain regression can't silently mint a
+  wrong frontier result.
+- `code/pdw_difficulty.py` extended to ingest CnC runs: per-cube time
+  distributions + a CnC-reach model (hardest cube stays bounded via
+  re-splitting, so reach is limited by parallel width / total work, not one
+  exponential solve).
+
+Run it:
+  gh workflow run cnc_pipeline.yml -f t=26 -f N=635 -f nshards=20 \
+    -f march_opts="-d 16" -f cap_seconds=1800 -f max_resplit_depth=2
+Note: nshards=20 saturates the free 20-job concurrency limit, so other
+workflows queue behind it. First real target: t=26 N=635 (AKS Table-6 p+1
+UNSAT cell that timed out monolithically), then the t=28/29 frontier.
+
+### STATUS SNAPSHOT (2026-07-22, end of CnC build session)
+
+Component status:
+- CnC decision pipeline (`cnc_pipeline.yml` + `vdw_cnc.py` conquer/aggregate)
+  -- BUILT + GREEN ON GITHUB. Confirmed end-to-end: t=20 N=381 run
+  29918948801 returned UNSAT, 8 shards, 2285 cubes, 0 unresolved (matches
+  the local result exactly). gh_actions_results/cnc-run-29918948801/.
+- Adaptive re-splitting (`vdw_cnc.py` conquer, --max-resplit-depth) -- BUILT,
+  proven locally (coarse split + tiny cap on t=20 -> hard cubes re-split
+  into ~60 children, all resolve, UNSAT, 0 unresolved). Not yet exercised on
+  a GH run that actually needed it.
+- Single-job certified proof (`vdw_cnc.py prove` + `cnc_prove.yml`) -- BUILT,
+  drat-trim VERIFIED locally on t=15/t=20. Not yet run on GH.
+- "solve t" orchestrator (`vdw_cnc.py solve`) -- BUILT (sweep N + CnC-decide
+  each -> SAT/UNSAT map). Validated locally on t=15 (reproduces the
+  conjectured (200,205) parity alternation). Reports candidate thresholds
+  only; exact (p,q) extraction is open question #2.
+- CnC difficulty analytics (`pdw_difficulty.py`) -- BUILT, ingests CnC runs,
+  models cube-work growth + parallel reach.
+- Regression harness (`test_known_values.py` + `regression.yml`) -- BUILT,
+  small cells certify in <1s locally. GH run was queued behind t=26; re-runs
+  on the next SAT-code push.
+
+Build gotchas locked in: march_cu needs `-fcommon` on GCC10+ (Linux);
+tools/CnC is an untracked upstream clone so CI clones+builds it; nshards=20
+saturates the free 20-job limit and blocks other workflows.
+
+Killed run: t=26 N=635 at -d 16 (run 29917066464) -- cancelled after ~45min,
+-d 16 made too large a cube set (open question #3, split tuning). Re-run
+t=26 with a shallower split.
+
+NEXT: (1) resolve Fable's two math/proof questions (exact (p,q) rule;
+parallel certified proof); (2) re-run t=26 with tuned -d, then the t=28/29
+frontier; (3) once a frontier point is UNSAT, decide whether the single-job
+`prove` sweep fits in 6h or the parallel proof is needed.
+
+2026-07-22 process review (Fable): full builder spec for pipeline fixes +
+efficiency pass in PLAN_pipeline_improvements.md (repo root). Headline:
+aggregate() has a vacuous-UNSAT bug — the two cancelled-run verdict.json
+files in gh_actions_results claim UNSAT with n_shards=0; fix (plan task 1)
+BEFORE the next dispatch. Killed t=26 run's measured cube-time tail is in
+the plan preamble; it motivates cap 1800->60 + re-split (task 4) and
+batched iglucose (task 5).
+
+2026-07-22 builder pass (Opus): PLAN_pipeline_improvements.md tasks 1-7
+landed (commits 98b6ca8..67be420). Highlights:
+- Task 1: aggregate() no longer reads an empty/partial shard set as UNSAT.
+  UNSAT now requires all expected shards present + all UNSAT + full cube
+  coverage. Found THREE false verdict.json (plan named two): cnc-run-
+  29916885056, -29917001084, -29917066464 -> repaired to UNDETERMINED.
+- Task 2: per-cube JSONL checkpoint (shard-<s>.jsonl), flushed per cube; a
+  killed shard is recoverable and re-dispatchable. slice_members() is the
+  single definition of round-robin membership.
+- Task 3: conquer --cube-indices re-dispatches exactly the unresolved cubes;
+  aggregate --merge-jsonl closes an instance across base+redispatch by
+  cube-level union (UNSAT iff every cube refuted somewhere). Coverage check
+  refuses a false full-instance UNSAT from a subset run.
+- Task 4: cnc_pipeline.yml cap 1800->60, resplit depth 2->3.
+- Task 5: solve_batch runs one iglucose over many cubes (learned-clause
+  reuse). Empirically pinned: batch `s UNSATISFIABLE` <=> every cube UNSAT
+  (SAT short-circuits, never overridden). t=20: batched == per-cube
+  cube-for-cube, 1.9x faster. --batch-size default 200; 1 = exact per-cube.
+- Task 6: `pilot` mode + budget gate in the split job (blocks fan-out over
+  budget_core_hours, default 40). t=20 projects 30s vs ~35 measured.
+- Task 7: build_tools cached on upstream CnC HEAD; nshards default 20->16.
+- test_cnc.py (14 hermetic aggregate/recovery/coverage/merge tests) wired
+  into regression.yml.
+
+PILOT RESULT for the next real dispatch: t=26 N=635 at **-d 12** = 4022
+cubes (vs 51k at -d 16 -- confirming -d 16 was mostly overhead). Pilot of
+200 cubes @5s cap: **22.5% timeout, median 0.43s, projected >=1.88
+core-hours (lower bound)**. Comfortably under the 40 core-hour budget, so
+the gate passes -- but the 22.5% heavy tail is real; rely on re-split
+(depth 3) + batching to clear it. This is the tuned dispatch the plan's
+Task 4 note calls for. NOT yet run on GH.
+
+Still TODO from the plan: task 6.3 (fold pilot JSON into pdw_difficulty.py
+reach model -- deferred), task 8 (parallelize `solve` sweeps), task 9
+(stitched parallel certificate -- its own session), task 10 (commit
+crosscheck_records.py, gitignore/known_values_out, restructure this file).
+
+### Open questions for Fable (things I'm not sure about)
+
+1. **Parallel certified proof (the hard one).** We can now produce a
+   machine-checked UNSAT certificate the EASY way: `vdw_cnc.py prove` runs
+   iglucose over the whole cube set in ONE process with DRAT logging, then
+   drat-trim verifies that proof against the base CNF (confirmed VERIFIED on
+   t=15/t=20 locally, and `cnc_prove.yml` runs it on GH). But that is
+   single-job -- bounded by the 6h wall on the sequential cube sweep. The
+   SHARDED decision (`cnc_pipeline.yml`) is what actually beats the wall,
+   and it does NOT yet produce a combined certificate. To certify a frontier
+   value whose monolithic cube-sweep exceeds 6h we need to STITCH the
+   per-shard proofs into one drat-trim-checkable certificate. I know the
+   shape -- each conquer solve of phi ∧ cube_i gives phi ⊢ ¬cube_i, and you
+   need a final "tautology proof" that ¬cube_1 ∧ ... ∧ ¬cube_m is UNSAT
+   (the cubes are exhaustive) -- but I do NOT know the exact mechanics with
+   these tools: which tool emits march_cu's tautology proof, how to make
+   iglucose emit per-cube proofs that derive ¬cube_i (vs. refuting phi∧cube
+   with the cube as clauses), and how to concatenate + reindex them so
+   drat-trim checks the whole thing against phi. Heule's group does this at
+   scale (Pythagorean triples, 200 TB) so there is a known recipe; I just
+   don't have it. This is the piece to research before betting a night on a
+   frontier proof.
+
+2. **Reading exact (p,q) off the sweep map (the math subtlety).** The new
+   `vdw_cnc.py solve` mode sweeps N over a window and CnC-decides each point.
+   On t=15 (conjectured pdw = (200,205)) it produced:
+       N:  197 198 199 200 | 201 202 203 204 205 | 206 207
+           S   S   S   S   |  U   S   U   S   U   |  U   U
+   i.e. below 201 all SAT, then a PARITY alternation -- odd N (201,203,205)
+   UNSAT, even N (202,204) SAT -- until it's permanently UNSAT from 206. So
+   the two pdw values (200,205) live in/at this alternation, and existence
+   is non-monotone exactly as the encoder docstring warned. I produce the
+   full map correctly, but I do NOT know the precise AKS rule that reads the
+   canonical (p, q) off a parity-alternating pattern (is p the last-all-SAT,
+   q the first-permanently-UNSAT? per-parity thresholds? something else?).
+   `solve` currently reports raw SAT->UNSAT transitions as *candidates* and
+   the conjectured pair, and stops short of asserting the exact value. This
+   is the rule to nail down (from AKS Section 5.2 / the Table 6 definition)
+   before the orchestrator can claim "pdw(2;3,t) = (p,q)" for a NEW t.
+
+3. **march_cu split-depth tuning.** `-d 16` on t=26 produced a large cube
+   set and the shards ran long (>20 min, still healthy). No principled way
+   yet to pick `-d` / cube count vs. nshards vs. per-cube cap for a given t.
+   A short calibration (cube count and max-cube-time vs -d at fixed t) would
+   let `pdw_difficulty.py` recommend settings instead of guessing.
+
+4. **nshards vs the free concurrency limit.** nshards=20 saturates GitHub's
+   ~20-job free ceiling, so everything else (regression, other runs) queues.
+   Is it worth capping nshards at ~16 to leave headroom, or chaining shard
+   batches? Minor, but affects overnight throughput.
+
+## Methodology lessons (the running theme)
+
+- Search strategy > search effort: symmetry restriction collapsed 2^1176 to
+  2^24; one theorem (Harborth–Krause) deleted a whole dead subspace.
+- Know when the subproblem stops needing search: frozen-seed extension is a
+  tiny exact CSP; an hour of SA flailed at what backtracking disproved in
+  milliseconds.
+- Verify everything independently (from-scratch recount before believing
+  any "hit"); check problems are still open before attacking (knowledge
+  cutoff!).
+- Negative results with proofs beat positive results without them.
+
+## Archive (concluded campaigns)
+
+The campaigns below are DONE — kept for the record, not active work. The live
+work is the exact-values / CnC campaign above. Reordered here 2026-07-22;
+nothing deleted.
 
 ## Ramsey campaign (phase 1 — concluded except one SAT run)
 
@@ -405,373 +826,6 @@ are the payoff at the end. Colorblind-safe validated palette.
 - Scanners were stopped externally (user at the machine); restart with:
   python3 code/vdw_scan3.py 3   (r=3, from the cap; adjust start to skip
   already-scanned band up to ~969,403,451)
-
-## Exact-values campaign (phase 3 — starting 2026-07-21)
-
-Pivot, after a mathematician's reality check (see memory
-vdw-lower-bounds-are-minor): our records are easy-direction lower bounds;
-the genuinely hard/interesting direction is EXACT values = an UNSAT proof
-that every coloring of [1,N+1] contains a mono AP. Target: the mixed
-table w(2;3,t), stalled since Ahmed–Kullmann–Snevily 2014 (2013-era
-solvers) — small instances (hundreds of vars), 12 years of solver
-progress, nobody pushing. NOT W(2,7) (Kouril's "NEVER" stands).
-Division of labor: Fable plans/specs/reviews; sonnet agents build.
-
-Plan: (1) pipeline — install kissat/CaDiCaL/drat-trim(/march_cu), CNF
-encoder for mixed vdW, validate by re-deriving known exact values (SAT
-at W−1 with witness brute-checked by vdw.py, proof-checked UNSAT at W);
-(2) calibration — re-prove the deepest known cells, measure the
-cell-to-cell time growth curve, extrapolate the first unknown cell's
-cost BEFORE committing (if it extrapolates to years, publish the curve
-and stop — honest negative); (3) attack — incremental SAT to push the
-lower bound until witnesses dry up, then cube-and-conquer UNSAT sharded
-on GitHub Actions (same skeleton as the scan workflow), per-cube DRAT
-proofs, all machine-checked.
-
-### Frontier intel (research agent, 2026-07-21 — full report w/ URLs in
-### session transcript; key sources: arXiv:1102.5433, Wikipedia vdW table,
-### OEIS A007783, IOS Press ebooks 42692)
-
-- AKS 2014 (Ahmed–Kullmann–Snevily, DAM 174): exact w(2;3,t) through
-  t=19 (=349, their new result: ~196 CPU-years on 2011 solvers, but
-  their own estimate says tawSolver-2.6 (2014) needed only ~1.4
-  CPU-years — a >100x software gain in 3 years). Conjectured values
-  t=20..30 (389, 416, 464, 516, 593, 656, 727, 770, 827, 868, 903;
-  "pretty safe" ≤28), weak lower bounds t=31..39.
-- **The frontier moved ONCE since 2014, and it's shaky: Kouril 2015
-  (FPGA cluster, IOS Press, paywalled) claims w(2;3,20)=389 plus three
-  small mixed cells. Unreplicated, no proof artifact; OEIS A007783 and
-  the smallnumbers verification project still stop at t=19.** Kouril's
-  same abstract promised W(5,3) in 6-9 months; it never appeared.
-- Nobody has ever attacked w(2;3,21). No AI system has touched vdW
-  exact values (2026 wave checked). Fox–Hunter arXiv:2606.02541 (June
-  2026) is theory only.
-- Cube-and-conquer was INVENTED on these exact instances (AKS fn. 6,
-  Heule–Kullmann–Wieringa–Biere). Modern stack: march_cu (or learned
-  cubing) → CaDiCaL 2.0 (native LRAT) / kissat → verified checker
-  (cake_lpr), embarrassingly parallel across cubes.
-- Other family frontiers (last exact / next): w(2;4,9)=309 (Ahmed
-  2012); w(2;5,7)=260 (Ahmed 2013, ~200 CPU-years, author asked in
-  print for independent verification — never done); w(3;3,3,6)=107;
-  w(3;2,3,14)=202 (Kouril 2012).
-
-### TARGET SELECTED: w(2;3,20) — prove =389 with machine-checkable proof
-
-Why: genuine frontier cell with a live discrepancy (Wikipedia says
-exact via one unreplicated FPGA run with no artifact; OEIS says
-unknown). Either outcome is a real result: first proof-logged
-confirmation, or refutation of a standing claim. Instance is tiny (389
-vars); cost extrapolation says ~1.5-5 CPU-years modern ≈ 1-3 weeks on
-free GitHub Actions (20 jobs × 4 cores). Sets up w(2;3,21)=416? as the
-genuinely-new follow-on (~10x harder, borderline feasible).
-Calibration ladder before committing: t=17 (=279, should be hours),
-t=18 (=312), measure the growth factor, extrapolate t=20; abort and
-publish the curve if it points past ~3000 core-days.
-Side quests (value per CPU): palindromic pdw(2;3,t) past t=27 (AKS
-stopped there; C&C strongest on palindromic instances; laptop-scale;
-QUEUED 2026-07-21 as builder task 4 — easiest genuinely hard-direction
-result on the board; NB the pdw definition is a PAIR, palindromicity
-is not monotone — definition to be taken from arXiv:1102.5433/OEIS
-A198684/5, not from memory); verify w(2;5,7)=260 (13-year-old standing
-request); modern local search on the t=31..39 lower bounds (days of
-compute, 2014-era records).
-
-### Efficiency watch (standing — user asked us to keep hunting)
-
-Levers identified so far, roughly by leverage:
-- Palindrome VARIABLE FOLDING (not equality clauses): halves vars on
-  pdw instances. In the task-4 spec.
-- Proof logging only at the boundary: bracket transitions with cheap
-  no-proof SAT calls; re-run only the final UNSAT with proofs on.
-- cadical >= 2.0 native LRAT skips the kissat->drat-trim post-pass;
-  builder measuring the delta on one cell.
-- Warm-start phases from nearby-n witnesses (sat_full.py pattern).
-- For the t=20 campaign: cube-depth tuning is THE knob (AKS split at
-  DLL depth 8 for 256 subtrees); measure cube-size distribution on
-  t=17/18 before picking t=20's depth. march_cu didn't have to build
-  for phase 1 — becomes required for phase 3.
-- Not yet explored: AKS report tawSolver (special-purpose, their 85x)
-  beat general CDCL on these instances — if calibration disappoints,
-  try building tawSolver (Kullmann's GitHub, OKlibrary) before buying
-  compute; also SAT-Comp-2025-winner kissat variants are public.
-
-### Phase-3 results — pipeline BUILT & VALIDATED (2026-07-21 night)
-
-Built in code/ (mostly by a sonnet build subagent, to spec):
-- `code/vdw_sat.py` — mixed-vdW CNF encoder (r=2: one boolean/integer;
-  r>=3: one-hot; one clause per AP; NO symmetry breaking — unsound on
-  mixed instances). CLI + importable.
-- `code/vdw_sat_validate.py` — validates the encoder by re-deriving known
-  exact values both directions (SAT at W-1 with witness brute-checked;
-  proof-logged UNSAT at W via drat-trim).
-- `code/vdw_pdw_validate.py` / `code/vdw_pdw_attack.py` — palindromic
-  path pdw(2;3,t): variable folding (mirror positions share a var).
-- Toolchain: kissat + cadical (Homebrew), drat-trim + march_cu/CnC built
-  from source in `tools/`; `satenv/` = pysat venv.
-
-RESULT: **pdw(2;3,20) = (380,389) fully REPRODUCED with machine-checked
-proofs, both components** — SAT witnesses at N=379/388 verified &
-confirmed palindromic; UNSAT at N=381 (116 MB cert) and N=390 (281 MB
-cert), both drat-trim-checked. Calibration curve: t=15 UNSAT sub-second
-(~1 MB cert) -> t=20 UNSAT 45-112s (116-281 MB cert). The machinery
-works end-to-end in the HARD (UNSAT/exact) direction.
-
-GitHub Actions: `.github/workflows/sat_pipeline.yml` (Abigail's standard
-self-chaining PAT-secret pattern; `GH_PAT` secret; repo PUBLIC for free
-minutes) shards by t: mode=validate (26 27) / mode=attack (28 29); runs
-dispatched. **NEXT REAL TARGET: pdw(2;3,28)/(29)** — genuinely-new values
-past AKS's t=27 ceiling. NB: a 2026-07-21-night session mixup (main
-assistant misread a user-directed build subagent as rogue, briefly
-reverted/disabled things) was fully resolved — repo public, workflow
-enabled, GH_PAT intact, runs re-dispatched; see memory
-incident-misread-user-directed-agent.
-
-### Phase-3 run 2026-07-22 (overnight) — what landed, and the timeout fix
-
-First real GH-Actions overnight run of validate 26/27 + attack 28/29.
-Results committed to gh_actions_results/run-29885808402 (26/27) and
-run-29885809480 (28/29).
-
-What we got:
-- SAT direction (a good palindromic partition exists = lower bound):
-  solves fine. New verified palindromic witnesses from the attack walk:
-  t=28 SAT up to N=725 (p-side) and N=740 (q-side); t=29 SAT up to N=808
-  (p-side). All witness-checked and confirmed palindromic. These are
-  honest lower bounds, nothing more.
-- UNSAT direction (no partition = the upper bound, the mathematically
-  interesting half): EVERY point timed out. Both engines — kissat+DRAT
-  and cadical+LRAT — hit the cap on the t=27 comparison cells. Zero
-  proofs generated. So NOTHING certified: not the 26/27 Table-6 cells,
-  not any 28/29 frontier value.
-
-Root cause, and it was NOT the chain: the per-instance cap was 30 min
-(TIME_CAP), a job ran many instances/probes back-to-back, and the job's
-own timeout-minutes wall (340) killed it mid-instance. GitHub reports a
-timeout-minutes kill as conclusion=cancelled — which is why 28/29 looked
-"cancelled" (its run jobs ended at exactly start+340min; the chain job
-was skipped). The earlier six cancels were just re-dispatched batches
-superseding each other.
-
-The fix (this session): these UNSAT instances need HOURS, not 30 min, and
-a public runner caps a job at 360 min (6h) — so the only way to give one
-instance hours is ONE INSTANCE PER JOB.
-- code/vdw_pdw_validate.py: added --cap-seconds (threaded all the way to
-  the solver AND the drat/lrat proof check), --only {p-1,q-1,p+1,q+1} to
-  run a single certification cell, and --point T N {sat,unsat} to hammer
-  one arbitrary point (e.g. a frontier ceiling) proof-logged in its own
-  job. Partial shards report certified=None (undetermined), not False.
-- code/vdw_pdw_attack.py: added --cap-seconds (per-probe).
-- .github/workflows/sat_pipeline.yml: rewritten to a shards model. You
-  pass shards=<JSON array of arg-strings>, one job each, fanned out as a
-  matrix; runner=validate|attack; cap_seconds (default 18000=5h);
-  timeout_minutes (default 350, must stay > cap/60 and <=360). Chain job
-  now guards against overlap (won't dispatch if another run is active)
-  and a run-level concurrency group serializes runs. KEEP cap_seconds
-  BELOW timeout_minutes*60 or the job wall bites again.
-
-Next overnight target: prove one frontier ceiling UNSAT with a checked
-proof, each in its own 5h job, e.g.
-  runner=validate cap_seconds=18000 timeout_minutes=350
-  shards=["--point 28 728 unsat","--point 29 810 unsat",
-          "--ts 26 --only p+1","--ts 26 --only q+1"]
-A single checked UNSAT at a t=28/29 point is a genuinely-new pdw value.
-Open question if 5h still isn't enough: cube-and-conquer (march_cu is
-already built in tools/CnC) rather than a single monolithic solve.
-
-### Phase-3: cube-and-conquer built (2026-07-22)
-
-Answered the "5h isn't enough" question by building the cube-and-conquer
-path -- the standard method for hard UNSAT combinatorics (how the exact
-vdW / Schur / Pythagorean-triple numbers were settled). Split one instance
-into cubes with march_cu (look-ahead), solve the cubes independently with
-iglucose, shard them across parallel GitHub jobs. This flattens a
-monolithic multi-hour exponential solve into thousands of independent
-sub-second cubes, sidestepping the 6h single-job wall.
-
-Why it works / soundness: march_cu's cubes are a complete case split, so
-all-cubes-UNSAT => formula UNSAT; any cube SAT => a full model (decoded and
-independently verified as a good palindrome). Demonstrated locally: t=20
-N=381 (45-112s monolithic) split into 5254 cubes, hardest single cube
-0.20s.
-
-New pieces:
-- `code/vdw_cnc.py` -- split / conquer / aggregate / local modes. conquer
-  solves its round-robin cube slice one cube at a time (a timeout costs one
-  cube, logged by global index for re-dispatch). ADAPTIVE RE-SPLITTING: a
-  timed-out cube is re-split with march_cu (residual CNF = base + cube lits
-  as units) and recursed on, up to --max-resplit-depth -- this clears the
-  hard tail of stubborn cubes near the frontier instead of stalling
-  (verified: coarse split + 1s cap on t=20 leaves 5 cubes timing out, each
-  re-splits into ~60 children that all solve -> UNSAT, 0 unresolved).
-  Solver paths overridable via $MARCH_CU / $IGLUCOSE.
-- `.github/workflows/cnc_pipeline.yml` -- build_tools clones+builds
-  march_cu + iglucose from github.com/marijnheule/CnC (NOT tracked here;
-  binaries are platform-specific). BUILD GOTCHA: march_cu is old C with
-  header globals; GCC 10+ defaults to -fno-common -> "multiple definition"
-  link errors. Fixed with `make CC="gcc -fcommon"` (Apple clang tolerates
-  it, so it builds on a mac but not on the ubuntu runner without the flag).
-  Then split -> conquer matrix (nshards jobs) -> collect aggregates the
-  verdict and commits it. Inputs: t, N, nshards, march_opts, cap_seconds
-  (per-cube), max_resplit_depth, timeout_minutes.
-- `code/test_known_values.py` + `.github/workflows/regression.yml` --
-  recompute small AKS Table-6 cells both directions on every SAT-code
-  change; tripwire so an encoder/toolchain regression can't silently mint a
-  wrong frontier result.
-- `code/pdw_difficulty.py` extended to ingest CnC runs: per-cube time
-  distributions + a CnC-reach model (hardest cube stays bounded via
-  re-splitting, so reach is limited by parallel width / total work, not one
-  exponential solve).
-
-Run it:
-  gh workflow run cnc_pipeline.yml -f t=26 -f N=635 -f nshards=20 \
-    -f march_opts="-d 16" -f cap_seconds=1800 -f max_resplit_depth=2
-Note: nshards=20 saturates the free 20-job concurrency limit, so other
-workflows queue behind it. First real target: t=26 N=635 (AKS Table-6 p+1
-UNSAT cell that timed out monolithically), then the t=28/29 frontier.
-
-### STATUS SNAPSHOT (2026-07-22, end of CnC build session)
-
-Component status:
-- CnC decision pipeline (`cnc_pipeline.yml` + `vdw_cnc.py` conquer/aggregate)
-  -- BUILT + GREEN ON GITHUB. Confirmed end-to-end: t=20 N=381 run
-  29918948801 returned UNSAT, 8 shards, 2285 cubes, 0 unresolved (matches
-  the local result exactly). gh_actions_results/cnc-run-29918948801/.
-- Adaptive re-splitting (`vdw_cnc.py` conquer, --max-resplit-depth) -- BUILT,
-  proven locally (coarse split + tiny cap on t=20 -> hard cubes re-split
-  into ~60 children, all resolve, UNSAT, 0 unresolved). Not yet exercised on
-  a GH run that actually needed it.
-- Single-job certified proof (`vdw_cnc.py prove` + `cnc_prove.yml`) -- BUILT,
-  drat-trim VERIFIED locally on t=15/t=20. Not yet run on GH.
-- "solve t" orchestrator (`vdw_cnc.py solve`) -- BUILT (sweep N + CnC-decide
-  each -> SAT/UNSAT map). Validated locally on t=15 (reproduces the
-  conjectured (200,205) parity alternation). Reports candidate thresholds
-  only; exact (p,q) extraction is open question #2.
-- CnC difficulty analytics (`pdw_difficulty.py`) -- BUILT, ingests CnC runs,
-  models cube-work growth + parallel reach.
-- Regression harness (`test_known_values.py` + `regression.yml`) -- BUILT,
-  small cells certify in <1s locally. GH run was queued behind t=26; re-runs
-  on the next SAT-code push.
-
-Build gotchas locked in: march_cu needs `-fcommon` on GCC10+ (Linux);
-tools/CnC is an untracked upstream clone so CI clones+builds it; nshards=20
-saturates the free 20-job limit and blocks other workflows.
-
-Killed run: t=26 N=635 at -d 16 (run 29917066464) -- cancelled after ~45min,
--d 16 made too large a cube set (open question #3, split tuning). Re-run
-t=26 with a shallower split.
-
-NEXT: (1) resolve Fable's two math/proof questions (exact (p,q) rule;
-parallel certified proof); (2) re-run t=26 with tuned -d, then the t=28/29
-frontier; (3) once a frontier point is UNSAT, decide whether the single-job
-`prove` sweep fits in 6h or the parallel proof is needed.
-
-2026-07-22 process review (Fable): full builder spec for pipeline fixes +
-efficiency pass in PLAN_pipeline_improvements.md (repo root). Headline:
-aggregate() has a vacuous-UNSAT bug — the two cancelled-run verdict.json
-files in gh_actions_results claim UNSAT with n_shards=0; fix (plan task 1)
-BEFORE the next dispatch. Killed t=26 run's measured cube-time tail is in
-the plan preamble; it motivates cap 1800->60 + re-split (task 4) and
-batched iglucose (task 5).
-
-2026-07-22 builder pass (Opus): PLAN_pipeline_improvements.md tasks 1-7
-landed (commits 98b6ca8..67be420). Highlights:
-- Task 1: aggregate() no longer reads an empty/partial shard set as UNSAT.
-  UNSAT now requires all expected shards present + all UNSAT + full cube
-  coverage. Found THREE false verdict.json (plan named two): cnc-run-
-  29916885056, -29917001084, -29917066464 -> repaired to UNDETERMINED.
-- Task 2: per-cube JSONL checkpoint (shard-<s>.jsonl), flushed per cube; a
-  killed shard is recoverable and re-dispatchable. slice_members() is the
-  single definition of round-robin membership.
-- Task 3: conquer --cube-indices re-dispatches exactly the unresolved cubes;
-  aggregate --merge-jsonl closes an instance across base+redispatch by
-  cube-level union (UNSAT iff every cube refuted somewhere). Coverage check
-  refuses a false full-instance UNSAT from a subset run.
-- Task 4: cnc_pipeline.yml cap 1800->60, resplit depth 2->3.
-- Task 5: solve_batch runs one iglucose over many cubes (learned-clause
-  reuse). Empirically pinned: batch `s UNSATISFIABLE` <=> every cube UNSAT
-  (SAT short-circuits, never overridden). t=20: batched == per-cube
-  cube-for-cube, 1.9x faster. --batch-size default 200; 1 = exact per-cube.
-- Task 6: `pilot` mode + budget gate in the split job (blocks fan-out over
-  budget_core_hours, default 40). t=20 projects 30s vs ~35 measured.
-- Task 7: build_tools cached on upstream CnC HEAD; nshards default 20->16.
-- test_cnc.py (14 hermetic aggregate/recovery/coverage/merge tests) wired
-  into regression.yml.
-
-PILOT RESULT for the next real dispatch: t=26 N=635 at **-d 12** = 4022
-cubes (vs 51k at -d 16 -- confirming -d 16 was mostly overhead). Pilot of
-200 cubes @5s cap: **22.5% timeout, median 0.43s, projected >=1.88
-core-hours (lower bound)**. Comfortably under the 40 core-hour budget, so
-the gate passes -- but the 22.5% heavy tail is real; rely on re-split
-(depth 3) + batching to clear it. This is the tuned dispatch the plan's
-Task 4 note calls for. NOT yet run on GH.
-
-Still TODO from the plan: task 6.3 (fold pilot JSON into pdw_difficulty.py
-reach model -- deferred), task 8 (parallelize `solve` sweeps), task 9
-(stitched parallel certificate -- its own session), task 10 (commit
-crosscheck_records.py, gitignore/known_values_out, restructure this file).
-
-### Open questions for Fable (things I'm not sure about)
-
-1. **Parallel certified proof (the hard one).** We can now produce a
-   machine-checked UNSAT certificate the EASY way: `vdw_cnc.py prove` runs
-   iglucose over the whole cube set in ONE process with DRAT logging, then
-   drat-trim verifies that proof against the base CNF (confirmed VERIFIED on
-   t=15/t=20 locally, and `cnc_prove.yml` runs it on GH). But that is
-   single-job -- bounded by the 6h wall on the sequential cube sweep. The
-   SHARDED decision (`cnc_pipeline.yml`) is what actually beats the wall,
-   and it does NOT yet produce a combined certificate. To certify a frontier
-   value whose monolithic cube-sweep exceeds 6h we need to STITCH the
-   per-shard proofs into one drat-trim-checkable certificate. I know the
-   shape -- each conquer solve of phi ∧ cube_i gives phi ⊢ ¬cube_i, and you
-   need a final "tautology proof" that ¬cube_1 ∧ ... ∧ ¬cube_m is UNSAT
-   (the cubes are exhaustive) -- but I do NOT know the exact mechanics with
-   these tools: which tool emits march_cu's tautology proof, how to make
-   iglucose emit per-cube proofs that derive ¬cube_i (vs. refuting phi∧cube
-   with the cube as clauses), and how to concatenate + reindex them so
-   drat-trim checks the whole thing against phi. Heule's group does this at
-   scale (Pythagorean triples, 200 TB) so there is a known recipe; I just
-   don't have it. This is the piece to research before betting a night on a
-   frontier proof.
-
-2. **Reading exact (p,q) off the sweep map (the math subtlety).** The new
-   `vdw_cnc.py solve` mode sweeps N over a window and CnC-decides each point.
-   On t=15 (conjectured pdw = (200,205)) it produced:
-       N:  197 198 199 200 | 201 202 203 204 205 | 206 207
-           S   S   S   S   |  U   S   U   S   U   |  U   U
-   i.e. below 201 all SAT, then a PARITY alternation -- odd N (201,203,205)
-   UNSAT, even N (202,204) SAT -- until it's permanently UNSAT from 206. So
-   the two pdw values (200,205) live in/at this alternation, and existence
-   is non-monotone exactly as the encoder docstring warned. I produce the
-   full map correctly, but I do NOT know the precise AKS rule that reads the
-   canonical (p, q) off a parity-alternating pattern (is p the last-all-SAT,
-   q the first-permanently-UNSAT? per-parity thresholds? something else?).
-   `solve` currently reports raw SAT->UNSAT transitions as *candidates* and
-   the conjectured pair, and stops short of asserting the exact value. This
-   is the rule to nail down (from AKS Section 5.2 / the Table 6 definition)
-   before the orchestrator can claim "pdw(2;3,t) = (p,q)" for a NEW t.
-
-3. **march_cu split-depth tuning.** `-d 16` on t=26 produced a large cube
-   set and the shards ran long (>20 min, still healthy). No principled way
-   yet to pick `-d` / cube count vs. nshards vs. per-cube cap for a given t.
-   A short calibration (cube count and max-cube-time vs -d at fixed t) would
-   let `pdw_difficulty.py` recommend settings instead of guessing.
-
-4. **nshards vs the free concurrency limit.** nshards=20 saturates GitHub's
-   ~20-job free ceiling, so everything else (regression, other runs) queues.
-   Is it worth capping nshards at ~16 to leave headroom, or chaining shard
-   batches? Minor, but affects overnight throughput.
-
-## Methodology lessons (the running theme)
-
-- Search strategy > search effort: symmetry restriction collapsed 2^1176 to
-  2^24; one theorem (Harborth–Krause) deleted a whole dead subspace.
-- Know when the subproblem stops needing search: frozen-seed extension is a
-  tiny exact CSP; an hour of SA flailed at what backtracking disproved in
-  milliseconds.
-- Verify everything independently (from-scratch recount before believing
-  any "hit"); check problems are still open before attacking (knowledge
-  cutoff!).
-- Negative results with proofs beat positive results without them.
 
 ## How to resume after /clear
 
