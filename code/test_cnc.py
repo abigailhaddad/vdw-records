@@ -9,6 +9,7 @@ be read as UNSAT -- that is exactly the vacuous-UNSAT bug that committed false
 
 Run: python3 code/test_cnc.py   (exit non-zero on any failure)
 """
+import argparse
 import json
 import os
 import sys
@@ -16,7 +17,8 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vdw_cnc import (aggregate, slice_members, collect_shard_results,  # noqa: E402
-                     reconstruct_shard_from_jsonl, merge_jsonl_verdicts)
+                     reconstruct_shard_from_jsonl, merge_jsonl_verdicts,
+                     resolve_instance)
 
 
 def _shard(shard, status, n_unsat=0, unresolved=None):
@@ -207,6 +209,148 @@ def test_merge_sat_cube_decides():
         m = merge_jsonl_verdicts(d)
     assert m["verdict"] == "SAT", m
     assert m["sat_cubes"] == [1], m
+
+
+def _ns(t=None, lengths=None, encoding=None):
+    """A minimal argparse.Namespace like main()'s parsed args, just the three
+    fields resolve_instance reads."""
+    return argparse.Namespace(t=t, lengths=lengths, encoding=encoding)
+
+
+def test_resolve_instance_t_alone_is_palindromic_backcompat():
+    # The back-compat rule Task 1.1 exists to protect: --t alone (no
+    # --lengths) must mean EXACTLY what it always meant, so every existing
+    # caller/workflow/test keeps working unchanged.
+    lengths, encoding = resolve_instance(_ns(t=26))
+    assert lengths == [3, 26], lengths
+    assert encoding == "palindromic", encoding
+
+
+def test_resolve_instance_lengths_defaults_to_full():
+    lengths, encoding = resolve_instance(_ns(lengths=["6,6"]))
+    assert lengths == [6, 6], lengths
+    assert encoding == "full", encoding
+
+
+def test_resolve_instance_lengths_space_separated_tokens():
+    # argparse nargs="+" splits "--lengths 6 6" into ["6", "6"]; comma form
+    # ("--lengths 6,6" -> ["6,6"]) is covered by the test above. Both must
+    # parse to the same lengths.
+    lengths, encoding = resolve_instance(_ns(lengths=["6", "6"]))
+    assert lengths == [6, 6], lengths
+    assert encoding == "full", encoding
+
+
+def test_resolve_instance_t_plus_encoding_full_is_ambiguous_error():
+    try:
+        resolve_instance(_ns(t=20, encoding="full"))
+        assert False, "expected SystemExit for --t + --encoding full"
+    except SystemExit:
+        pass
+
+
+def test_resolve_instance_lengths_plus_encoding_palindromic_is_refused():
+    try:
+        resolve_instance(_ns(lengths=["4,4"], encoding="palindromic"))
+        assert False, ("expected SystemExit for --lengths + "
+                       "--encoding palindromic")
+    except SystemExit:
+        pass
+
+
+def test_resolve_instance_neither_given_not_required_returns_none():
+    lengths, encoding = resolve_instance(_ns(), required=False)
+    assert lengths is None and encoding is None, (lengths, encoding)
+
+
+def test_resolve_instance_neither_given_required_raises():
+    try:
+        resolve_instance(_ns())
+        assert False, "expected SystemExit when no instance given and required"
+    except SystemExit:
+        pass
+
+
+def _write_jsonl_instance(d, shard, ncubes, nshards, verdicts, lengths,
+                          encoding, N=1132):
+    """Like _write_jsonl but with an explicit lengths/encoding meta line, for
+    the mixed-artifact (cross-encoding) refusal tests."""
+    path = os.path.join(d, f"shard-{shard}.jsonl")
+    with open(path, "w") as f:
+        f.write(json.dumps({"meta": True, "lengths": lengths,
+                            "encoding": encoding, "N": N, "shard": shard,
+                            "nshards": nshards, "ncubes": ncubes}) + "\n")
+        for g in slice_members(ncubes, nshards, shard):
+            if g in verdicts:
+                f.write(json.dumps({"gidx": g, "verdict": verdicts[g],
+                                    "seconds": 0.01}) + "\n")
+    return path
+
+
+def test_merge_refuses_mixed_encoding():
+    # A full-mode W(6,2) shard and a palindromic pdw(2;3,26) shard must NEVER
+    # be combinable into one merged verdict (soundness invariant #2) --
+    # extends the existing ncubes-disagreement guard to lengths/encoding.
+    with tempfile.TemporaryDirectory() as d:
+        _write_jsonl_instance(d, 0, 4, 2, {0: "UNSAT", 2: "UNSAT"},
+                              lengths=[6, 6], encoding="full")
+        _write_jsonl_instance(d, 1, 4, 2, {1: "UNSAT", 3: "UNSAT"},
+                              lengths=[3, 26], encoding="palindromic")
+        try:
+            merge_jsonl_verdicts(d)
+            assert False, "expected ValueError on mixed encoding"
+        except ValueError:
+            pass
+
+
+def test_merge_refuses_mixed_lengths():
+    with tempfile.TemporaryDirectory() as d:
+        _write_jsonl_instance(d, 0, 4, 2, {0: "UNSAT", 2: "UNSAT"},
+                              lengths=[6, 6], encoding="full")
+        _write_jsonl_instance(d, 1, 4, 2, {1: "UNSAT", 3: "UNSAT"},
+                              lengths=[5, 5], encoding="full")
+        try:
+            merge_jsonl_verdicts(d)
+            assert False, "expected ValueError on mixed lengths"
+        except ValueError:
+            pass
+
+
+def test_merge_agrees_when_same_instance():
+    # Sanity check the guard doesn't false-positive: same lengths/encoding
+    # across shards must merge fine.
+    with tempfile.TemporaryDirectory() as d:
+        _write_jsonl_instance(d, 0, 4, 2, {0: "UNSAT", 2: "UNSAT"},
+                              lengths=[6, 6], encoding="full")
+        _write_jsonl_instance(d, 1, 4, 2, {1: "UNSAT", 3: "UNSAT"},
+                              lengths=[6, 6], encoding="full")
+        m = merge_jsonl_verdicts(d)
+    assert m["verdict"] == "UNSAT", m
+    assert m["lengths"] == [6, 6] and m["encoding"] == "full", m
+
+
+def _instance_shard(shard, lengths, encoding, N=1132):
+    return {"t": (lengths[1] if encoding == "palindromic" else None),
+            "lengths": lengths, "encoding": encoding, "N": N, "shard": shard,
+            "status": "UNSAT", "n_unsat": 2, "unresolved_cubes": [],
+            "ncubes": 4, "members": [shard, shard + 2]}
+
+
+def test_aggregate_refuses_mixed_lengths_or_encoding():
+    shards = [_instance_shard(0, [6, 6], "full"),
+             _instance_shard(1, [3, 26], "palindromic", N=635)]
+    try:
+        aggregate(shards, expected_nshards=2)
+        assert False, "expected ValueError on mixed lengths/encoding"
+    except ValueError:
+        pass
+
+
+def test_aggregate_agrees_when_same_instance():
+    shards = [_instance_shard(0, [6, 6], "full"),
+             _instance_shard(1, [6, 6], "full")]
+    agg = aggregate(shards, expected_nshards=2)
+    assert agg["verdict"] == "UNSAT", agg
 
 
 def main():

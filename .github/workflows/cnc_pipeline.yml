@@ -25,8 +25,16 @@ on:
   workflow_dispatch:
     inputs:
       t:
-        description: "t in pdw(2;3,t)"
+        description: "t in pdw(2;3,t) -- back-compat instance spec, used ONLY when lengths is left empty (see resolve_instance in code/vdw_cnc.py)"
         default: "26"
+      lengths:
+        description: "FULL-mode instance: comma-separated AP lengths, e.g. 6,6 for the diagonal W(6,2). Leave EMPTY for the default pdw(2;3,t) behavior (back-compat, unchanged) -- setting this switches the whole run to the full non-palindromic encoder, the only encoding a W(k,2) claim may come from."
+        default: ""
+      encoding:
+        description: "palindromic or full. Only consulted when lengths is set (empty lengths always uses palindromic via --t, regardless of this value)"
+        default: "full"
+        type: choice
+        options: ["full", "palindromic"]
       N:
         description: "length N to decide (SAT = good partition exists; UNSAT = none)"
         default: "635"
@@ -161,13 +169,31 @@ jobs:
         run: |
           tar -xzf cnc-tools.tar.gz
           chmod +x cncbin/*
+      # Resolve the back-compat instance spec ONCE per job (matches
+      # resolve_instance() in code/vdw_cnc.py -- lengths empty = pdw via
+      # --t, unchanged; lengths set = full mode). SLUG mirrors
+      # instance_slug() exactly so this job's hand-built filenames agree
+      # with what vdw_cnc.py itself writes (palindromic: t{t}_N{N}, byte-
+      # identical to the pre-diagonal-campaign naming; full: w{lengths..}_N{N}).
+      - name: resolve instance args
+        run: |
+          if [ -n "${{ inputs.lengths }}" ]; then
+            inst_args="--lengths ${{ inputs.lengths }} --encoding ${{ inputs.encoding }}"
+            slug="w$(echo '${{ inputs.lengths }}' | tr ',' '_' | tr -d ' ')_N${{ inputs.N }}"
+          else
+            inst_args="--t ${{ inputs.t }}"
+            slug="t${{ inputs.t }}_N${{ inputs.N }}"
+          fi
+          echo "INST_ARGS=$inst_args" >> "$GITHUB_ENV"
+          echo "SLUG=$slug" >> "$GITHUB_ENV"
+          echo "resolved: INST_ARGS='$inst_args' SLUG='$slug'"
       - name: split into cubes
         env:
           MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
           IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
         run: |
           mkdir -p cnc_out
-          python3 code/vdw_cnc.py split --t ${{ inputs.t }} --N ${{ inputs.N }} \
+          python3 code/vdw_cnc.py split $INST_ARGS --N ${{ inputs.N }} \
             --march-opts "${{ inputs.march_opts }}" \
             --outdir cnc_out --json-out cnc_out/split.json \
             | tee cnc_out/split.log
@@ -183,9 +209,9 @@ jobs:
         run: |
           forceflag=""
           [ "${{ inputs.force }}" = "true" ] && forceflag="--force"
-          python3 code/vdw_cnc.py pilot --t ${{ inputs.t }} --N ${{ inputs.N }} \
-            --cnf cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cnf \
-            --cubes cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cubes \
+          python3 code/vdw_cnc.py pilot $INST_ARGS --N ${{ inputs.N }} \
+            --cnf cnc_out/cnc_${SLUG}.cnf \
+            --cubes cnc_out/cnc_${SLUG}.cubes \
             --budget-core-hours ${{ inputs.budget_core_hours }} $forceflag \
             --outdir cnc_out --json-out cnc_out/pilot.json \
             | tee -a "$GITHUB_STEP_SUMMARY"
@@ -220,6 +246,20 @@ jobs:
         run: |
           tar -xzf cnc-tools.tar.gz
           chmod +x cncbin/*
+      # Same resolution as the split job (separate runner, so recomputed here
+      # -- see the comment there).
+      - name: resolve instance args
+        run: |
+          if [ -n "${{ inputs.lengths }}" ]; then
+            inst_args="--lengths ${{ inputs.lengths }} --encoding ${{ inputs.encoding }}"
+            slug="w$(echo '${{ inputs.lengths }}' | tr ',' '_' | tr -d ' ')_N${{ inputs.N }}"
+          else
+            inst_args="--t ${{ inputs.t }}"
+            slug="t${{ inputs.t }}_N${{ inputs.N }}"
+          fi
+          echo "INST_ARGS=$inst_args" >> "$GITHUB_ENV"
+          echo "SLUG=$slug" >> "$GITHUB_ENV"
+          echo "resolved: INST_ARGS='$inst_args' SLUG='$slug'"
       - name: conquer this shard's cube slice
         env:
           MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
@@ -229,9 +269,9 @@ jobs:
           [ "${{ inputs.certified }}" = "true" ] && certflag="--certified"
           ciflag=""
           [ -n "${{ matrix.cube_indices }}" ] && ciflag="--cube-indices ${{ matrix.cube_indices }}"
-          python3 code/vdw_cnc.py conquer --t ${{ inputs.t }} --N ${{ inputs.N }} \
-            --cnf cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cnf \
-            --cubes cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cubes \
+          python3 code/vdw_cnc.py conquer $INST_ARGS --N ${{ inputs.N }} \
+            --cnf cnc_out/cnc_${SLUG}.cnf \
+            --cubes cnc_out/cnc_${SLUG}.cubes \
             --shard ${{ matrix.shard }} --nshards ${{ needs.setup.outputs.nshards }} \
             --cap-seconds ${{ inputs.cap_seconds }} $certflag $ciflag \
             --max-resplit-depth ${{ inputs.max_resplit_depth }} \
@@ -284,14 +324,25 @@ jobs:
         run: |
           git config user.name "vdw-cnc-pipeline[bot]"
           git config user.email "actions@users.noreply.github.com"
-          dir="gh_actions_results/cnc-run-${{ github.run_id }}"
+          # Distinguish full-mode (diagonal etc.) result dirs from the
+          # existing pdw naming, so the two campaigns' committed artifacts
+          # never collide (e.g. cnc-w-6-6-N1131-run-<id> vs the unchanged
+          # cnc-run-<id> for the default pdw path).
+          if [ -n "${{ inputs.lengths }}" ]; then
+            tag="w-$(echo '${{ inputs.lengths }}' | tr ',' '-' | tr -d ' ')-N${{ inputs.N }}"
+            dir="gh_actions_results/cnc-${tag}-run-${{ github.run_id }}"
+            label="w(${{ inputs.lengths }}) N=${{ inputs.N }} [${{ inputs.encoding }}]"
+          else
+            dir="gh_actions_results/cnc-run-${{ github.run_id }}"
+            label="pdw(2;3,${{ inputs.t }}) N=${{ inputs.N }}"
+          fi
           mkdir -p "$dir"
           cp -r results/* "$dir/" 2>/dev/null || true
           git add "$dir"
           if git diff --cached --quiet; then
             echo "nothing to commit"; exit 0
           fi
-          git commit -m "GH Actions: vdw-cnc-pipeline pdw(2;3,${{ inputs.t }}) N=${{ inputs.N }} (run ${{ github.run_id }})"
+          git commit -m "GH Actions: vdw-cnc-pipeline $label (run ${{ github.run_id }})"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main && break
             echo "push attempt $i failed, retrying..."; sleep 5

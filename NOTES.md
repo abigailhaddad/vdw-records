@@ -58,6 +58,106 @@ coverage, that's the pdw(2;3,26) upper-bound half.
    the artifact that would actually justify building PLAN task 9) and the open
    math questions only a mathematician can answer.
 
+   FABLE VERDICT (2026-07-22): pivot is FEASIBLE and worth it; sequencing in
+   the doc is right. Web-verified: W(3..6,2)=9/35/178/1132 correct; W(7,2)
+   lower bound >3703 (Rabung 1979, stood 47 years — rank step 4 last); NO
+   checkable certificate of W(6,2) found anywhere (Kouril 2008 predates DRAT;
+   beware conflation — the "200TB / 800 cores" figures floating around are
+   the Pythagorean-triples proof, NOT W(2,6)). KEY FIND: **LRAT-Catcher,
+   arXiv 2607.00815 (July 2026)** — imports per-cube LRAT refutations + a
+   cover-completeness cert into Lean 4 and composes them into ONE verified
+   UNSAT theorem. That is PLAN task 9, already built and formally verified,
+   with better output (a Lean theorem, post-Jacobian gold standard). Demos
+   are toys (S(4)=44, R(4,4)=18) — nobody has pushed it to a prestige
+   instance; W(6,2) certified in Lean is the opening. Risks: total cube-work
+   at n=1131 (ladder measures this) and certificate size (if TB-scale, Lean
+   checking may wall — probe with a partial run). Cheap insurance before
+   heavy investment: email Heule/Kouril to confirm no cert exists. Order:
+   fire the tuned t=26 (ready, cheap), then step 1 diagonal certs
+   (lengths=[k,k], encoder already sound: full non-palindromic, no symmetry
+   breaking), then the ladder; evaluate LRAT-Catcher as the task-9
+   replacement instead of hand-building a DRAT stitcher. Builder spec for
+   the whole diagonal campaign: `PLAN_diagonal_W_k_2.md` (repo root).
+
+**DIAGONAL W(k,2) — Task 1 LANDED (2026-07-22, reviewed).** `vdw_cnc.py`
+generalized from hardwired palindromic pdw(2;3,t) to arbitrary
+(lengths, encoding); the diagonal W(k,2) now runs the FULL non-palindromic
+encoder (`vdw_sat.encode`, NO symmetry breaking -- the only sound source for a
+W(k,2) claim). CLI: `--lengths k,k` (implies `--encoding full`); `--t X` alone
+unchanged (= palindromic [3,X]). Soundness invariant #2 enforced IN CODE: one
+`check_witness()` quarantines `is_palindrome`/`decode_palindromic` to the
+palindromic path (full mode decodes with `decode`, NEVER checks palindrome --
+grep-confirmed they appear nowhere else); every artifact carries
+lengths+encoding; `merge_jsonl_verdicts`/`aggregate` REFUSE to combine
+mixed-encoding shards. Independently re-verified this session (not just the
+builder's transcript): t=20 N=381 byte-identical (.cnf/.cubes, not only the
+verdict) -> UNSAT 2285/2285; test_cnc 27/27 (12 new: back-compat rule +
+mixed-artifact refusal); test_known_values 8/8; W(4,2) N=34 SAT witness_ok /
+N=35 UNSAT 14/14; full mode emits no "palindrome" at runtime.
+- LATENT BUG fixed in passing: `local` mode's "march_cu decided during split"
+  SAT branch never recovered/verified a witness -- dormant in the pdw path
+  since written, but the diagonal hits it constantly (W(3,2)/W(4,2) SAT sides
+  decide during look-ahead). Now recovers + validates for both encodings.
+- OFF-BY-ONE confirmed k=3,4,5: SAT strictly below W, UNSAT exactly AT W
+  (9/35/178). So Task 3's k=6 UNSAT instance is N=1132, SAT is N=1131 (this
+  corrects a slip in the plan draft, now fixed in PLAN_diagonal_W_k_2.md).
+- TASK 2 CERTS DONE (2026-07-22, local, drat-trim VERIFIED -- the first
+  diagonal certificates in the repo). Calibration ladder rungs:
+    k  N     cubes   proof      B/cube   solve   drat-trim
+    3  9     1       (trivial)  -        -       -
+    4  35    14      7,242 B    517      0.004s  0.06s VERIFIED
+    5  178   3,627   55.2 MB    15,973   6.6s    7.8s  VERIFIED
+  Proof density grows ~31x/rung (517 -> 15,973 B/cube) -- this is the number
+  driving the k=6 proof-SIZE projection, and it means a naive scale from k=5
+  alone UNDER-projects. STILL TODO for Task 2: add W(3,2)/W(4,2) cells to
+  test_known_values.py (the regression half; the certs above are the artifact
+  half). Certs produced via `vdw_cnc.py prove --lengths k,k --N W`.
+- TASK 3 k=6 PROBE (2026-07-22): W(6,2) split at N=1132 `-d 12` = 1132 vars,
+  255,154 clauses -> 4096 cubes (= 2^12, i.e. march_cu found NO early cutoff
+  and split uniformly to the depth limit) in 46.8s. Pilot 200 cubes @ 5s cap:
+  **100% TIMEOUT** (200/200), so the projected 5.69 core-hours is an
+  ~uninformative FLOOR -- it just means each cube takes >5s; true cost =
+  5.69 x (real-mean-cube-time / 5s), multiplier unknown. CONCLUSION: `-d 12`
+  is far too coarse for k=6 (contrast t=26 pdw at the SAME -d 12: 22.5%
+  timeout, 0.43s median -- cubes mostly trivial). The pilot did its job:
+  caught the bad split BEFORE any fan-out, and confirms W(6,2) is genuinely
+  hard (consistent with the 2008-FPGA history).
+  ESCALATION (all 100% TIMEOUT): 12 cubes @ 300s; 6 cubes run to completion
+  @ 1800s -> floor >=2048 core-hours (a LOWER bound, real cost higher);
+  re-split one cube to 24 fixed vars -> children again a full 2^12, no cheap
+  bottom-out (tree is bushy all the way down at reachable depths).
+  **DECISIVE SOLVER BAKE-OFF** on one cube (331) @ 1800s cap: iglucose,
+  kissat (1676s CPU, killed UNSOLVED, memory-explosive -- reported absurd
+  hundreds-of-GB peak), AND cadical (8.5M learned clauses, killed UNSOLVED)
+  ALL WALL. => It is NOT the solver. W(6,2) via cube-and-conquer with
+  off-the-shelf tools is genuinely hard -- consistent with why no checkable
+  cert exists (Heule, best tooling on Earth, has none). This IS the plan's
+  "quantify the NEVER" deliverable, and it reads HARD.
+  RECOMMENDATION: no-go on a blind multi-week campaign; ship the ladder as
+  the result (RESULTS_diagonal_ladder.md, TODO).
+  OPEN QUESTION FOR FABLE -> `BRIEF_diagonal_solver_question.md` (repo root):
+  can SOUND symmetry breaking (color-swap + reflection; our encoder has NONE
+  by design) or a structural reduction shrink the search? Highest-info next
+  probe = add SB to the diagonal encoder + re-run the k=6 bake-off. Soundness
+  catch: SB clauses must be RAT-justified in the certificate -> revises PLAN
+  invariant #2 -> Fable's call, not a builder's.
+  TOOLING added today: `--pilot-workers` (parallel cube solves + per-cube
+  streaming, so an all-timeout split shows after ~one cap not k*cap;
+  measurement-only, soundness-neutral). Part of the uncommitted Task-1 diff.
+- Design notes: `instance_slug` keeps palindromic filenames byte-for-byte
+  (`t{t}_N{N}`), full mode gets `w{k}_{k}_N{N}`; a monotonicity violation in a
+  diagonal sweep is flagged LOUD but non-fatal (the sweep still returns the
+  full map, and `threshold` is withheld on violation so nothing downstream can
+  read a bogus value). Workflows `cnc_pipeline.yml`/`cnc_prove.yml` gained
+  `lengths`/`encoding` inputs, defaults empty = unchanged pdw dispatch.
+NEXT (diagonal): (1) read the k=6 pilot projection when it lands -- Fable/
+Abigail go/no-go on the gated Task 5 W(6,2) campaign; (2) finish Task 2's
+regression cells; (3) Task 3.3-3.4: k=6 at 2-3 depths + the k=4/k=5/(proj k=6)
+-> k=7 extrapolation, written up honestly (long extrapolation over a guessed
+W(7,2) location -- illustration, not a defensible figure). Task 4
+(LRAT-Catcher: confirm arXiv 2607.00815's artifact EXISTS + builds, then the
+W(5,2) dress rehearsal) can proceed in parallel -- justified by W(5,2) alone.
+
 **Resume basics:** every script is a self-contained CLI (see docstrings).
 Fast local sanity before any commit:
 ```

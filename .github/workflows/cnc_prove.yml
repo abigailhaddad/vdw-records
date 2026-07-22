@@ -23,8 +23,16 @@ on:
   workflow_dispatch:
     inputs:
       t:
-        description: "t in pdw(2;3,t)"
+        description: "t in pdw(2;3,t) -- back-compat instance spec, used ONLY when lengths is left empty (see resolve_instance in code/vdw_cnc.py)"
         default: "26"
+      lengths:
+        description: "FULL-mode instance: comma-separated AP lengths, e.g. 5,5 for W(5,2). Leave EMPTY for the default pdw(2;3,t) behavior (back-compat, unchanged)."
+        default: ""
+      encoding:
+        description: "palindromic or full. Only consulted when lengths is set"
+        default: "full"
+        type: choice
+        options: ["full", "palindromic"]
       N:
         description: "length N to certify UNSAT"
         default: "635"
@@ -62,6 +70,23 @@ jobs:
           cp /tmp/CnC/march_cu/march_cu /tmp/CnC/iglucose/core/iglucose \
              /tmp/drat-trim/drat-trim cncbin/
           chmod +x cncbin/*
+      - name: resolve instance args
+        run: |
+          if [ -n "${{ inputs.lengths }}" ]; then
+            inst_args="--lengths ${{ inputs.lengths }} --encoding ${{ inputs.encoding }}"
+            tag="w-$(echo '${{ inputs.lengths }}' | tr ',' '-' | tr -d ' ')-N${{ inputs.N }}-"
+            label="w(${{ inputs.lengths }}) N=${{ inputs.N }} [${{ inputs.encoding }}]"
+          else
+            # empty tag reproduces the exact old default dir name
+            # (gh_actions_results/cnc-prove-<run_id>) byte-for-byte.
+            inst_args="--t ${{ inputs.t }}"
+            tag=""
+            label="pdw(2;3,${{ inputs.t }}) N=${{ inputs.N }}"
+          fi
+          echo "INST_ARGS=$inst_args" >> "$GITHUB_ENV"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "LABEL=$label" >> "$GITHUB_ENV"
+          echo "resolved: INST_ARGS='$inst_args' TAG='$tag' LABEL='$label'"
       - name: prove + verify
         env:
           MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
@@ -69,23 +94,27 @@ jobs:
           DRAT_TRIM: ${{ github.workspace }}/cncbin/drat-trim
         run: |
           mkdir -p cnc_out
-          python3 code/vdw_cnc.py prove --t ${{ inputs.t }} --N ${{ inputs.N }} \
+          python3 code/vdw_cnc.py prove $INST_ARGS --N ${{ inputs.N }} \
             --march-opts "${{ inputs.march_opts }}" \
             --cap-seconds ${{ inputs.cap_seconds }} \
             --outdir cnc_out --json-out cnc_out/prove.json \
             | tee cnc_out/prove.log
-          { echo "# cnc-prove pdw(2;3,${{ inputs.t }}) N=${{ inputs.N }}"; \
+          { echo "# cnc-prove $LABEL"; \
             echo '```'; cat cnc_out/prove.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: commit the verdict (proof itself can be huge; keep json+log)
         run: |
           git config user.name "vdw-cnc-prove[bot]"
           git config user.email "actions@users.noreply.github.com"
-          dir="gh_actions_results/cnc-prove-${{ github.run_id }}"
+          # Full-mode (diagonal etc.) result dirs are distinguished from the
+          # existing pdw naming (empty TAG reproduces the old
+          # cnc-prove-<id> path byte-for-byte; a full-mode TAG e.g.
+          # "w-5-5-N178-" gives cnc-prove-w-5-5-N178-<id>).
+          dir="gh_actions_results/cnc-prove-${TAG}${{ github.run_id }}"
           mkdir -p "$dir"
           cp cnc_out/prove.json cnc_out/prove.log "$dir/" 2>/dev/null || true
           git add "$dir"
           if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
-          git commit -m "GH Actions: cnc-prove pdw(2;3,${{ inputs.t }}) N=${{ inputs.N }} (run ${{ github.run_id }})"
+          git commit -m "GH Actions: cnc-prove $LABEL (run ${{ github.run_id }})"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main && break
             echo "retry $i"; sleep 5

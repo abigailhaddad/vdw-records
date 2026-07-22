@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Cube-and-conquer for palindromic pdw(2;3,t) instances.
+"""Cube-and-conquer for pdw(2;3,t) AND full (non-palindromic) w(r;t1,...,tr)
+instances -- in particular the diagonal van der Waerden numbers W(k,2)
+(lengths=[k,k]).
 
 The hard direction here is proving a point UNSAT, and a single monolithic
 solve grows exponentially in t (see code/pdw_difficulty.py). Cube-and-
@@ -10,6 +12,19 @@ march_cu (a look-ahead solver, in tools/CnC) splits the formula into cubes
 and each cube is solved INDEPENDENTLY by a CDCL solver (iglucose). The
 cubes being independent is the whole point: they shard across as many
 GitHub-Actions jobs as we like, sidestepping the 6h single-job wall.
+
+Two encodings, never to be confused (soundness invariant #2 in
+PLAN_diagonal_W_k_2.md): "palindromic" (encode_palindromic, a pdw(r;...)
+TOOL ONLY -- it folds position i and N+1-i onto one boolean, so it can only
+ever speak about palindromic colorings) and "full" (encode, no symmetry
+breaking of any kind). A W(k,2) claim -- the diagonal van der Waerden
+number -- may ONLY ever come from "full". Every mode threads an instance
+spec (lengths, encoding) end to end -- see resolve_instance() (the single
+home of the CLI back-compat rule) and check_witness() (the single decode +
+witness-check branch) -- specifically so the two encodings can't leak into
+each other, and every JSON artifact records both fields so two runs can
+never be silently merged across encodings (see the lengths/encoding guards
+in aggregate() and merge_jsonl_verdicts()).
 
 Soundness (why "all cubes UNSAT => formula UNSAT" is valid): march_cu's
 cube set is a complete case split, so if every case is refuted the formula
@@ -40,8 +55,8 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from vdw_sat import (encode_palindromic, write_dimacs,  # noqa: E402
-                     decode_palindromic)
+from vdw_sat import (encode, encode_palindromic, write_dimacs,  # noqa: E402
+                     decode, decode_palindromic)
 from vdw_sat_validate import independent_ap_check, TIME_CAP  # noqa: E402
 from vdw_pdw_validate import AKS_TABLE_6  # noqa: E402
 try:
@@ -72,9 +87,110 @@ def is_palindrome(colors, N):
     return all(colors[i] == colors[N + 1 - i] for i in range(1, N + 1))
 
 
-def do_split(t, N, cnf_path, cubes_path, march_opts):
-    """Encode pdw(2;3,t) at length N (palindromic, expect the caller is
-    probing UNSAT) and split it into cubes with march_cu.
+# Known EXACT diagonal van der Waerden numbers W(k,2) (web-verified
+# 2026-07-22 -- see PLAN_diagonal_W_k_2.md). W(k,2) is monotone: a good
+# 2-coloring of [1,N] avoiding a mono AP-k exists for every N < W(k,2), and
+# none exists for any N >= W(k,2) -- unlike pdw, which alternates (see
+# do_solve). Used by known_threshold() to cross-check a diagonal sweep.
+W_K2_TABLE = {3: 9, 4: 35, 5: 178, 6: 1132}
+
+
+def known_threshold(lengths):
+    """W(k,2) for diagonal lengths=[k,k] if k is in W_K2_TABLE, else None.
+    Not diagonal (r != 2 or lengths[0] != lengths[1]) -> None."""
+    if len(lengths) == 2 and lengths[0] == lengths[1]:
+        return W_K2_TABLE.get(lengths[0])
+    return None
+
+
+def instance_label(lengths, encoding, N=None):
+    """Human-readable instance label for print/log lines and file comments.
+    ALWAYS switches on `encoding`, never on the presence/value of "t" --
+    keeping that switch consistent everywhere is what stops a full-mode
+    result from ever being mislabeled/mis-displayed as a pdw one or vice
+    versa (see the "keep t alive" note in PLAN_diagonal_W_k_2.md)."""
+    if encoding == "palindromic":
+        base = f"pdw(2;3,{lengths[1]})"
+    elif len(lengths) == 2 and lengths[0] == lengths[1]:
+        base = f"W({lengths[0]},2)?"
+    else:
+        base = f"w({len(lengths)};{','.join(str(x) for x in lengths)})"
+    return f"{base} N={N}" if N is not None else base
+
+
+def instance_slug(lengths, encoding, N):
+    """Filesystem-safe tag for filenames/workdirs, so full and palindromic
+    runs never collide under the same cnc_out/ paths. Chosen so that the
+    PALINDROMIC case reproduces the exact old naming byte-for-byte (t{t}_N{N}
+    -- no "pdw_" prefix): every existing filename this repo/its workflows
+    build by hand from --t/--N depends on that exact string, and back-compat
+    (acceptance test (c), the t=20 regression) requires it survive untouched.
+    Full mode is new territory, so it gets a fresh, self-describing scheme,
+    e.g. lengths=[6,6] N=1132 -> "w6_6_N1132"."""
+    if encoding == "palindromic":
+        return f"t{lengths[1]}_N{N}"
+    return "w" + "_".join(str(x) for x in lengths) + f"_N{N}"
+
+
+def check_witness(model, N, lengths, encoding):
+    """The ONE decode + witness-check branch (soundness invariant #2): a
+    W(k,2) claim may ONLY ever come from the full (non-palindromic) encoder,
+    so full mode decodes with `decode` (never decode_palindromic) and NEVER
+    calls is_palindrome. palindromic mode additionally reports
+    is_palindrome as a decoder sanity check (always True by construction --
+    encode_palindromic cannot produce a non-palindromic model -- matching
+    what the pdw path already asserted before this refactor)."""
+    if encoding == "palindromic":
+        colors = decode_palindromic(model, N, 2)
+        bad = independent_ap_check(colors, lengths, N)
+        return {"witness_ok": bad is None,
+                "is_palindrome": is_palindrome(colors, N)}
+    colors = decode(model, N, 2)
+    bad = independent_ap_check(colors, lengths, N)
+    return {"witness_ok": bad is None}
+
+
+def resolve_instance(args, required=True):
+    """Single home of the CLI back-compat rule (Task 1.1 in
+    PLAN_diagonal_W_k_2.md). Every mode that needs an instance calls this
+    ONE function, so the rule can never drift between split/conquer/local/
+    prove/solve/pilot:
+      - `--lengths` given: parse it (comma- or space-separated ints),
+        encoding defaults to "full"; `--encoding palindromic` together with
+        `--lengths` is refused (pdw of general, non-[3,t] lengths is
+        untested territory -- Task 1.1).
+      - else `--t` given (the ONLY thing every existing caller/workflow/test
+        passes): `--encoding full` together with bare `--t` is refused as
+        ambiguous (use `--lengths 3,T` instead); otherwise lengths=[3, t],
+        encoding="palindromic" -- IDENTICAL to every prior behavior.
+      - neither given: SystemExit if required, else (None, None) (pilot mode
+        only needs an instance for JSON labeling, not computation).
+    Returns (lengths, encoding)."""
+    if args.lengths is not None:
+        if args.encoding == "palindromic":
+            raise SystemExit(
+                "--lengths + --encoding palindromic is refused: pdw of "
+                "general (non-3,t) lengths is untested territory "
+                "(PLAN_diagonal_W_k_2.md Task 1.1)")
+        joined = " ".join(str(x) for x in args.lengths)
+        lengths = [int(x) for x in joined.replace(",", " ").split()]
+        return lengths, "full"
+    if args.t is None:
+        if required:
+            raise SystemExit("need --t or --lengths to specify the instance")
+        return None, None
+    if args.encoding == "full":
+        raise SystemExit(
+            "--t + --encoding full is ambiguous (use --lengths 3,T instead)")
+    return [3, args.t], "palindromic"
+
+
+def do_split(lengths, encoding, N, cnf_path, cubes_path, march_opts):
+    """Encode the instance (lengths, encoding) at length N (expect the
+    caller is probing UNSAT) and split it into cubes with march_cu.
+    encoding=="palindromic" -> encode_palindromic (pdw tool ONLY);
+    encoding=="full" -> encode (no symmetry breaking of any kind -- the
+    ONLY encoding a W(k,2) claim may come from).
 
     march_cu can also DECIDE the instance during look-ahead instead of
     emitting cubes -- it exits 10 (SATISFIABLE) or 20 (UNSATISFIABLE), like
@@ -82,10 +198,13 @@ def do_split(t, N, cnf_path, cubes_path, march_opts):
     ("SAT"/"UNSAT", else None) with ncubes 0. Callers MUST honour it: a
     0-cube split fed to conquer would otherwise be read as a vacuous UNSAT
     (no cubes to refute), which for a rc=10 SAT short-circuit is dead wrong."""
-    lengths = [3, t]
-    clauses, nvars = encode_palindromic(lengths, N)
+    if encoding == "palindromic":
+        clauses, nvars = encode_palindromic(lengths, N)
+    else:
+        clauses, nvars = encode(lengths, N)
+    label = instance_label(lengths, encoding, N)
     write_dimacs(clauses, nvars, cnf_path,
-                 comment=f"pdw(2;3,{t}) N={N} palindromic (cube-and-conquer)")
+                 comment=f"{label} {encoding} (cube-and-conquer)")
     cmd = [MARCH, cnf_path, "-o", cubes_path] + march_opts.split()
     print(f"  split: {' '.join(cmd)}", flush=True)
     t0 = time.time()
@@ -101,7 +220,9 @@ def do_split(t, N, cnf_path, cubes_path, march_opts):
           f"in {split_time:.1f}s"
           + (f" (march_cu decided {solved} during look-ahead)" if solved
              else ""), flush=True)
-    return {"t": t, "N": N, "nvars": nvars, "nclauses": len(clauses),
+    return {"lengths": lengths, "encoding": encoding,
+            "t": (lengths[1] if encoding == "palindromic" else None),
+            "N": N, "nvars": nvars, "nclauses": len(clauses),
             "cnf": cnf_path, "cubes": cubes_path, "ncubes": ncubes,
             "solved": solved,
             "march_opts": march_opts, "split_seconds": split_time}
@@ -304,8 +425,9 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     cube must refute for the slice to be decisive. Hard cubes are re-split up
     to max_resplit_depth before being given up as UNRESOLVED (recorded by
     global cube index so exactly those can be re-dispatched)."""
-    t, N = meta["t"], meta["N"]
-    workdir = os.path.join(outdir, f"cnc_t{t}_N{N}_shard{shard}")
+    lengths, encoding, N = meta["lengths"], meta["encoding"], meta["N"]
+    slug = instance_slug(lengths, encoding, N)
+    workdir = os.path.join(outdir, f"cnc_{slug}_shard{shard}")
     os.makedirs(workdir, exist_ok=True)
     if cube_indices is not None:
         members, mode = list(cube_indices), "explicit"
@@ -325,7 +447,9 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     # reconstruct_shard_from_jsonl.
     jsonl_path = os.path.join(outdir, f"shard-{shard}.jsonl")
     jf = open(jsonl_path, "w")
-    jf.write(json.dumps({"meta": True, "t": t, "N": N, "shard": shard,
+    jf.write(json.dumps({"meta": True, "lengths": lengths, "encoding": encoding,
+                         "t": (lengths[1] if encoding == "palindromic" else None),
+                         "N": N, "shard": shard,
                          "nshards": nshards, "ncubes": len(cubes),
                          "mode": mode, "members": members}) + "\n")
     jf.flush()
@@ -354,14 +478,13 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
                                       max_resplit_depth, 0, certified, records)
         record(gidx, verdict, time.time() - c0)
         if verdict == "SAT":
-            colors = decode_palindromic(model, N, 2)
-            bad = independent_ap_check(colors, [3, t], N)
-            witness = {"cube": gidx, "witness_ok": bad is None,
-                       "is_palindrome": is_palindrome(colors, N)}
+            wit = check_witness(model, N, lengths, encoding)
+            witness = {"cube": gidx, **wit}
             sat_gidx = gidx
+            extra = (f" palindrome={wit['is_palindrome']}"
+                     if "is_palindrome" in wit else "")
             print(f"    -> SAT witness at cube {gidx}: "
-                  f"witness_ok={witness['witness_ok']} "
-                  f"palindrome={witness['is_palindrome']}", flush=True)
+                  f"witness_ok={witness['witness_ok']}{extra}", flush=True)
             return True
         if verdict == "UNSAT":
             n_unsat += 1
@@ -410,7 +533,9 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
         status = "UNRESOLVED"
     else:
         status = "UNSAT"
-    return {"t": t, "N": N, "shard": shard, "nshards": nshards, "mode": mode,
+    return {"lengths": lengths, "encoding": encoding,
+            "t": (lengths[1] if encoding == "palindromic" else None),
+            "N": N, "shard": shard, "nshards": nshards, "mode": mode,
             "ncubes": len(cubes), "members": members,
             "cap_seconds": cap, "max_resplit_depth": max_resplit_depth,
             "batch_size": eff_batch, "n_batched_unsat": n_batched,
@@ -421,28 +546,35 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
             "n_solves": len(records), "per_solve": records}
 
 
-def do_prove(t, N, outdir, march_opts, cap):
+def do_prove(lengths, encoding, N, outdir, march_opts, cap):
     """Produce and CHECK a single machine-verified UNSAT certificate for
-    pdw(2;3,t) at N via cube-and-conquer in one process: split with
-    march_cu, run iglucose over the whole inccnf (all cubes) with DRAT
-    proof logging, then verify that proof against the BASE CNF with
-    drat-trim. This is the certified counterpart to the sharded `conquer`
-    decision -- but single-job, so it is bounded by the 6h wall on the full
-    sequential cube sweep. (The PARALLEL certified proof -- stitching
-    per-shard proofs + march_cu's tautology proof into one certificate --
-    is not done yet; see the open question in NOTES.md.)"""
-    lengths = [3, t]
-    clauses, nvars = encode_palindromic(lengths, N)
-    cnf = os.path.join(outdir, f"prove_t{t}_N{N}.cnf")
-    write_dimacs(clauses, nvars, cnf,
-                 comment=f"pdw(2;3,{t}) N={N} palindromic (prove)")
-    cubes = os.path.join(outdir, f"prove_t{t}_N{N}.cubes")
+    the instance (lengths, encoding) at N via cube-and-conquer in one
+    process: split with march_cu, run iglucose over the whole inccnf (all
+    cubes) with DRAT proof logging, then verify that proof against the BASE
+    CNF with drat-trim. This is the certified counterpart to the sharded
+    `conquer` decision -- but single-job, so it is bounded by the 6h wall on
+    the full sequential cube sweep. (The PARALLEL certified proof --
+    stitching per-shard proofs + march_cu's tautology proof into one
+    certificate -- is not done yet; see the open question in NOTES.md.)"""
+    if encoding == "palindromic":
+        clauses, nvars = encode_palindromic(lengths, N)
+    else:
+        clauses, nvars = encode(lengths, N)
+    slug = instance_slug(lengths, encoding, N)
+    label = instance_label(lengths, encoding, N)
+    base = {"lengths": lengths, "encoding": encoding,
+            "t": (lengths[1] if encoding == "palindromic" else None),
+            "N": N}
+    cnf = os.path.join(outdir, f"prove_{slug}.cnf")
+    write_dimacs(clauses, nvars, cnf, comment=f"{label} {encoding} (prove)")
+    cubes = os.path.join(outdir, f"prove_{slug}.cubes")
     print(f"  split ({nvars} vars, {len(clauses)} clauses) ...", flush=True)
     subprocess.run([MARCH, cnf, "-o", cubes] + march_opts.split(),
                    capture_output=True, text=True, check=True)
     ncubes = sum(1 for ln in open(cubes) if ln.startswith("a "))
+    base["ncubes"] = ncubes
 
-    icnf = os.path.join(outdir, f"prove_t{t}_N{N}.icnf")
+    icnf = os.path.join(outdir, f"prove_{slug}.icnf")
     with open(icnf, "w") as f:
         f.write("p inccnf\n")
         _, clause_lines = read_cnf(cnf)
@@ -450,7 +582,7 @@ def do_prove(t, N, outdir, march_opts, cap):
         for ln in open(cubes):
             if ln.startswith("a "):
                 f.write(ln)
-    proof = os.path.join(outdir, f"prove_t{t}_N{N}.drat")
+    proof = os.path.join(outdir, f"prove_{slug}.drat")
     print(f"  conquer {ncubes} cubes with proof logging ...", flush=True)
     t0 = time.time()
     try:
@@ -458,16 +590,15 @@ def do_prove(t, N, outdir, march_opts, cap):
                              f"-certified-output={proof}"],
                             capture_output=True, text=True, timeout=cap)
     except subprocess.TimeoutExpired:
-        return {"t": t, "N": N, "ncubes": ncubes, "status": "TIMEOUT",
+        return {**base, "status": "TIMEOUT",
                 "solve_seconds": time.time() - t0, "proof_verified": False}
     solve_s = time.time() - t0
     out = ig.stdout
     if "s SATISFIABLE" in out:
-        return {"t": t, "N": N, "ncubes": ncubes, "status": "SAT",
+        return {**base, "status": "SAT",
                 "solve_seconds": solve_s, "proof_verified": False}
     if "s UNSATISFIABLE" not in out:
-        return {"t": t, "N": N, "ncubes": ncubes,
-                "status": f"ERR(rc={ig.returncode})",
+        return {**base, "status": f"ERR(rc={ig.returncode})",
                 "solve_seconds": solve_s, "proof_verified": False}
 
     proof_bytes = os.path.getsize(proof) if os.path.exists(proof) else 0
@@ -480,13 +611,27 @@ def do_prove(t, N, outdir, march_opts, cap):
     verified = "s VERIFIED" in dt.stdout
     print(f"  drat-trim: {'VERIFIED' if verified else 'NOT VERIFIED'} "
           f"in {check_s:.1f}s", flush=True)
-    return {"t": t, "N": N, "ncubes": ncubes, "status": "UNSAT",
+    return {**base, "status": "UNSAT",
             "solve_seconds": solve_s, "proof_bytes": proof_bytes,
             "proof_verified": verified, "check_seconds": check_s,
             "proof_path": os.path.relpath(proof, REPO_ROOT)}
 
 
-def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, t=None, N=None):
+def _pilot_solve_one(job):
+    """Solve ONE sampled pilot cube in its own process (module-level so
+    ProcessPoolExecutor can pickle it). Re-reads the CNF rather than having
+    the parent pickle 10^5 clause lines to every worker (the file read is
+    <1s; pickling the clause list to K workers is not). Returns
+    (gidx, status, secs)."""
+    cnf_path, gidx, cube_lits, cap, workdir = job
+    _, clause_lines = read_cnf(cnf_path)
+    status, secs, _ = solve_lits(clause_lines, cube_lits, cap, workdir,
+                                 f"pilot{gidx}", False)
+    return gidx, status, secs
+
+
+def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, lengths=None,
+             encoding=None, N=None, workers=1):
     """Sample K cubes uniformly (fixed seed -> reproducible), solve each with
     a small cap, and project the full instance's cost BEFORE fanning out to
     dozens of jobs. The t=26 -d16 dispatch burned ~15 job-hours before a human
@@ -495,7 +640,16 @@ def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, t=None, N=None):
     The projection (capped mean cube time x ncubes) is a LOWER BOUND whenever
     any sampled cube timed out -- a timed-out cube really took longer than the
     cap, and the heavy tail is exactly where cube-and-conquer cost hides, so a
-    nonzero timeout fraction is the signal to split deeper (or budget more)."""
+    nonzero timeout fraction is the signal to split deeper (or budget more).
+
+    Cubes are independent, so workers>1 solves them concurrently in a process
+    pool, and EVERY cube's result is streamed the instant it lands (not held
+    for the final summary) -- so an all-timeout split is visible after ~one
+    cap, not after k*cap. Keep workers <= physical cores: the pool bounds
+    concurrency to `workers`, so each running cube gets a dedicated core and
+    its measured wall time is a faithful per-cube cost (which is exactly what
+    the fan-out projection assumes -- one cube per core). Worst-case wall is
+    ceil(k/workers)*cap. Measurement only; touches no verdict/soundness path."""
     import random
     nvars, clause_lines = read_cnf(cnf_path)
     cubes = read_cube_lits(cubes_path)
@@ -504,19 +658,32 @@ def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, t=None, N=None):
     sample = sorted(random.Random(seed).sample(range(ncubes), k))
     workdir = os.path.join(outdir, "pilot")
     os.makedirs(workdir, exist_ok=True)
-    print(f"  pilot: {k} of {ncubes} cubes, cap {cap}s, seed {seed}",
-          flush=True)
+    print(f"  pilot: {k} of {ncubes} cubes, cap {cap}s, seed {seed}, "
+          f"workers {workers}", flush=True)
 
-    times, n_timeout, n_sat = [], 0, 0
-    for gidx in sample:
-        status, secs, _ = solve_lits(clause_lines, cubes[gidx], cap, workdir,
-                                     f"pilot{gidx}", False)
-        times.append(secs)
-        if status == "TIMEOUT":
-            n_timeout += 1
-        elif status == "SAT":
-            n_sat += 1
-    times.sort()
+    results = {}
+
+    def note_one(gidx, status, secs):
+        results[gidx] = (status, secs)
+        print(f"    [{len(results)}/{k}] cube {gidx}: {status} in {secs:.2f}s",
+              flush=True)
+
+    if workers > 1:
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        jobs = [(cnf_path, gidx, cubes[gidx], cap, workdir) for gidx in sample]
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            for f in as_completed([ex.submit(_pilot_solve_one, j)
+                                   for j in jobs]):
+                note_one(*f.result())
+    else:
+        for gidx in sample:
+            status, secs, _ = solve_lits(clause_lines, cubes[gidx], cap,
+                                         workdir, f"pilot{gidx}", False)
+            note_one(gidx, status, secs)
+
+    times = sorted(s for _, s in results.values())
+    n_timeout = sum(1 for st, _ in results.values() if st == "TIMEOUT")
+    n_sat = sum(1 for st, _ in results.values() if st == "SAT")
     n = len(times)
 
     def pct(p):
@@ -525,7 +692,9 @@ def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, t=None, N=None):
     mean = sum(times) / n
     proj_core_hours = mean * ncubes / 3600.0
     lower_bound = n_timeout > 0
-    res = {"t": t, "N": N,
+    res = {"lengths": lengths, "encoding": encoding,
+           "t": (lengths[1] if encoding == "palindromic" else None),
+           "N": N,
            "ncubes": ncubes, "n_sampled": k, "cap_seconds": cap, "seed": seed,
            "timeout_fraction": n_timeout / n, "n_sat_in_sample": n_sat,
            "median_seconds": pct(0.5), "p90_seconds": pct(0.9),
@@ -556,18 +725,19 @@ def conjectured_pair(t):
     return None, None
 
 
-def _solve_point(t, N, base_outdir, march_opts, cap, resplit_opts, max_depth,
-                 batch_size):
+def _solve_point(lengths, encoding, N, base_outdir, march_opts, cap,
+                 resplit_opts, max_depth, batch_size):
     """Decide ONE sweep point (split + conquer) in its OWN work directory, so
     parallel workers never collide on the shared shard-0.jsonl / workdir names.
     Module-level (not a closure) so ProcessPoolExecutor can pickle it. Returns
     (N, status, witness_ok)."""
     import shutil
-    outdir = os.path.join(base_outdir, f"solve_t{t}_N{N}")
+    slug = instance_slug(lengths, encoding, N)
+    outdir = os.path.join(base_outdir, f"solve_{slug}")
     os.makedirs(outdir, exist_ok=True)
     cnf = os.path.join(outdir, "i.cnf")
     cubes = os.path.join(outdir, "i.cubes")
-    meta = do_split(t, N, cnf, cubes, march_opts)
+    meta = do_split(lengths, encoding, N, cnf, cubes, march_opts)
     nvars, clause_lines = read_cnf(cnf)
     if meta["solved"] == "UNSAT":
         shutil.rmtree(outdir, ignore_errors=True)
@@ -579,8 +749,7 @@ def _solve_point(t, N, base_outdir, march_opts, cap, resplit_opts, max_depth,
                                       False)
         wok = None
         if status == "SAT" and model is not None:
-            colors = decode_palindromic(model, N, 2)
-            wok = independent_ap_check(colors, [3, t], N) is None
+            wok = check_witness(model, N, lengths, encoding)["witness_ok"]
         shutil.rmtree(outdir, ignore_errors=True)
         return N, "SAT", wok
     cube_lits = read_cube_lits(cubes)
@@ -592,24 +761,48 @@ def _solve_point(t, N, base_outdir, march_opts, cap, resplit_opts, max_depth,
     return N, r["status"], wok
 
 
-def do_solve(t, n_lo, n_hi, outdir, march_opts, cap, resplit_opts, max_depth,
-             batch_size=1, sweep_workers=1):
+def do_solve(lengths, encoding, n_lo, n_hi, outdir, march_opts, cap,
+             resplit_opts, max_depth, batch_size=1, sweep_workers=1):
     """SWEEP N over [n_lo, n_hi], deciding each point SAT/UNSAT with a
     one-process cube-and-conquer (split + conquer, adaptive re-splitting),
-    and report the full pattern. A sweep -- not a binary search -- because
-    palindromic existence is NOT monotone in N: between the two pdw values
-    it alternates, so a bisection can land on an interior alternation point
-    (see vdw_pdw_attack.locate_boundary's soundness note). The full map is
-    unambiguous; reading the exact (p, q) OFF that map per the AKS
-    definition is the subtle part -- see the open question in NOTES.md.
+    and report the full pattern.
+
+    palindromic mode: NOT monotone in N -- between the pdw pair existence
+    alternates with period 2 (see vdw_pdw_attack.locate_boundary's soundness
+    note), so a bisection can land on an interior alternation point. The
+    full map is reported and SAT->UNSAT transitions are candidates only;
+    reading the exact (p, q) OFF that map per the AKS definition is the
+    subtle part -- see the open question in NOTES.md.
+
+    full-mode DIAGONAL (lengths=[k,k]): W(k,2) is, BY DEFINITION, monotone
+    -- a good 2-coloring avoiding a mono AP-k exists for every N < W(k,2)
+    and none exists for any N >= W(k,2) -- so exactly ONE SAT->UNSAT
+    transition is expected in the window, and the threshold can be read
+    directly off it (Task 1.5 -- do NOT route the diagonal through the
+    palindromic parity-alternation logic above; that subtlety does not
+    apply here). A second transition or an UNSAT->SAT reversal is asserted
+    against and flagged loudly: it means the ENCODER OR SOLVER PIPELINE has
+    a bug, not that W(k,2) failed to be a single threshold.
 
     Points are independent, so sweep_workers>1 decides them concurrently in a
     process pool (march_cu/iglucose are subprocesses -- the GIL is irrelevant;
     each point works in its own directory). Results are collected by N, so the
     printed map is identical regardless of worker count or finish order."""
-    pair, src = conjectured_pair(t)
-    print(f"=== solving pdw(2;3,{t}); conjectured {pair} [{src}] ===\n"
-          f"    sweeping N={n_lo}..{n_hi} (workers={sweep_workers})", flush=True)
+    diagonal = (encoding == "full" and len(lengths) == 2
+                and lengths[0] == lengths[1])
+    if encoding == "palindromic":
+        pair, src = conjectured_pair(lengths[1])
+        print(f"=== solving {instance_label(lengths, encoding)}; "
+              f"conjectured {pair} [{src}] ===\n"
+              f"    sweeping N={n_lo}..{n_hi} (workers={sweep_workers})",
+              flush=True)
+    else:
+        pair, src = None, None
+        known = known_threshold(lengths) if diagonal else None
+        print(f"=== solving {instance_label(lengths, encoding)}"
+              + (f"; known {known}" if known else "") + " ===\n"
+              f"    sweeping N={n_lo}..{n_hi} (workers={sweep_workers})",
+              flush=True)
     smap = {}
 
     def note(N, status, wok):
@@ -621,26 +814,66 @@ def do_solve(t, n_lo, n_hi, outdir, march_opts, cap, resplit_opts, max_depth,
     if sweep_workers > 1:
         from concurrent.futures import ProcessPoolExecutor, as_completed
         with ProcessPoolExecutor(max_workers=sweep_workers) as ex:
-            futs = [ex.submit(_solve_point, t, N, outdir, march_opts, cap,
-                              resplit_opts, max_depth, batch_size) for N in ns]
+            futs = [ex.submit(_solve_point, lengths, encoding, N, outdir,
+                              march_opts, cap, resplit_opts, max_depth,
+                              batch_size) for N in ns]
             for f in as_completed(futs):
                 note(*f.result())
     else:
         for N in ns:
-            note(*_solve_point(t, N, outdir, march_opts, cap, resplit_opts,
-                               max_depth, batch_size))
+            note(*_solve_point(lengths, encoding, N, outdir, march_opts, cap,
+                               resplit_opts, max_depth, batch_size))
 
     # SAT->UNSAT transitions (a candidate pdw threshold sits at the last SAT
-    # before an UNSAT run). Reported as candidates only; exact (p,q) TBD.
+    # before an UNSAT run; for the diagonal, the ONE expected transition IS
+    # W(k,2)). Reported as candidates only in pdw mode; exact (p,q) TBD there.
     transitions = [N for N in range(n_lo + 1, n_hi + 1)
                    if smap.get(N - 1) == "SAT" and smap.get(N) == "UNSAT"]
     print(f"\n  map: " + "  ".join(f"{N}:{smap[N][:1]}" for N in
                                    range(n_lo, n_hi + 1)), flush=True)
-    print(f"  SAT->UNSAT transitions at N in {transitions} "
-          f"(candidate thresholds; conjectured pair {pair})", flush=True)
-    return {"t": t, "window": [n_lo, n_hi], "map": smap,
-            "sat_unsat_transitions": transitions, "conjectured": pair,
-            "conjecture_source": src}
+
+    result = {"lengths": lengths, "encoding": encoding,
+              "t": (lengths[1] if encoding == "palindromic" else None),
+              "window": [n_lo, n_hi], "map": smap,
+              "sat_unsat_transitions": transitions,
+              "conjectured": pair, "conjecture_source": src}
+
+    if diagonal:
+        reversals = [N for N in range(n_lo + 1, n_hi + 1)
+                     if smap.get(N - 1) == "UNSAT" and smap.get(N) == "SAT"]
+        monotone_ok = not reversals and len(transitions) <= 1
+        known = known_threshold(lengths)
+        result.update({"monotone_ok": monotone_ok, "reversals": reversals,
+                       "known_threshold": known})
+        if not monotone_ok:
+            print(f"  *** MONOTONICITY VIOLATION for diagonal "
+                  f"W({lengths[0]},2): expected exactly one SAT->UNSAT "
+                  f"transition; got transitions={transitions} "
+                  f"reversals={reversals} -- THIS IS A PIPELINE BUG "
+                  f"(encoder/solver), not a mathematical possibility -- "
+                  f"investigate before trusting any result here ***",
+                  flush=True)
+        elif transitions:
+            w = transitions[0]
+            result["threshold"] = w
+            result["threshold_matches_known"] = (known is None or w == known)
+            if known is None:
+                print(f"  W({lengths[0]},2) threshold read off sweep: {w} "
+                      f"(no known-table entry to cross-check)", flush=True)
+            elif w == known:
+                print(f"  W({lengths[0]},2) threshold read off sweep: {w} "
+                      f"(matches known table value {known})", flush=True)
+            else:
+                print(f"  *** W({lengths[0]},2) threshold read off sweep: "
+                      f"{w} -- MISMATCH with known table value {known} ***",
+                      flush=True)
+        else:
+            print("  no SAT->UNSAT transition found in this window",
+                  flush=True)
+    else:
+        print(f"  SAT->UNSAT transitions at N in {transitions} "
+              f"(candidate thresholds; conjectured pair {pair})", flush=True)
+    return result
 
 
 def read_shard_jsonl(path):
@@ -675,7 +908,9 @@ def reconstruct_shard_from_jsonl(meta, verdicts):
     members = meta.get("members")
     if members is None:  # pre-Task-3 checkpoint: derive round-robin slice
         members = slice_members(meta["ncubes"], meta["nshards"], shard)
-    base = {"t": meta.get("t"), "N": meta.get("N"), "shard": shard,
+    base = {"t": meta.get("t"), "lengths": meta.get("lengths"),
+            "encoding": meta.get("encoding"), "N": meta.get("N"),
+            "shard": shard,
             "nshards": meta["nshards"], "recovered_from": "jsonl",
             "ncubes": meta["ncubes"], "members": members,
             "n_cubes_in_slice": len(members)}
@@ -747,8 +982,15 @@ def merge_jsonl_verdicts(results_dir):
     faithful form of the campaign invariant (every cube refuted), and because
     it unions per-cube by global index it closes an instance that took several
     runs -- unlike shard-level aggregate, whose per-shard files collide across
-    runs. ncubes comes from the JSONL meta lines (they must agree)."""
+    runs. ncubes comes from the JSONL meta lines (they must agree); so do
+    lengths/encoding -- combining a full-mode and a palindromic-mode shard
+    into one merged verdict would silently mix the two encodings (soundness
+    invariant #2), so that disagreement is refused exactly like ncubes'.
+    Older meta lines that predate this field (lengths/encoding absent) are
+    treated as "no opinion" and don't trigger the check."""
     ncubes = None
+    lengths = None
+    encoding = None
     unsat, sat = set(), set()
     for p in sorted(glob.glob(os.path.join(results_dir, "**", "shard-*.jsonl"),
                               recursive=True)):
@@ -758,6 +1000,18 @@ def merge_jsonl_verdicts(results_dir):
                 raise ValueError(f"JSONL files disagree on ncubes: "
                                  f"{ncubes} vs {meta['ncubes']} in {p}")
             ncubes = meta["ncubes"]
+            m_lengths = meta.get("lengths")
+            if m_lengths is not None:
+                if lengths is not None and lengths != m_lengths:
+                    raise ValueError(f"JSONL files disagree on lengths: "
+                                     f"{lengths} vs {m_lengths} in {p}")
+                lengths = m_lengths
+            m_encoding = meta.get("encoding")
+            if m_encoding is not None:
+                if encoding is not None and encoding != m_encoding:
+                    raise ValueError(f"JSONL files disagree on encoding: "
+                                     f"{encoding} vs {m_encoding} in {p}")
+                encoding = m_encoding
         for g, v in verdicts.items():
             (sat if v == "SAT" else unsat if v == "UNSAT" else set()).add(g)
     if sat:
@@ -768,7 +1022,8 @@ def merge_jsonl_verdicts(results_dir):
         status = "UNSAT" if len(unsat) >= ncubes and set(
             range(ncubes)) <= unsat else "UNDETERMINED"
     missing = sorted(set(range(ncubes)) - unsat) if ncubes is not None else []
-    return {"verdict": status, "ncubes": ncubes,
+    return {"verdict": status, "lengths": lengths, "encoding": encoding,
+            "ncubes": ncubes,
             "n_cubes_refuted": len(unsat & set(range(ncubes))) if ncubes
             else len(unsat),
             "cubes_without_unsat": missing, "sat_cubes": sorted(sat)}
@@ -797,7 +1052,22 @@ def aggregate(shard_results, expected_nshards):
       - all expected shards present, all UNSAT, full coverage -> UNSAT;
       - anything else -> UNDETERMINED.
     Shard status stays UNRESOLVED; only the instance verdict is UNDETERMINED,
-    keeping the two levels distinct."""
+    keeping the two levels distinct.
+
+    lengths/encoding guard (extends the merge_jsonl_verdicts ncubes-
+    disagreement guard to this path, Task 1.3): shard results carrying
+    different lengths or encoding can never be combined into one verdict --
+    that would silently claim a result for one instance/encoding using
+    another's cubes. Shards that predate this field (lengths/encoding
+    absent, e.g. hand-built dicts in older unit tests) are "no opinion" and
+    don't trigger it."""
+    li = [r["lengths"] for r in shard_results if r.get("lengths") is not None]
+    if len({tuple(x) for x in li}) > 1:
+        raise ValueError(f"shard results disagree on lengths: {li}")
+    ei = [r["encoding"] for r in shard_results if r.get("encoding") is not None]
+    if len(set(ei)) > 1:
+        raise ValueError(f"shard results disagree on encoding: {ei}")
+
     sat = [r for r in shard_results if r["status"] == "SAT"]
     unresolved = [r for r in shard_results if r["status"] == "UNRESOLVED"]
     present_shards = {r["shard"] for r in shard_results}
@@ -846,7 +1116,24 @@ def main():
     ap.add_argument("mode",
                      choices=["split", "conquer", "local", "aggregate",
                               "prove", "solve", "pilot"])
-    ap.add_argument("--t", type=int)
+    ap.add_argument("--t", type=int,
+                     help="pdw(2;3,t): back-compat instance spec. --t alone "
+                          "(no --lengths) means lengths=[3,t], encoding="
+                          "palindromic -- identical to every prior behavior "
+                          "(see resolve_instance).")
+    ap.add_argument("--lengths", default=None, nargs="+",
+                     help="AP lengths t1,...,tr, space- or comma-separated "
+                          "(e.g. --lengths 6,6 for the diagonal W(6,2), or "
+                          "--lengths 6 6). Implies --encoding full unless "
+                          "overridden (--encoding palindromic + --lengths "
+                          "is refused -- untested territory).")
+    ap.add_argument("--encoding", choices=["palindromic", "full"],
+                     default=None,
+                     help="palindromic (encode_palindromic -- a pdw tool "
+                          "ONLY, --t's default) or full (encode -- NO "
+                          "symmetry breaking; the ONLY encoding a W(k,2) "
+                          "claim may come from). See resolve_instance for "
+                          "the exact back-compat rule.")
     ap.add_argument("--N", type=int)
     ap.add_argument("--outdir", default=os.path.join(REPO_ROOT, "cnc_out"))
     ap.add_argument("--cnf", default=None, help="conquer: CNF from split")
@@ -914,6 +1201,11 @@ def main():
     ap.add_argument("--seed", type=int, default=0,
                      help="pilot: RNG seed for the cube sample (default 0, "
                           "for reproducible projections)")
+    ap.add_argument("--pilot-workers", type=int, default=1,
+                     help="pilot: solve this many sampled cubes concurrently "
+                          "(default 1). Results stream as they land, so an "
+                          "all-timeout split shows after ~one cap not k*cap. "
+                          "Keep <= physical cores for faithful per-cube times.")
     ap.add_argument("--budget-core-hours", type=float, default=None,
                      help="pilot: if the projection exceeds this, exit non-zero "
                           "(blocks a fan-out that would blow the budget) unless "
@@ -925,17 +1217,27 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
 
     if args.mode == "solve":
-        pair, _ = conjectured_pair(args.t)
-        n_lo = args.n_lo if args.n_lo is not None else (
-            (pair[0] - 2) if pair else None)
-        n_hi = args.n_hi if args.n_hi is not None else (
-            (pair[1] + 2) if pair else None)
+        lengths, encoding = resolve_instance(args)
+        n_lo, n_hi = args.n_lo, args.n_hi
+        if encoding == "palindromic":
+            pair, _ = conjectured_pair(lengths[1])
+            if n_lo is None:
+                n_lo = (pair[0] - 2) if pair else None
+            if n_hi is None:
+                n_hi = (pair[1] + 2) if pair else None
+        else:
+            known = known_threshold(lengths)
+            if n_lo is None:
+                n_lo = (known - 2) if known else None
+            if n_hi is None:
+                n_hi = (known + 2) if known else None
         if n_lo is None or n_hi is None:
-            ap.error("solve needs --n-lo/--n-hi (no conjectured pair for "
-                     f"t={args.t} to default from)")
-        res = do_solve(args.t, n_lo, n_hi, args.outdir, args.march_opts,
-                       args.cap_seconds, args.resplit_march_opts,
-                       args.max_resplit_depth, batch_size=args.batch_size,
+            ap.error("solve needs --n-lo/--n-hi (no default window for "
+                     f"{instance_label(lengths, encoding)} to default from)")
+        res = do_solve(lengths, encoding, n_lo, n_hi, args.outdir,
+                       args.march_opts, args.cap_seconds,
+                       args.resplit_march_opts, args.max_resplit_depth,
+                       batch_size=args.batch_size,
                        sweep_workers=args.sweep_workers)
         if args.json_out:
             json.dump(res, open(args.json_out, "w"), indent=2)
@@ -963,9 +1265,14 @@ def main():
         shard_results = collect_shard_results(args.results_dir,
                                               args.expected_nshards)
         agg = aggregate(shard_results, args.expected_nshards)
-        t = shard_results[0]["t"] if shard_results else "?"
-        N = shard_results[0]["N"] if shard_results else "?"
-        print(f"=== pdw(2;3,{t}) N={N}: {agg['verdict']} "
+        t = shard_results[0].get("t", "?") if shard_results else "?"
+        N = shard_results[0].get("N", "?") if shard_results else "?"
+        lengths0 = shard_results[0].get("lengths") if shard_results else None
+        encoding0 = shard_results[0].get("encoding") if shard_results else None
+        label = (instance_label(lengths0, encoding0, N)
+                 if lengths0 is not None and encoding0 is not None
+                 else f"pdw(2;3,{t}) N={N}")
+        print(f"=== {label}: {agg['verdict']} "
               f"({agg['n_shards']}/{agg['expected_nshards']} shards reported, "
               f"{agg['total_cubes_solved']} cubes decided) ===", flush=True)
         if agg["missing_shards"]:
@@ -989,8 +1296,10 @@ def main():
     if args.mode == "pilot":
         if not args.cnf or not args.cubes:
             ap.error("pilot needs --cnf and --cubes (from a prior split)")
+        lengths, encoding = resolve_instance(args, required=False)
         res = do_pilot(args.cnf, args.cubes, args.outdir, args.pilot_k,
-                       args.pilot_cap_seconds, args.seed, t=args.t, N=args.N)
+                       args.pilot_cap_seconds, args.seed, lengths=lengths,
+                       encoding=encoding, N=args.N, workers=args.pilot_workers)
         over = (args.budget_core_hours is not None
                 and res["projected_core_hours"] > args.budget_core_hours)
         res["budget_core_hours"] = args.budget_core_hours
@@ -1007,26 +1316,30 @@ def main():
         return
 
     if args.mode == "prove":
-        res = do_prove(args.t, args.N, args.outdir, args.march_opts,
-                       args.cap_seconds)
-        print(f"\n=== pdw(2;3,{args.t}) N={args.N}: {res['status']} "
+        lengths, encoding = resolve_instance(args)
+        res = do_prove(lengths, encoding, args.N, args.outdir,
+                       args.march_opts, args.cap_seconds)
+        label = instance_label(lengths, encoding, args.N)
+        print(f"\n=== {label}: {res['status']} "
               f"proof_verified={res.get('proof_verified')} ===", flush=True)
         if args.json_out:
             json.dump(res, open(args.json_out, "w"), indent=2)
         return
 
     if args.mode == "split":
-        cnf = args.cnf or os.path.join(args.outdir,
-                                       f"cnc_t{args.t}_N{args.N}.cnf")
-        cubes = args.cubes or os.path.join(args.outdir,
-                                           f"cnc_t{args.t}_N{args.N}.cubes")
-        meta = do_split(args.t, args.N, cnf, cubes, args.march_opts)
+        lengths, encoding = resolve_instance(args)
+        slug = instance_slug(lengths, encoding, args.N)
+        cnf = args.cnf or os.path.join(args.outdir, f"cnc_{slug}.cnf")
+        cubes = args.cubes or os.path.join(args.outdir, f"cnc_{slug}.cubes")
+        meta = do_split(lengths, encoding, args.N, cnf, cubes, args.march_opts)
         if args.json_out:
             json.dump(meta, open(args.json_out, "w"), indent=2)
         return
 
     if args.mode == "conquer":
-        meta = {"t": args.t, "N": args.N}
+        lengths, encoding = resolve_instance(args)
+        meta = {"lengths": lengths, "encoding": encoding, "N": args.N,
+                "t": (lengths[1] if encoding == "palindromic" else None)}
         nvars, clause_lines = read_cnf(args.cnf)
         cubes = read_cube_lits(args.cubes)
         cube_indices = None
@@ -1046,17 +1359,36 @@ def main():
         return
 
     # local: split then conquer every shard in-process
-    cnf = os.path.join(args.outdir, f"cnc_t{args.t}_N{args.N}.cnf")
-    cubes = os.path.join(args.outdir, f"cnc_t{args.t}_N{args.N}.cubes")
-    meta = do_split(args.t, args.N, cnf, cubes, args.march_opts)
+    lengths, encoding = resolve_instance(args)
+    slug = instance_slug(lengths, encoding, args.N)
+    label = instance_label(lengths, encoding, args.N)
+    cnf = os.path.join(args.outdir, f"cnc_{slug}.cnf")
+    cubes = os.path.join(args.outdir, f"cnc_{slug}.cubes")
+    meta = do_split(lengths, encoding, args.N, cnf, cubes, args.march_opts)
     if meta["solved"]:
         # march_cu decided the instance during the split -> no cubes to
         # conquer; report its verdict directly rather than "conquering" an
-        # empty cube set (which would read as a vacuous UNSAT).
-        print(f"\n=== pdw(2;3,{args.t}) N={args.N}: {meta['solved']} "
-              f"(decided by march_cu during split, 0 cubes) ===", flush=True)
+        # empty cube set (which would read as a vacuous UNSAT). For SAT,
+        # march_cu's rc=10 short-circuit emits no model, so recover a real
+        # witness by solving the base CNF directly (same recipe _solve_point
+        # uses) and validate it with the one check_witness helper -- this
+        # instance-decided-at-N=8-during-split case is exactly how the
+        # smallest diagonal cells (e.g. W(3,2) at N=8) get decided, so
+        # skipping this would silently ship an unverified SAT claim.
+        witness = None
+        if meta["solved"] == "SAT":
+            nvars, clause_lines = read_cnf(cnf)
+            status, _, model = solve_lits(clause_lines, [], args.cap_seconds,
+                                          args.outdir, "satwit", False)
+            if status == "SAT" and model is not None:
+                witness = check_witness(model, args.N, lengths, encoding)
+        extra = f" witness_ok={witness['witness_ok']}" if witness else ""
+        print(f"\n=== {label}: {meta['solved']} "
+              f"(decided by march_cu during split, 0 cubes){extra} ===",
+              flush=True)
         if args.json_out:
-            json.dump({"meta": meta, "verdict": meta["solved"]},
+            json.dump({"meta": meta, "verdict": meta["solved"],
+                       "witness": witness},
                       open(args.json_out, "w"), indent=2)
         return
     nvars, clause_lines = read_cnf(cnf)
@@ -1069,7 +1401,7 @@ def main():
                           args.certified, args.resplit_march_opts,
                           args.max_resplit_depth, batch_size=args.batch_size))
     agg = aggregate(shard_results, args.nshards)
-    print(f"\n=== pdw(2;3,{args.t}) N={args.N}: {agg['verdict']} "
+    print(f"\n=== {label}: {agg['verdict']} "
           f"({agg['total_cubes_solved']}/{meta['ncubes']} cubes decided) ===",
           flush=True)
     if args.json_out:
