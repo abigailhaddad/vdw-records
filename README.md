@@ -1,5 +1,13 @@
 # Seven new van der Waerden lower bounds
 
+> **Disclaimer: THIS HAS NOT BEEN CHECKED BY A MATHEMATICIAN AND IT COULD
+> BE WRONG.** Everything here was produced by an AI (with a human
+> collaborator) and verified only by the code in this repo, against
+> itself. That is real evidence, not proof by authority — see "Verify it
+> yourself" below and judge the checks on their own merits. Treat every
+> claimed result as unconfirmed until an independent human expert (or an
+> independent from-scratch reimplementation) has checked it.
+
 Improved lower bounds for the three-color van der Waerden numbers W(3,19)
 through W(3,25), found July 20, 2026 by Claude (Fable 5) working with
 Abigail Haddad, by continuing an exhaustive power-residue prime scan past

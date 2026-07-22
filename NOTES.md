@@ -406,6 +406,95 @@ are the payoff at the end. Colorblind-safe validated palette.
   python3 code/vdw_scan3.py 3   (r=3, from the cap; adjust start to skip
   already-scanned band up to ~969,403,451)
 
+## Exact-values campaign (phase 3 — starting 2026-07-21)
+
+Pivot, after a mathematician's reality check (see memory
+vdw-lower-bounds-are-minor): our records are easy-direction lower bounds;
+the genuinely hard/interesting direction is EXACT values = an UNSAT proof
+that every coloring of [1,N+1] contains a mono AP. Target: the mixed
+table w(2;3,t), stalled since Ahmed–Kullmann–Snevily 2014 (2013-era
+solvers) — small instances (hundreds of vars), 12 years of solver
+progress, nobody pushing. NOT W(2,7) (Kouril's "NEVER" stands).
+Division of labor: Fable plans/specs/reviews; sonnet agents build.
+
+Plan: (1) pipeline — install kissat/CaDiCaL/drat-trim(/march_cu), CNF
+encoder for mixed vdW, validate by re-deriving known exact values (SAT
+at W−1 with witness brute-checked by vdw.py, proof-checked UNSAT at W);
+(2) calibration — re-prove the deepest known cells, measure the
+cell-to-cell time growth curve, extrapolate the first unknown cell's
+cost BEFORE committing (if it extrapolates to years, publish the curve
+and stop — honest negative); (3) attack — incremental SAT to push the
+lower bound until witnesses dry up, then cube-and-conquer UNSAT sharded
+on GitHub Actions (same skeleton as the scan workflow), per-cube DRAT
+proofs, all machine-checked.
+
+### Frontier intel (research agent, 2026-07-21 — full report w/ URLs in
+### session transcript; key sources: arXiv:1102.5433, Wikipedia vdW table,
+### OEIS A007783, IOS Press ebooks 42692)
+
+- AKS 2014 (Ahmed–Kullmann–Snevily, DAM 174): exact w(2;3,t) through
+  t=19 (=349, their new result: ~196 CPU-years on 2011 solvers, but
+  their own estimate says tawSolver-2.6 (2014) needed only ~1.4
+  CPU-years — a >100x software gain in 3 years). Conjectured values
+  t=20..30 (389, 416, 464, 516, 593, 656, 727, 770, 827, 868, 903;
+  "pretty safe" ≤28), weak lower bounds t=31..39.
+- **The frontier moved ONCE since 2014, and it's shaky: Kouril 2015
+  (FPGA cluster, IOS Press, paywalled) claims w(2;3,20)=389 plus three
+  small mixed cells. Unreplicated, no proof artifact; OEIS A007783 and
+  the smallnumbers verification project still stop at t=19.** Kouril's
+  same abstract promised W(5,3) in 6-9 months; it never appeared.
+- Nobody has ever attacked w(2;3,21). No AI system has touched vdW
+  exact values (2026 wave checked). Fox–Hunter arXiv:2606.02541 (June
+  2026) is theory only.
+- Cube-and-conquer was INVENTED on these exact instances (AKS fn. 6,
+  Heule–Kullmann–Wieringa–Biere). Modern stack: march_cu (or learned
+  cubing) → CaDiCaL 2.0 (native LRAT) / kissat → verified checker
+  (cake_lpr), embarrassingly parallel across cubes.
+- Other family frontiers (last exact / next): w(2;4,9)=309 (Ahmed
+  2012); w(2;5,7)=260 (Ahmed 2013, ~200 CPU-years, author asked in
+  print for independent verification — never done); w(3;3,3,6)=107;
+  w(3;2,3,14)=202 (Kouril 2012).
+
+### TARGET SELECTED: w(2;3,20) — prove =389 with machine-checkable proof
+
+Why: genuine frontier cell with a live discrepancy (Wikipedia says
+exact via one unreplicated FPGA run with no artifact; OEIS says
+unknown). Either outcome is a real result: first proof-logged
+confirmation, or refutation of a standing claim. Instance is tiny (389
+vars); cost extrapolation says ~1.5-5 CPU-years modern ≈ 1-3 weeks on
+free GitHub Actions (20 jobs × 4 cores). Sets up w(2;3,21)=416? as the
+genuinely-new follow-on (~10x harder, borderline feasible).
+Calibration ladder before committing: t=17 (=279, should be hours),
+t=18 (=312), measure the growth factor, extrapolate t=20; abort and
+publish the curve if it points past ~3000 core-days.
+Side quests (value per CPU): palindromic pdw(2;3,t) past t=27 (AKS
+stopped there; C&C strongest on palindromic instances; laptop-scale;
+QUEUED 2026-07-21 as builder task 4 — easiest genuinely hard-direction
+result on the board; NB the pdw definition is a PAIR, palindromicity
+is not monotone — definition to be taken from arXiv:1102.5433/OEIS
+A198684/5, not from memory); verify w(2;5,7)=260 (13-year-old standing
+request); modern local search on the t=31..39 lower bounds (days of
+compute, 2014-era records).
+
+### Efficiency watch (standing — user asked us to keep hunting)
+
+Levers identified so far, roughly by leverage:
+- Palindrome VARIABLE FOLDING (not equality clauses): halves vars on
+  pdw instances. In the task-4 spec.
+- Proof logging only at the boundary: bracket transitions with cheap
+  no-proof SAT calls; re-run only the final UNSAT with proofs on.
+- cadical >= 2.0 native LRAT skips the kissat->drat-trim post-pass;
+  builder measuring the delta on one cell.
+- Warm-start phases from nearby-n witnesses (sat_full.py pattern).
+- For the t=20 campaign: cube-depth tuning is THE knob (AKS split at
+  DLL depth 8 for 256 subtrees); measure cube-size distribution on
+  t=17/18 before picking t=20's depth. march_cu didn't have to build
+  for phase 1 — becomes required for phase 3.
+- Not yet explored: AKS report tawSolver (special-purpose, their 85x)
+  beat general CDCL on these instances — if calibration disappoints,
+  try building tawSolver (Kullmann's GitHub, OKlibrary) before buying
+  compute; also SAT-Comp-2025-winner kissat variants are public.
+
 ## Methodology lessons (the running theme)
 
 - Search strategy > search effort: symmetry restriction collapsed 2^1176 to
