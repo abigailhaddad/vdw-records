@@ -30,12 +30,21 @@ Clauses forbidding monochromatic APs:
 - r >= 3: for each color c with length t_c, for every AP of length t_c,
   clause (-y_{a,c} v -y_{a+d,c} v ...) — forbids all-position-c-colored.
 
-NO symmetry breaking of any kind (deliberate, phase 1): position 1's
-color is not fixed, and the r==2 color-swap symmetry is not broken. For
-mixed lengths (t1 != t2) there is no color-swap symmetry to begin with,
-and breaking it in general would be UNSOUND, so it is omitted here even
-where it would be sound (e.g. diagonal t1==t2==...==tr), to keep the
-encoder uniformly correct across all inputs without a special case.
+NO symmetry breaking BY DEFAULT (phase 1 decision): position 1's color is
+not fixed, and the r==2 color-swap symmetry is not broken. For mixed
+lengths (t1 != t2) there is no color-swap symmetry to begin with, and
+breaking it in general would be UNSOUND, so it stays off there
+unconditionally. An OPT-IN symmetry-breaking layer for the r==2 DIAGONAL
+case (t1==t2, i.e. W(k,2)) was added later (PLAN_sb_probe.md, "SB probe"):
+pass symmetry_break=True to encode() (r==2, t1==t2 only -- ValueError
+otherwise) to add lex-leader clauses for the instance's full symmetry
+group {id, color-swap, reflection, both} -- see symmetry_break_clauses()
+and lex_leader_clauses() below for the construction and the soundness
+argument. This is a DECISION-only tool: the certificate path (drat-trim
+verification against the ORIGINAL formula) is not sound over the SB
+formula without RAT-justifying the SB clauses, which this pipeline does
+NOT do -- see the scope guard in PLAN_sb_probe.md. Default is still
+symmetry_break=False everywhere, so every existing caller is unaffected.
 
 --- Palindromic mode (encode_palindromic) -----------------------------
 
@@ -97,11 +106,128 @@ def var_r(i, c, r):
     return (i - 1) * r + c
 
 
-def encode(lengths, N):
+def lex_leader_clauses(xs, ys, aux_start):
+    """Generic lex-leader chain: X <=_lex Y, where xs and ys are two
+    equal-length LITERAL vectors (complementing a variable is just negating
+    its entry -- no separate "complement" parameter needed). Standard
+    "equal-so-far" auxiliary-variable encoding (PLAN_sb_probe.md SB-1):
+
+        a_0 = TRUE (constant, folded away -- see below)
+        for i = 1..N:
+          (not a_{i-1} or not x_i or y_i)        # equal-so-far -> x_i<=y_i
+          a_i := a_{i-1} AND (x_i <-> y_i), via:
+            (not a_i or a_{i-1})
+            (not a_i or x_i or not y_i), (not a_i or not x_i or y_i)
+            (a_i or not a_{i-1} or x_i or y_i)
+            (a_i or not a_{i-1} or not x_i or not y_i)
+
+    a_0=TRUE is folded away (never allocated: literals referencing it are
+    just dropped from the i=1 clauses instead of adding a variable for a
+    constant). The a_N block is dropped entirely (per spec: "a_N unused
+    beyond its definition") since nothing needs to know if X and Y are
+    equal all the way to the end -- only the running x_i<=y_i clauses matter.
+    Fresh aux variables a_1..a_{N-1} are numbered aux_start..aux_start+N-2.
+
+    Returns (clauses, next_free_var) so multiple chains can be laid out
+    back-to-back without colliding on aux variable ids.
+
+    Soundness: this is the standard, well-known lex-leader construction (see
+    symmetry_break_clauses() docstring for how it is used here and why it
+    keeps SAT-equivalence).
+    """
+    N = len(xs)
+    if len(ys) != N:
+        raise ValueError("xs and ys must be equal length")
+    clauses = []
+
+    def add(lits):
+        s = set(lits)
+        if any(-l in s for l in s):
+            return  # tautology, drop
+        clauses.append(list(s))
+
+    prev = None  # None stands for the constant a_0 = TRUE
+    for i in range(1, N + 1):
+        x, y = xs[i - 1], ys[i - 1]
+        if prev is None:
+            add([-x, y])
+        else:
+            add([-prev, -x, y])
+        if i == N:
+            break  # a_N block dropped -- nothing downstream needs it
+        a = aux_start + i - 1
+        if prev is not None:
+            add([-a, prev])
+        add([-a, x, -y])
+        add([-a, -x, y])
+        if prev is None:
+            add([a, x, y])
+            add([a, -x, -y])
+        else:
+            add([a, -prev, x, y])
+            add([a, -prev, -x, -y])
+        prev = a
+    next_free = aux_start + (N - 1)
+    return clauses, next_free
+
+
+def symmetry_break_clauses(N, aux_start):
+    """Lex-leader clauses for ALL THREE non-identity elements of the r=2
+    diagonal symmetry group {id, color-swap s, reflection r, both sr} acting
+    on positions 1..N (var2(i) = i):
+
+      1. color-swap s:  g(X)_i = NOT x_i           -> ys = [-i for i in xs]
+      2. reflection r:  g(X)_i = x_{N+1-i}          -> ys = reversed(xs)
+      3. both sr:       g(X)_i = NOT x_{N+1-i}      -> ys = [-l for l in
+                                                             reversed(xs)]
+
+    (These are provably the only non-identity affine maps of [1,N] sending
+    APs to APs -- x -> x and x -> N+1-i are the only affine bijections of an
+    interval to itself -- crossed with the two colors; PLAN_sb_probe.md.)
+
+    Returns (clauses, n_aux_vars, next_free_var).
+
+    Soundness argument (kept here, not just in the plan, since this is the
+    part a future certificate-writer needs): SB clauses only ADD
+    constraints, so models(SB formula) is a SUBSET of models(original) --
+    the SAT side needs no new checking (a witness under SB is automatically
+    a witness of the original). And every orbit of the symmetry group acting
+    on original models contains its lex-min element, which by construction
+    satisfies X <=_lex g(X) for every g in the group -- so the SB formula is
+    satisfiable whenever the original is (SAT-equivalence). It follows that
+    UNSAT of the SB formula implies UNSAT of the original -- but that
+    implication is NOT machine-checked anywhere in this pipeline (no RAT
+    justification is produced for the SB clauses), so it must never be
+    treated as a certified result; this SB layer is DECISION-only (see the
+    scope guard in PLAN_sb_probe.md -- `prove` mode refuses --symmetry-break
+    for exactly this reason).
+    """
+    xs = list(range(1, N + 1))
+    swap_ys = [-i for i in xs]
+    reflect_ys = list(reversed(xs))
+    sr_ys = [-i for i in reversed(xs)]
+    clauses = []
+    a = aux_start
+    for ys in (swap_ys, reflect_ys, sr_ys):
+        cl, a = lex_leader_clauses(xs, ys, a)
+        clauses += cl
+    return clauses, a - aux_start, a
+
+
+def encode(lengths, N, symmetry_break=False):
     """Build the CNF for `lengths` = [t1,...,tr] at candidate value N.
 
+    symmetry_break=True (opt-in, default False): add the lex-leader
+    symmetry-breaking layer from symmetry_break_clauses() -- ONLY valid for
+    r==2 diagonal (t1==t2); ValueError otherwise (see module docstring and
+    PLAN_sb_probe.md scope guard -- color-swap symmetry is unsound when
+    t1 != t2, and this encoder never attempts a partial (reflection-only) SB
+    layer for the mixed case, to keep the soundness surface small).
+
     Returns (clauses, nvars) where clauses is a list of lists of ints
-    (DIMACS literals, no trailing 0) and nvars is the variable count.
+    (DIMACS literals, no trailing 0) and nvars is the variable count
+    (including any symmetry-breaking aux variables, numbered ABOVE the N
+    position variables).
     """
     r = len(lengths)
     if r < 2:
@@ -115,7 +241,22 @@ def encode(lengths, N):
             clauses.append([var2(a + k * d) for k in range(t1)])
         for a, d in ap_starts(N, t2):
             clauses.append([-var2(a + k * d) for k in range(t2)])
+        if symmetry_break:
+            if t1 != t2:
+                raise ValueError(
+                    "symmetry_break=True requires diagonal lengths "
+                    "(t1 == t2): mixed instances have no color-swap "
+                    "symmetry to begin with, so breaking it would be "
+                    "unsound (PLAN_sb_probe.md scope guard)")
+            sb_clauses, n_aux, _ = symmetry_break_clauses(N, nvars + 1)
+            clauses += sb_clauses
+            nvars += n_aux
         return clauses, nvars
+
+    if symmetry_break:
+        raise ValueError(
+            "symmetry_break=True is only implemented for r==2 "
+            "(PLAN_sb_probe.md scope guard)")
 
     # r >= 3: one-hot encoding.
     nvars = N * r
@@ -256,19 +397,33 @@ def main():
     ap.add_argument("--palindromic", action="store_true",
                      help="fold positions i, N+1-i onto one variable "
                           "(AKS 2014 pdw(r;t1,...,tr) mode)")
+    ap.add_argument("--symmetry-break", action="store_true",
+                     help="add the lex-leader symmetry-breaking layer "
+                          "(color-swap + reflection + both) -- r==2 "
+                          "diagonal (t1==t2) only, DECISION-only, "
+                          "incompatible with --palindromic; see "
+                          "PLAN_sb_probe.md")
     args = ap.parse_args()
+
+    if args.palindromic and args.symmetry_break:
+        ap.error("--palindromic and --symmetry-break are mutually exclusive "
+                 "(palindromic mode already folds out reflection symmetry; "
+                 "see PLAN_sb_probe.md scope guard)")
 
     if args.palindromic:
         clauses, nvars = encode_palindromic(args.lengths, args.N)
         tag = "vdW palindromic encoding"
     else:
-        clauses, nvars = encode(args.lengths, args.N)
-        tag = "vdW mixed encoding"
+        clauses, nvars = encode(args.lengths, args.N,
+                                symmetry_break=args.symmetry_break)
+        tag = "vdW mixed encoding" + (" + symmetry breaking"
+                                      if args.symmetry_break else "")
     comment = (f"{tag}: lengths={args.lengths} N={args.N} "
                f"r={len(args.lengths)} vars={nvars} clauses={len(clauses)}")
     write_dimacs(clauses, nvars, args.out, comment=comment)
     print(f"wrote {args.out}: {nvars} vars, {len(clauses)} clauses "
-          f"(lengths={args.lengths}, N={args.N}, palindromic={args.palindromic})")
+          f"(lengths={args.lengths}, N={args.N}, palindromic={args.palindromic}, "
+          f"symmetry_break={args.symmetry_break})")
 
 
 if __name__ == "__main__":
