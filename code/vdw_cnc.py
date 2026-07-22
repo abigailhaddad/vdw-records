@@ -118,7 +118,7 @@ def instance_label(lengths, encoding, N=None):
     return f"{base} N={N}" if N is not None else base
 
 
-def instance_slug(lengths, encoding, N):
+def instance_slug(lengths, encoding, N, symmetry_break=False):
     """Filesystem-safe tag for filenames/workdirs, so full and palindromic
     runs never collide under the same cnc_out/ paths. Chosen so that the
     PALINDROMIC case reproduces the exact old naming byte-for-byte (t{t}_N{N}
@@ -126,10 +126,16 @@ def instance_slug(lengths, encoding, N):
     build by hand from --t/--N depends on that exact string, and back-compat
     (acceptance test (c), the t=20 regression) requires it survive untouched.
     Full mode is new territory, so it gets a fresh, self-describing scheme,
-    e.g. lengths=[6,6] N=1132 -> "w6_6_N1132"."""
+    e.g. lengths=[6,6] N=1132 -> "w6_6_N1132". symmetry_break=True appends
+    "_sb" (e.g. "w6_6_N1132_sb") so SB and non-SB artifacts of the SAME
+    instance can never collide on disk (PLAN_sb_probe.md SB-2) -- in
+    practice this only ever fires in full mode (palindromic + SB is refused
+    upstream), but the suffix is applied uniformly here for robustness."""
     if encoding == "palindromic":
-        return f"t{lengths[1]}_N{N}"
-    return "w" + "_".join(str(x) for x in lengths) + f"_N{N}"
+        base = f"t{lengths[1]}_N{N}"
+    else:
+        base = "w" + "_".join(str(x) for x in lengths) + f"_N{N}"
+    return base + ("_sb" if symmetry_break else "")
 
 
 def check_witness(model, N, lengths, encoding):
@@ -185,26 +191,63 @@ def resolve_instance(args, required=True):
     return [3, args.t], "palindromic"
 
 
-def do_split(lengths, encoding, N, cnf_path, cubes_path, march_opts):
+def check_sb_allowed(lengths, encoding, symmetry_break):
+    """Enforce the SB probe's scope guard (PLAN_sb_probe.md) uniformly,
+    wherever --symmetry-break might combine with an instance: SOUND symmetry
+    breaking (color-swap + reflection + both) only exists for the full
+    (non-palindromic) r=2 DIAGONAL encoding (lengths=[k,k]).
+      - palindromic mode already folds out reflection symmetry via variable
+        sharing (position i and N+1-i share ONE boolean) -- mixing the two
+        is exactly the kind of subtle unsoundness the scope guard
+        quarantines, so it is refused outright, not silently ignored.
+      - mixed r=2 (t1 != t2) has no color-swap symmetry to begin with (see
+        vdw_sat.encode's own guard) -- refused here too, before any CNF work
+        is spent, for a clearer error at the CLI layer.
+    A no-op when symmetry_break is False, so every existing call site is
+    unaffected."""
+    if not symmetry_break:
+        return
+    if encoding != "full":
+        raise SystemExit(
+            "--symmetry-break requires the full (non-palindromic) encoding "
+            "-- palindromic mode already folds out reflection symmetry via "
+            "variable sharing; mixing the two is unsound "
+            "(PLAN_sb_probe.md scope guard)")
+    if len(lengths) != 2 or lengths[0] != lengths[1]:
+        raise SystemExit(
+            "--symmetry-break requires diagonal lengths (r=2, t1==t2, e.g. "
+            "--lengths 6,6 for W(6,2)) -- color-swap symmetry is unsound "
+            "when t1 != t2 (PLAN_sb_probe.md scope guard)")
+
+
+def do_split(lengths, encoding, N, cnf_path, cubes_path, march_opts,
+            symmetry_break=False):
     """Encode the instance (lengths, encoding) at length N (expect the
     caller is probing UNSAT) and split it into cubes with march_cu.
     encoding=="palindromic" -> encode_palindromic (pdw tool ONLY);
-    encoding=="full" -> encode (no symmetry breaking of any kind -- the
-    ONLY encoding a W(k,2) claim may come from).
+    encoding=="full" -> encode, optionally with the lex-leader
+    symmetry-breaking layer (symmetry_break=True; r=2 diagonal only -- see
+    check_sb_allowed / vdw_sat.encode). DECISION-only: the SB clauses are
+    never RAT-justified anywhere in this pipeline, so a split with
+    symmetry_break=True must never feed `prove` (enforced at the CLI layer).
 
     march_cu can also DECIDE the instance during look-ahead instead of
     emitting cubes -- it exits 10 (SATISFIABLE) or 20 (UNSATISFIABLE), like
     a CDCL solver, and writes no cube file. We surface that as meta["solved"]
     ("SAT"/"UNSAT", else None) with ncubes 0. Callers MUST honour it: a
     0-cube split fed to conquer would otherwise be read as a vacuous UNSAT
-    (no cubes to refute), which for a rc=10 SAT short-circuit is dead wrong."""
+    (no cubes to refute), which for a rc=10 SAT short-circuit is dead wrong.
+    Note: march_cu branches on whatever variables are in the CNF, aux SB
+    variables included -- it has no notion of "position" vs "auxiliary"."""
+    check_sb_allowed(lengths, encoding, symmetry_break)
     if encoding == "palindromic":
         clauses, nvars = encode_palindromic(lengths, N)
     else:
-        clauses, nvars = encode(lengths, N)
+        clauses, nvars = encode(lengths, N, symmetry_break=symmetry_break)
     label = instance_label(lengths, encoding, N)
     write_dimacs(clauses, nvars, cnf_path,
-                 comment=f"{label} {encoding} (cube-and-conquer)")
+                 comment=f"{label} {encoding} (cube-and-conquer)"
+                 + (" +sb" if symmetry_break else ""))
     cmd = [MARCH, cnf_path, "-o", cubes_path] + march_opts.split()
     print(f"  split: {' '.join(cmd)}", flush=True)
     t0 = time.time()
@@ -224,7 +267,7 @@ def do_split(lengths, encoding, N, cnf_path, cubes_path, march_opts):
             "t": (lengths[1] if encoding == "palindromic" else None),
             "N": N, "nvars": nvars, "nclauses": len(clauses),
             "cnf": cnf_path, "cubes": cubes_path, "ncubes": ncubes,
-            "solved": solved,
+            "solved": solved, "symmetry_break": symmetry_break,
             "march_opts": march_opts, "split_seconds": split_time}
 
 
@@ -426,7 +469,8 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     to max_resplit_depth before being given up as UNRESOLVED (recorded by
     global cube index so exactly those can be re-dispatched)."""
     lengths, encoding, N = meta["lengths"], meta["encoding"], meta["N"]
-    slug = instance_slug(lengths, encoding, N)
+    symmetry_break = meta.get("symmetry_break", False)
+    slug = instance_slug(lengths, encoding, N, symmetry_break)
     workdir = os.path.join(outdir, f"cnc_{slug}_shard{shard}")
     os.makedirs(workdir, exist_ok=True)
     if cube_indices is not None:
@@ -449,7 +493,8 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     jf = open(jsonl_path, "w")
     jf.write(json.dumps({"meta": True, "lengths": lengths, "encoding": encoding,
                          "t": (lengths[1] if encoding == "palindromic" else None),
-                         "N": N, "shard": shard,
+                         "N": N, "symmetry_break": symmetry_break,
+                         "shard": shard,
                          "nshards": nshards, "ncubes": len(cubes),
                          "mode": mode, "members": members}) + "\n")
     jf.flush()
@@ -535,7 +580,8 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
         status = "UNSAT"
     return {"lengths": lengths, "encoding": encoding,
             "t": (lengths[1] if encoding == "palindromic" else None),
-            "N": N, "shard": shard, "nshards": nshards, "mode": mode,
+            "N": N, "symmetry_break": symmetry_break,
+            "shard": shard, "nshards": nshards, "mode": mode,
             "ncubes": len(cubes), "members": members,
             "cap_seconds": cap, "max_resplit_depth": max_resplit_depth,
             "batch_size": eff_batch, "n_batched_unsat": n_batched,
@@ -564,7 +610,7 @@ def do_prove(lengths, encoding, N, outdir, march_opts, cap):
     label = instance_label(lengths, encoding, N)
     base = {"lengths": lengths, "encoding": encoding,
             "t": (lengths[1] if encoding == "palindromic" else None),
-            "N": N}
+            "N": N, "symmetry_break": False}
     cnf = os.path.join(outdir, f"prove_{slug}.cnf")
     write_dimacs(clauses, nvars, cnf, comment=f"{label} {encoding} (prove)")
     cubes = os.path.join(outdir, f"prove_{slug}.cubes")
@@ -631,7 +677,7 @@ def _pilot_solve_one(job):
 
 
 def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, lengths=None,
-             encoding=None, N=None, workers=1):
+             encoding=None, N=None, workers=1, symmetry_break=False):
     """Sample K cubes uniformly (fixed seed -> reproducible), solve each with
     a small cap, and project the full instance's cost BEFORE fanning out to
     dozens of jobs. The t=26 -d16 dispatch burned ~15 job-hours before a human
@@ -649,8 +695,17 @@ def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, lengths=None,
     concurrency to `workers`, so each running cube gets a dedicated core and
     its measured wall time is a faithful per-cube cost (which is exactly what
     the fan-out projection assumes -- one cube per core). Worst-case wall is
-    ceil(k/workers)*cap. Measurement only; touches no verdict/soundness path."""
+    ceil(k/workers)*cap. Measurement only; touches no verdict/soundness path.
+
+    symmetry_break is a LABEL ONLY here (pilot reads a pre-built --cnf/--cubes
+    pair -- whatever SB clauses are or aren't already baked into that CNF are
+    what actually gets solved; this flag is not re-validated against the file
+    and exists so pilot.json carries it per the scope guard's "every
+    artifact" rule and so a labeled instance is checked with check_sb_allowed
+    for a fast, clear error on an obviously wrong combination)."""
     import random
+    if lengths is not None:
+        check_sb_allowed(lengths, encoding, symmetry_break)
     nvars, clause_lines = read_cnf(cnf_path)
     cubes = read_cube_lits(cubes_path)
     ncubes = len(cubes)
@@ -694,7 +749,7 @@ def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, lengths=None,
     lower_bound = n_timeout > 0
     res = {"lengths": lengths, "encoding": encoding,
            "t": (lengths[1] if encoding == "palindromic" else None),
-           "N": N,
+           "N": N, "symmetry_break": symmetry_break,
            "ncubes": ncubes, "n_sampled": k, "cap_seconds": cap, "seed": seed,
            "timeout_fraction": n_timeout / n, "n_sat_in_sample": n_sat,
            "median_seconds": pct(0.5), "p90_seconds": pct(0.9),
@@ -726,18 +781,19 @@ def conjectured_pair(t):
 
 
 def _solve_point(lengths, encoding, N, base_outdir, march_opts, cap,
-                 resplit_opts, max_depth, batch_size):
+                 resplit_opts, max_depth, batch_size, symmetry_break=False):
     """Decide ONE sweep point (split + conquer) in its OWN work directory, so
     parallel workers never collide on the shared shard-0.jsonl / workdir names.
     Module-level (not a closure) so ProcessPoolExecutor can pickle it. Returns
     (N, status, witness_ok)."""
     import shutil
-    slug = instance_slug(lengths, encoding, N)
+    slug = instance_slug(lengths, encoding, N, symmetry_break)
     outdir = os.path.join(base_outdir, f"solve_{slug}")
     os.makedirs(outdir, exist_ok=True)
     cnf = os.path.join(outdir, "i.cnf")
     cubes = os.path.join(outdir, "i.cubes")
-    meta = do_split(lengths, encoding, N, cnf, cubes, march_opts)
+    meta = do_split(lengths, encoding, N, cnf, cubes, march_opts,
+                    symmetry_break=symmetry_break)
     nvars, clause_lines = read_cnf(cnf)
     if meta["solved"] == "UNSAT":
         shutil.rmtree(outdir, ignore_errors=True)
@@ -762,7 +818,8 @@ def _solve_point(lengths, encoding, N, base_outdir, march_opts, cap,
 
 
 def do_solve(lengths, encoding, n_lo, n_hi, outdir, march_opts, cap,
-             resplit_opts, max_depth, batch_size=1, sweep_workers=1):
+             resplit_opts, max_depth, batch_size=1, sweep_workers=1,
+             symmetry_break=False):
     """SWEEP N over [n_lo, n_hi], deciding each point SAT/UNSAT with a
     one-process cube-and-conquer (split + conquer, adaptive re-splitting),
     and report the full pattern.
@@ -788,6 +845,7 @@ def do_solve(lengths, encoding, n_lo, n_hi, outdir, march_opts, cap,
     process pool (march_cu/iglucose are subprocesses -- the GIL is irrelevant;
     each point works in its own directory). Results are collected by N, so the
     printed map is identical regardless of worker count or finish order."""
+    check_sb_allowed(lengths, encoding, symmetry_break)
     diagonal = (encoding == "full" and len(lengths) == 2
                 and lengths[0] == lengths[1])
     if encoding == "palindromic":
@@ -816,13 +874,14 @@ def do_solve(lengths, encoding, n_lo, n_hi, outdir, march_opts, cap,
         with ProcessPoolExecutor(max_workers=sweep_workers) as ex:
             futs = [ex.submit(_solve_point, lengths, encoding, N, outdir,
                               march_opts, cap, resplit_opts, max_depth,
-                              batch_size) for N in ns]
+                              batch_size, symmetry_break) for N in ns]
             for f in as_completed(futs):
                 note(*f.result())
     else:
         for N in ns:
             note(*_solve_point(lengths, encoding, N, outdir, march_opts, cap,
-                               resplit_opts, max_depth, batch_size))
+                               resplit_opts, max_depth, batch_size,
+                               symmetry_break))
 
     # SAT->UNSAT transitions (a candidate pdw threshold sits at the last SAT
     # before an UNSAT run; for the diagonal, the ONE expected transition IS
@@ -834,6 +893,7 @@ def do_solve(lengths, encoding, n_lo, n_hi, outdir, march_opts, cap,
 
     result = {"lengths": lengths, "encoding": encoding,
               "t": (lengths[1] if encoding == "palindromic" else None),
+              "symmetry_break": symmetry_break,
               "window": [n_lo, n_hi], "map": smap,
               "sat_unsat_transitions": transitions,
               "conjectured": pair, "conjecture_source": src}
@@ -987,10 +1047,18 @@ def merge_jsonl_verdicts(results_dir):
     into one merged verdict would silently mix the two encodings (soundness
     invariant #2), so that disagreement is refused exactly like ncubes'.
     Older meta lines that predate this field (lengths/encoding absent) are
-    treated as "no opinion" and don't trigger the check."""
+    treated as "no opinion" and don't trigger the check. Same treatment for
+    symmetry_break (PLAN_sb_probe.md scope guard): an SB shard and a non-SB
+    shard of the SAME instance are still two DIFFERENT formulas (one has
+    extra clauses), so merging them would silently mix results across
+    formulas -- refused like the others. When the merged verdict IS from an
+    SB run, "encoding" is reported as "full+sb" (never plain "full") so
+    nothing downstream (crosscheck_records.py, NOTES claims) can mistake it
+    for a result about the ORIGINAL formula."""
     ncubes = None
     lengths = None
     encoding = None
+    symmetry_break = None
     unsat, sat = set(), set()
     for p in sorted(glob.glob(os.path.join(results_dir, "**", "shard-*.jsonl"),
                               recursive=True)):
@@ -1012,6 +1080,13 @@ def merge_jsonl_verdicts(results_dir):
                     raise ValueError(f"JSONL files disagree on encoding: "
                                      f"{encoding} vs {m_encoding} in {p}")
                 encoding = m_encoding
+            m_sb = meta.get("symmetry_break")
+            if m_sb is not None:
+                if symmetry_break is not None and symmetry_break != m_sb:
+                    raise ValueError(f"JSONL files disagree on "
+                                     f"symmetry_break: {symmetry_break} vs "
+                                     f"{m_sb} in {p}")
+                symmetry_break = m_sb
         for g, v in verdicts.items():
             (sat if v == "SAT" else unsat if v == "UNSAT" else set()).add(g)
     if sat:
@@ -1022,8 +1097,10 @@ def merge_jsonl_verdicts(results_dir):
         status = "UNSAT" if len(unsat) >= ncubes and set(
             range(ncubes)) <= unsat else "UNDETERMINED"
     missing = sorted(set(range(ncubes)) - unsat) if ncubes is not None else []
-    return {"verdict": status, "lengths": lengths, "encoding": encoding,
-            "ncubes": ncubes,
+    encoding_out = ("full+sb" if (encoding == "full" and symmetry_break)
+                    else encoding)
+    return {"verdict": status, "lengths": lengths, "encoding": encoding_out,
+            "symmetry_break": bool(symmetry_break), "ncubes": ncubes,
             "n_cubes_refuted": len(unsat & set(range(ncubes))) if ncubes
             else len(unsat),
             "cubes_without_unsat": missing, "sat_cubes": sorted(sat)}
@@ -1060,13 +1137,25 @@ def aggregate(shard_results, expected_nshards):
     that would silently claim a result for one instance/encoding using
     another's cubes. Shards that predate this field (lengths/encoding
     absent, e.g. hand-built dicts in older unit tests) are "no opinion" and
-    don't trigger it."""
+    don't trigger it. symmetry_break gets the same treatment (PLAN_sb_probe.md
+    scope guard) -- SB and non-SB shards are different formulas, never
+    combinable -- and when the resulting verdict IS from an SB run, this
+    function's returned "encoding" is "full+sb" (never plain "full"), so
+    an SB decision can never be misread downstream as a claim about the
+    ORIGINAL formula."""
     li = [r["lengths"] for r in shard_results if r.get("lengths") is not None]
     if len({tuple(x) for x in li}) > 1:
         raise ValueError(f"shard results disagree on lengths: {li}")
     ei = [r["encoding"] for r in shard_results if r.get("encoding") is not None]
     if len(set(ei)) > 1:
         raise ValueError(f"shard results disagree on encoding: {ei}")
+    si = [r["symmetry_break"] for r in shard_results
+          if r.get("symmetry_break") is not None]
+    if len(set(si)) > 1:
+        raise ValueError(f"shard results disagree on symmetry_break: {si}")
+    encoding0 = ei[0] if ei else None
+    sb0 = si[0] if si else False
+    encoding_out = ("full+sb" if (encoding0 == "full" and sb0) else encoding0)
 
     sat = [r for r in shard_results if r["status"] == "SAT"]
     unresolved = [r for r in shard_results if r["status"] == "UNRESOLVED"]
@@ -1101,6 +1190,7 @@ def aggregate(shard_results, expected_nshards):
             "n_shards": len(shard_results),
             "present_shards": sorted(present_shards),
             "missing_shards": missing_shards,
+            "encoding": encoding_out, "symmetry_break": sb0,
             "ncubes": ncubes,
             "uncovered_cubes": uncovered,
             "total_cubes_solved": sum(r["n_unsat"] for r in shard_results)
@@ -1134,6 +1224,16 @@ def main():
                           "symmetry breaking; the ONLY encoding a W(k,2) "
                           "claim may come from). See resolve_instance for "
                           "the exact back-compat rule.")
+    ap.add_argument("--symmetry-break", action="store_true",
+                     help="add the lex-leader symmetry-breaking layer "
+                          "(color-swap + reflection + both) to the full r=2 "
+                          "DIAGONAL encoding -- split/pilot/local/solve only "
+                          "(lengths mode, t1==t2). DECISION-only: `prove` "
+                          "REFUSES this flag, since the SB clauses are never "
+                          "RAT-justified in any certificate this pipeline "
+                          "produces -- an SB UNSAT decision is NOT a "
+                          "machine-checked claim about the original formula. "
+                          "See PLAN_sb_probe.md scope guard.")
     ap.add_argument("--N", type=int)
     ap.add_argument("--outdir", default=os.path.join(REPO_ROOT, "cnc_out"))
     ap.add_argument("--cnf", default=None, help="conquer: CNF from split")
@@ -1238,7 +1338,8 @@ def main():
                        args.march_opts, args.cap_seconds,
                        args.resplit_march_opts, args.max_resplit_depth,
                        batch_size=args.batch_size,
-                       sweep_workers=args.sweep_workers)
+                       sweep_workers=args.sweep_workers,
+                       symmetry_break=args.symmetry_break)
         if args.json_out:
             json.dump(res, open(args.json_out, "w"), indent=2)
         return
@@ -1299,7 +1400,8 @@ def main():
         lengths, encoding = resolve_instance(args, required=False)
         res = do_pilot(args.cnf, args.cubes, args.outdir, args.pilot_k,
                        args.pilot_cap_seconds, args.seed, lengths=lengths,
-                       encoding=encoding, N=args.N, workers=args.pilot_workers)
+                       encoding=encoding, N=args.N, workers=args.pilot_workers,
+                       symmetry_break=args.symmetry_break)
         over = (args.budget_core_hours is not None
                 and res["projected_core_hours"] > args.budget_core_hours)
         res["budget_core_hours"] = args.budget_core_hours
@@ -1316,6 +1418,15 @@ def main():
         return
 
     if args.mode == "prove":
+        if args.symmetry_break:
+            raise SystemExit(
+                "prove refuses --symmetry-break: this pipeline never "
+                "RAT-justifies the SB clauses in any certificate, so a "
+                "drat-trim-verified UNSAT of the SB-augmented formula would "
+                "NOT be a machine-checked claim about the ORIGINAL formula "
+                "-- exactly the unsound shortcut the scope guard in "
+                "PLAN_sb_probe.md forbids. Use `local`/`solve`/`split`+"
+                "`conquer` for a DECISION-only SB run instead.")
         lengths, encoding = resolve_instance(args)
         res = do_prove(lengths, encoding, args.N, args.outdir,
                        args.march_opts, args.cap_seconds)
@@ -1328,18 +1439,26 @@ def main():
 
     if args.mode == "split":
         lengths, encoding = resolve_instance(args)
-        slug = instance_slug(lengths, encoding, args.N)
+        slug = instance_slug(lengths, encoding, args.N, args.symmetry_break)
         cnf = args.cnf or os.path.join(args.outdir, f"cnc_{slug}.cnf")
         cubes = args.cubes or os.path.join(args.outdir, f"cnc_{slug}.cubes")
-        meta = do_split(lengths, encoding, args.N, cnf, cubes, args.march_opts)
+        meta = do_split(lengths, encoding, args.N, cnf, cubes, args.march_opts,
+                        symmetry_break=args.symmetry_break)
         if args.json_out:
             json.dump(meta, open(args.json_out, "w"), indent=2)
         return
 
     if args.mode == "conquer":
         lengths, encoding = resolve_instance(args)
+        # conquer solves a pre-built --cnf/--cubes pair (from a separate
+        # split job/process); symmetry_break here is a LABEL trusted from
+        # the CLI (same trust level as --lengths/--encoding already are in
+        # this branch) -- whatever the CNF actually contains is what gets
+        # solved regardless of this flag, but every artifact must carry it
+        # (scope guard), so it is stamped into meta the same way.
         meta = {"lengths": lengths, "encoding": encoding, "N": args.N,
-                "t": (lengths[1] if encoding == "palindromic" else None)}
+                "t": (lengths[1] if encoding == "palindromic" else None),
+                "symmetry_break": args.symmetry_break}
         nvars, clause_lines = read_cnf(args.cnf)
         cubes = read_cube_lits(args.cubes)
         cube_indices = None
@@ -1360,11 +1479,12 @@ def main():
 
     # local: split then conquer every shard in-process
     lengths, encoding = resolve_instance(args)
-    slug = instance_slug(lengths, encoding, args.N)
+    slug = instance_slug(lengths, encoding, args.N, args.symmetry_break)
     label = instance_label(lengths, encoding, args.N)
     cnf = os.path.join(args.outdir, f"cnc_{slug}.cnf")
     cubes = os.path.join(args.outdir, f"cnc_{slug}.cubes")
-    meta = do_split(lengths, encoding, args.N, cnf, cubes, args.march_opts)
+    meta = do_split(lengths, encoding, args.N, cnf, cubes, args.march_opts,
+                    symmetry_break=args.symmetry_break)
     if meta["solved"]:
         # march_cu decided the instance during the split -> no cubes to
         # conquer; report its verdict directly rather than "conquering" an
