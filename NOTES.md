@@ -47,8 +47,15 @@ coverage, that's the pdw(2;3,26) upper-bound half.
    Deferred on purpose: it's a soundness-critical DRAT transformer (build it
    as its own session with drat-trim iteration) AND it's not on the critical
    path until a frontier point's monolithic sweep exceeds 6h (t=28+?).
-3. Nail the exact (p,q) reading rule off the sweep map (open question #2)
-   before claiming a value for a NEW t.
+3. RESOLVED 2026-07-22 (research agent read AKS Section 5; details replace
+   open question #2 below): the (p,q) reading rule is AKS Theorem 5.1 —
+   exactly FOUR facts certify pdw = (p,q): SAT at p-1, UNSAT at p+1, SAT at
+   q-1, UNSAT at q+1. Consequence for t=26: N=635 (p+1, in flight) is only
+   HALF the UNSAT work — re-certifying pdw(2;3,26)=(634,643) also needs
+   UNSAT at N=644 (q+1) plus witnesses at 633/642. NB Table 6 says t<=27 is
+   already exact (AKS computed it), so t=26/27 are REPRODUCTIONS with
+   modern certs; the genuinely-new frontier is t=28+ (Table 7 pairs are
+   explicitly lower bounds from local search, not exact).
 4. STRATEGIC PIVOT for Fable to weigh in on: `RESEARCH_diagonal_W_k_2.md`
    (repo root). A mathematician's reality check on a 2026-07-22 call — the
    off-diagonal w(2;3,t) family we've been computing is a sideshow; the numbers
@@ -546,7 +553,28 @@ wall.
    don't have it. This is the piece to research before betting a night on a
    frontier proof.
 
-2. **Reading exact (p,q) off the sweep map (the math subtlety).** The new
+2. **RESOLVED 2026-07-22 — the (p,q) reading rule (AKS Section 5, read by a
+   research agent from the arXiv 1102.5433 PDF; extracted text in session
+   scratchpad aks.txt).** Definition 5.3: p = largest p such that ALL n <= p
+   are palindromic-SAT; q = smallest q such that ALL n >= q are UNSAT. The
+   infinite claims reduce to finite facts via Corollary 5.1.1 (UNSAT at n =>
+   UNSAT at n+2i — removing BOTH endpoints preserves the palindrome, so
+   monotonicity is per-PARITY, upward only) and Corollary 5.1.2 (q-p is
+   always ODD; between p and q verdicts strictly alternate: p+1 UNSAT, p+2
+   SAT, ...). **Theorem 5.1: exactly FOUR facts certify pdw=(p,q): (i) SAT
+   at p-1 and q-1; (ii) UNSAT at p+1 and q+1.** Everything else follows
+   (SAT at q-1 propagates down its parity chain covering all n<=p; UNSAT at
+   p+1 and q+1 propagate up their chains covering all n>=q). Cross-checked
+   on our t=15 map: 197-200 S, 201 U, 202 S, 203 U, 204 S, 205-207 U reads
+   (p,q)=(200,205) = AKS Table 6, all four Theorem-5.1 cells present.
+   OEIS: A198684 = p-sequence, A198685 = q-sequence (verified by value at
+   t=15/20/26/27). So the orchestrator rule: p = first_UNSAT - 1, q =
+   last_SAT + 1; validate q-p odd + strict alternation; CLAIM only when the
+   four Theorem-5.1 cells are certified (witnesses at p-1/q-1, checked
+   UNSAT at p+1/q+1). TO IMPLEMENT in `solve` once the SB-probe builder is
+   done editing vdw_cnc.py (avoid collision).
+
+   (Original question, for the record:) The new
    `vdw_cnc.py solve` mode sweeps N over a window and CnC-decides each point.
    On t=15 (conjectured pdw = (200,205)) it produced:
        N:  197 198 199 200 | 201 202 203 204 205 | 206 207
