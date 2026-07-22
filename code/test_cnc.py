@@ -16,9 +16,11 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import vdw_cnc  # noqa: E402
 from vdw_cnc import (aggregate, slice_members, collect_shard_results,  # noqa: E402
                      reconstruct_shard_from_jsonl, merge_jsonl_verdicts,
-                     resolve_instance)
+                     resolve_instance, check_sb_allowed, do_split,
+                     conquer_slice, read_cnf, read_cube_lits, MARCH, IGLUCOSE)
 
 
 def _shard(shard, status, n_unsat=0, unresolved=None):
@@ -272,14 +274,19 @@ def test_resolve_instance_neither_given_required_raises():
 
 
 def _write_jsonl_instance(d, shard, ncubes, nshards, verdicts, lengths,
-                          encoding, N=1132):
+                          encoding, N=1132, symmetry_break=None):
     """Like _write_jsonl but with an explicit lengths/encoding meta line, for
-    the mixed-artifact (cross-encoding) refusal tests."""
+    the mixed-artifact (cross-encoding) refusal tests. symmetry_break=None
+    (default) omits the field entirely -- matching the "older checkpoint,
+    no opinion" contract the mixed-lengths/encoding checks already use --
+    pass True/False to exercise the SB-mixing refusal / "full+sb" labeling."""
     path = os.path.join(d, f"shard-{shard}.jsonl")
+    meta = {"meta": True, "lengths": lengths, "encoding": encoding, "N": N,
+            "shard": shard, "nshards": nshards, "ncubes": ncubes}
+    if symmetry_break is not None:
+        meta["symmetry_break"] = symmetry_break
     with open(path, "w") as f:
-        f.write(json.dumps({"meta": True, "lengths": lengths,
-                            "encoding": encoding, "N": N, "shard": shard,
-                            "nshards": nshards, "ncubes": ncubes}) + "\n")
+        f.write(json.dumps(meta) + "\n")
         for g in slice_members(ncubes, nshards, shard):
             if g in verdicts:
                 f.write(json.dumps({"gidx": g, "verdict": verdicts[g],
@@ -351,6 +358,119 @@ def test_aggregate_agrees_when_same_instance():
              _instance_shard(1, [6, 6], "full")]
     agg = aggregate(shards, expected_nshards=2)
     assert agg["verdict"] == "UNSAT", agg
+
+
+# --- SB probe (PLAN_sb_probe.md) -------------------------------------------
+# The scope guard's soundness gate: sound symmetry breaking exists ONLY for
+# the full r=2 DIAGONAL encoding. `prove` (certificate path) must refuse it
+# outright; palindromic mode must refuse it (reflection is already folded
+# out there, so adding SB clauses on top would be a subtle double-count);
+# artifacts with mismatched symmetry_break flags must never be mergeable
+# (same pattern as the existing mixed-encoding/mixed-lengths guards).
+
+def test_check_sb_allowed_refuses_palindromic():
+    try:
+        check_sb_allowed([3, 26], "palindromic", True)
+        assert False, "expected SystemExit for symmetry_break + palindromic"
+    except SystemExit:
+        pass
+    check_sb_allowed([3, 26], "palindromic", False)  # no-op, must not raise
+    check_sb_allowed([6, 6], "full", True)  # diagonal full, must not raise
+
+
+def test_check_sb_allowed_refuses_mixed_lengths():
+    # t1 != t2 has no color-swap symmetry to begin with -- refused even
+    # though encoding == "full".
+    try:
+        check_sb_allowed([3, 5], "full", True)
+        assert False, "expected SystemExit for symmetry_break + mixed lengths"
+    except SystemExit:
+        pass
+
+
+def test_main_prove_refuses_symmetry_break():
+    # The certificate-path refusal (scope guard): prove must reject
+    # --symmetry-break with a clear error, BEFORE doing any solver work --
+    # so this is hermetic (no march_cu/iglucose call happens).
+    with tempfile.TemporaryDirectory() as d:
+        old_argv = sys.argv
+        try:
+            sys.argv = ["vdw_cnc.py", "prove", "--lengths", "4,4", "--N", "35",
+                       "--symmetry-break", "--outdir", d]
+            try:
+                vdw_cnc.main()
+                assert False, "expected SystemExit for prove + --symmetry-break"
+            except SystemExit:
+                pass
+        finally:
+            sys.argv = old_argv
+
+
+def test_merge_refuses_mixed_symmetry_break():
+    # Same instance (lengths/encoding agree), but one shard is an SB run and
+    # the other isn't -- these are two DIFFERENT formulas (one has extra
+    # clauses), so merging them must be refused exactly like mixed lengths/
+    # encoding.
+    with tempfile.TemporaryDirectory() as d:
+        _write_jsonl_instance(d, 0, 4, 2, {0: "UNSAT", 2: "UNSAT"},
+                              lengths=[6, 6], encoding="full",
+                              symmetry_break=True)
+        _write_jsonl_instance(d, 1, 4, 2, {1: "UNSAT", 3: "UNSAT"},
+                              lengths=[6, 6], encoding="full",
+                              symmetry_break=False)
+        try:
+            merge_jsonl_verdicts(d)
+            assert False, "expected ValueError on mixed symmetry_break"
+        except ValueError:
+            pass
+
+
+def test_merge_sb_run_labeled_full_plus_sb():
+    # An SB run's merged verdict must never be readable as a plain "full"
+    # (original-formula) result -- scope guard requires "full+sb".
+    with tempfile.TemporaryDirectory() as d:
+        _write_jsonl_instance(d, 0, 4, 2, {0: "UNSAT", 2: "UNSAT"},
+                              lengths=[6, 6], encoding="full",
+                              symmetry_break=True)
+        _write_jsonl_instance(d, 1, 4, 2, {1: "UNSAT", 3: "UNSAT"},
+                              lengths=[6, 6], encoding="full",
+                              symmetry_break=True)
+        m = merge_jsonl_verdicts(d)
+    assert m["verdict"] == "UNSAT", m
+    assert m["encoding"] == "full+sb", m
+    assert m["symmetry_break"] is True, m
+
+
+def test_local_path_k4_both_sides_with_symmetry_break():
+    # SB-3 validation cells 1 (k=4): N=34 (< W(4,2)=35) -> SAT, N=35
+    # (== W(4,2)) -> UNSAT, both with --symmetry-break, through the actual
+    # do_split/conquer_slice machinery `local` mode uses. Needs the real
+    # march_cu/iglucose binaries (tools/CnC) -- skip gracefully if this
+    # environment doesn't have them built (e.g. regression.yml's test_cnc.py
+    # step is explicitly "no solver needed" and runs before the solver-build
+    # step), so this test never blocks that hermetic gate; it DOES run
+    # (and DID run, manually, during this task's validation -- see the SB
+    # probe report) wherever the binaries are present.
+    if not (os.path.exists(MARCH) and os.path.exists(IGLUCOSE)):
+        print("    (skipped: march_cu/iglucose not built in this environment)")
+        return
+    with tempfile.TemporaryDirectory() as d:
+        def decide(N):
+            cnf = os.path.join(d, f"n{N}.cnf")
+            cubes = os.path.join(d, f"n{N}.cubes")
+            meta = do_split([4, 4], "full", N, cnf, cubes, "-d 12",
+                            symmetry_break=True)
+            assert meta["symmetry_break"] is True, meta
+            if meta["solved"] is not None:
+                return meta["solved"]
+            nvars, clause_lines = read_cnf(cnf)
+            cube_lits = read_cube_lits(cubes)
+            r = conquer_slice(meta, nvars, clause_lines, cube_lits, 0, 1,
+                              30, d, False, "-d 6", 0)
+            return r["status"]
+
+        assert decide(34) == "SAT", "N=34 (< W(4,2)) must stay SAT under SB"
+        assert decide(35) == "UNSAT", "N=35 (== W(4,2)) must stay UNSAT under SB"
 
 
 def main():
