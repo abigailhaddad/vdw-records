@@ -665,6 +665,51 @@ parallel certified proof); (2) re-run t=26 with tuned -d, then the t=28/29
 frontier; (3) once a frontier point is UNSAT, decide whether the single-job
 `prove` sweep fits in 6h or the parallel proof is needed.
 
+2026-07-22 process review (Fable): full builder spec for pipeline fixes +
+efficiency pass in PLAN_pipeline_improvements.md (repo root). Headline:
+aggregate() has a vacuous-UNSAT bug — the two cancelled-run verdict.json
+files in gh_actions_results claim UNSAT with n_shards=0; fix (plan task 1)
+BEFORE the next dispatch. Killed t=26 run's measured cube-time tail is in
+the plan preamble; it motivates cap 1800->60 + re-split (task 4) and
+batched iglucose (task 5).
+
+2026-07-22 builder pass (Opus): PLAN_pipeline_improvements.md tasks 1-7
+landed (commits 98b6ca8..67be420). Highlights:
+- Task 1: aggregate() no longer reads an empty/partial shard set as UNSAT.
+  UNSAT now requires all expected shards present + all UNSAT + full cube
+  coverage. Found THREE false verdict.json (plan named two): cnc-run-
+  29916885056, -29917001084, -29917066464 -> repaired to UNDETERMINED.
+- Task 2: per-cube JSONL checkpoint (shard-<s>.jsonl), flushed per cube; a
+  killed shard is recoverable and re-dispatchable. slice_members() is the
+  single definition of round-robin membership.
+- Task 3: conquer --cube-indices re-dispatches exactly the unresolved cubes;
+  aggregate --merge-jsonl closes an instance across base+redispatch by
+  cube-level union (UNSAT iff every cube refuted somewhere). Coverage check
+  refuses a false full-instance UNSAT from a subset run.
+- Task 4: cnc_pipeline.yml cap 1800->60, resplit depth 2->3.
+- Task 5: solve_batch runs one iglucose over many cubes (learned-clause
+  reuse). Empirically pinned: batch `s UNSATISFIABLE` <=> every cube UNSAT
+  (SAT short-circuits, never overridden). t=20: batched == per-cube
+  cube-for-cube, 1.9x faster. --batch-size default 200; 1 = exact per-cube.
+- Task 6: `pilot` mode + budget gate in the split job (blocks fan-out over
+  budget_core_hours, default 40). t=20 projects 30s vs ~35 measured.
+- Task 7: build_tools cached on upstream CnC HEAD; nshards default 20->16.
+- test_cnc.py (14 hermetic aggregate/recovery/coverage/merge tests) wired
+  into regression.yml.
+
+PILOT RESULT for the next real dispatch: t=26 N=635 at **-d 12** = 4022
+cubes (vs 51k at -d 16 -- confirming -d 16 was mostly overhead). Pilot of
+200 cubes @5s cap: **22.5% timeout, median 0.43s, projected >=1.88
+core-hours (lower bound)**. Comfortably under the 40 core-hour budget, so
+the gate passes -- but the 22.5% heavy tail is real; rely on re-split
+(depth 3) + batching to clear it. This is the tuned dispatch the plan's
+Task 4 note calls for. NOT yet run on GH.
+
+Still TODO from the plan: task 6.3 (fold pilot JSON into pdw_difficulty.py
+reach model -- deferred), task 8 (parallelize `solve` sweeps), task 9
+(stitched parallel certificate -- its own session), task 10 (commit
+crosscheck_records.py, gitignore/known_values_out, restructure this file).
+
 ### Open questions for Fable (things I'm not sure about)
 
 1. **Parallel certified proof (the hard one).** We can now produce a
