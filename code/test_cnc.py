@@ -367,39 +367,74 @@ def test_aggregate_agrees_when_same_instance():
 # out there, so adding SB clauses on top would be a subtle double-count);
 # artifacts with mismatched symmetry_break flags must never be mergeable
 # (same pattern as the existing mixed-encoding/mixed-lengths guards).
+#
+# SB-4 made symmetry_break a TRI-STATE: False (off), "split" (--symmetry-
+# break --sb-in-split, SB baked into what march_cu sees -- the original,
+# slower SB-1/SB-2 variant), "conquer" (--symmetry-break alone, the SB-4
+# default -- SB added only at solve time, march_cu never sees an aux var).
+# Every guard below is exercised against BOTH non-False variants, and the
+# mixing-refusal tests check "split" vs "conquer" specifically (not just
+# SB vs no-SB), since they are two different code paths that must not be
+# silently combined even though they decide the same formula.
 
 def test_check_sb_allowed_refuses_palindromic():
-    try:
-        check_sb_allowed([3, 26], "palindromic", True)
-        assert False, "expected SystemExit for symmetry_break + palindromic"
-    except SystemExit:
-        pass
+    for variant in ("split", "conquer"):
+        try:
+            check_sb_allowed([3, 26], "palindromic", variant)
+            assert False, f"expected SystemExit for {variant} + palindromic"
+        except SystemExit:
+            pass
     check_sb_allowed([3, 26], "palindromic", False)  # no-op, must not raise
-    check_sb_allowed([6, 6], "full", True)  # diagonal full, must not raise
+    check_sb_allowed([6, 6], "full", "split")  # diagonal full, must not raise
+    check_sb_allowed([6, 6], "full", "conquer")  # ditto
 
 
 def test_check_sb_allowed_refuses_mixed_lengths():
     # t1 != t2 has no color-swap symmetry to begin with -- refused even
-    # though encoding == "full".
-    try:
-        check_sb_allowed([3, 5], "full", True)
-        assert False, "expected SystemExit for symmetry_break + mixed lengths"
-    except SystemExit:
-        pass
+    # though encoding == "full", for both variants.
+    for variant in ("split", "conquer"):
+        try:
+            check_sb_allowed([3, 5], "full", variant)
+            assert False, f"expected SystemExit for {variant} + mixed lengths"
+        except SystemExit:
+            pass
 
 
 def test_main_prove_refuses_symmetry_break():
     # The certificate-path refusal (scope guard): prove must reject
     # --symmetry-break with a clear error, BEFORE doing any solver work --
-    # so this is hermetic (no march_cu/iglucose call happens).
+    # so this is hermetic (no march_cu/iglucose call happens). Both variants
+    # ("conquer" via the flag alone, "split" via --sb-in-split too) must be
+    # refused.
+    for extra_args in ([], ["--sb-in-split"]):
+        with tempfile.TemporaryDirectory() as d:
+            old_argv = sys.argv
+            try:
+                sys.argv = (["vdw_cnc.py", "prove", "--lengths", "4,4",
+                            "--N", "35", "--symmetry-break", "--outdir", d]
+                           + extra_args)
+                try:
+                    vdw_cnc.main()
+                    assert False, ("expected SystemExit for prove + "
+                                   f"--symmetry-break {extra_args}")
+                except SystemExit:
+                    pass
+            finally:
+                sys.argv = old_argv
+
+
+def test_main_sb_in_split_requires_symmetry_break():
+    # --sb-in-split is a modifier, not a standalone flag -- passing it alone
+    # (no --symmetry-break) must be an ap.error (SystemExit), before any
+    # instance/mode logic runs.
     with tempfile.TemporaryDirectory() as d:
         old_argv = sys.argv
         try:
-            sys.argv = ["vdw_cnc.py", "prove", "--lengths", "4,4", "--N", "35",
-                       "--symmetry-break", "--outdir", d]
+            sys.argv = ["vdw_cnc.py", "split", "--lengths", "4,4", "--N", "35",
+                       "--sb-in-split", "--outdir", d]
             try:
                 vdw_cnc.main()
-                assert False, "expected SystemExit for prove + --symmetry-break"
+                assert False, "expected SystemExit for --sb-in-split alone"
             except SystemExit:
                 pass
         finally:
@@ -407,70 +442,124 @@ def test_main_prove_refuses_symmetry_break():
 
 
 def test_merge_refuses_mixed_symmetry_break():
-    # Same instance (lengths/encoding agree), but one shard is an SB run and
-    # the other isn't -- these are two DIFFERENT formulas (one has extra
-    # clauses), so merging them must be refused exactly like mixed lengths/
-    # encoding.
-    with tempfile.TemporaryDirectory() as d:
-        _write_jsonl_instance(d, 0, 4, 2, {0: "UNSAT", 2: "UNSAT"},
-                              lengths=[6, 6], encoding="full",
-                              symmetry_break=True)
-        _write_jsonl_instance(d, 1, 4, 2, {1: "UNSAT", 3: "UNSAT"},
-                              lengths=[6, 6], encoding="full",
-                              symmetry_break=False)
-        try:
-            merge_jsonl_verdicts(d)
-            assert False, "expected ValueError on mixed symmetry_break"
-        except ValueError:
-            pass
+    # Same instance (lengths/encoding agree). Any pairwise disagreement among
+    # False / "split" / "conquer" must be refused -- they are different
+    # formulas (SB vs not) or different code paths (split-time vs solve-time
+    # SB) that must never be silently combined.
+    cases = [("split", False), ("conquer", False), ("split", "conquer")]
+    for a, b in cases:
+        with tempfile.TemporaryDirectory() as d:
+            _write_jsonl_instance(d, 0, 4, 2, {0: "UNSAT", 2: "UNSAT"},
+                                  lengths=[6, 6], encoding="full",
+                                  symmetry_break=a)
+            _write_jsonl_instance(d, 1, 4, 2, {1: "UNSAT", 3: "UNSAT"},
+                                  lengths=[6, 6], encoding="full",
+                                  symmetry_break=b)
+            try:
+                merge_jsonl_verdicts(d)
+                assert False, f"expected ValueError on mixed {a} vs {b}"
+            except ValueError:
+                pass
 
 
 def test_merge_sb_run_labeled_full_plus_sb():
     # An SB run's merged verdict must never be readable as a plain "full"
-    # (original-formula) result -- scope guard requires "full+sb".
-    with tempfile.TemporaryDirectory() as d:
-        _write_jsonl_instance(d, 0, 4, 2, {0: "UNSAT", 2: "UNSAT"},
-                              lengths=[6, 6], encoding="full",
-                              symmetry_break=True)
-        _write_jsonl_instance(d, 1, 4, 2, {1: "UNSAT", 3: "UNSAT"},
-                              lengths=[6, 6], encoding="full",
-                              symmetry_break=True)
-        m = merge_jsonl_verdicts(d)
-    assert m["verdict"] == "UNSAT", m
-    assert m["encoding"] == "full+sb", m
-    assert m["symmetry_break"] is True, m
+    # (original-formula) result -- scope guard requires "full+sb" -- and the
+    # symmetry_break field must keep the split/conquer distinction (not get
+    # coerced to a plain bool). Checked for both variants.
+    for variant in ("split", "conquer"):
+        with tempfile.TemporaryDirectory() as d:
+            _write_jsonl_instance(d, 0, 4, 2, {0: "UNSAT", 2: "UNSAT"},
+                                  lengths=[6, 6], encoding="full",
+                                  symmetry_break=variant)
+            _write_jsonl_instance(d, 1, 4, 2, {1: "UNSAT", 3: "UNSAT"},
+                                  lengths=[6, 6], encoding="full",
+                                  symmetry_break=variant)
+            m = merge_jsonl_verdicts(d)
+        assert m["verdict"] == "UNSAT", m
+        assert m["encoding"] == "full+sb", (variant, m)
+        assert m["symmetry_break"] == variant, (variant, m)
+
+
+def test_instance_slug_distinguishes_split_and_conquer():
+    # SB-4: "split" and "conquer" artifacts of the SAME instance must never
+    # collide on disk with each other OR with the no-SB baseline.
+    plain = vdw_cnc.instance_slug([6, 6], "full", 1132, False)
+    split = vdw_cnc.instance_slug([6, 6], "full", 1132, "split")
+    conquer = vdw_cnc.instance_slug([6, 6], "full", 1132, "conquer")
+    assert len({plain, split, conquer}) == 3, (plain, split, conquer)
+    assert split == plain + "_sb", (plain, split)  # byte-compat w/ SB-2
+    assert conquer == plain + "_sbc", (plain, conquer)
+
+
+def test_sb_augment_clause_lines_matches_encode_symmetry_break_true():
+    # The var-numbering identity SB-4 depends on: appending
+    # symmetry_break_clauses(nvars, nvars+1) to the PLAIN clause set must be
+    # EXACTLY what encode(..., symmetry_break=True) builds internally (same
+    # clauses, same aux var ids) -- otherwise "split" and "conquer" modes
+    # would silently decide two different formulas. Checked directly here
+    # (not just argued) for the two SB-3/SB-4 validation instances.
+    from vdw_sat import encode
+    for lengths, N in ([4, 4], 35), ([5, 5], 178):
+        plain_clauses, plain_nvars = encode(lengths, N, symmetry_break=False)
+        full_clauses, full_nvars = encode(lengths, N, symmetry_break=True)
+        plain_lines = [" ".join(str(l) for l in cl) + " 0\n"
+                      for cl in plain_clauses]
+        aug_lines, aug_nvars = vdw_cnc.sb_augment_clause_lines(
+            plain_lines, plain_nvars, "conquer")
+        full_lines = [" ".join(str(l) for l in cl) + " 0\n"
+                      for cl in full_clauses]
+        assert aug_lines == full_lines, (lengths, N)
+        assert aug_nvars == full_nvars, (lengths, N, aug_nvars, full_nvars)
 
 
 def test_local_path_k4_both_sides_with_symmetry_break():
-    # SB-3 validation cells 1 (k=4): N=34 (< W(4,2)=35) -> SAT, N=35
-    # (== W(4,2)) -> UNSAT, both with --symmetry-break, through the actual
-    # do_split/conquer_slice machinery `local` mode uses. Needs the real
-    # march_cu/iglucose binaries (tools/CnC) -- skip gracefully if this
-    # environment doesn't have them built (e.g. regression.yml's test_cnc.py
-    # step is explicitly "no solver needed" and runs before the solver-build
-    # step), so this test never blocks that hermetic gate; it DOES run
-    # (and DID run, manually, during this task's validation -- see the SB
-    # probe report) wherever the binaries are present.
+    # SB-3/SB-4 validation cells (k=4): N=34 (< W(4,2)=35) -> SAT, N=35
+    # (== W(4,2)) -> UNSAT, for BOTH SB variants, through the actual
+    # do_split/conquer_slice machinery `local` mode uses. Also checks the
+    # SB-4 headline property directly: "conquer" mode's split must produce
+    # the IDENTICAL cube count to a plain (no-SB) split -- march_cu never
+    # sees an aux variable. Needs the real march_cu/iglucose binaries
+    # (tools/CnC) -- skip gracefully if this environment doesn't have them
+    # built (e.g. regression.yml's test_cnc.py step is explicitly "no
+    # solver needed" and runs before the solver-build step), so this test
+    # never blocks that hermetic gate; it DOES run (and DID run, manually,
+    # during this task's validation -- see the SB probe report) wherever
+    # the binaries are present.
     if not (os.path.exists(MARCH) and os.path.exists(IGLUCOSE)):
         print("    (skipped: march_cu/iglucose not built in this environment)")
         return
     with tempfile.TemporaryDirectory() as d:
-        def decide(N):
-            cnf = os.path.join(d, f"n{N}.cnf")
-            cubes = os.path.join(d, f"n{N}.cubes")
+        def decide(N, variant, tag):
+            cnf = os.path.join(d, f"{tag}.cnf")
+            cubes = os.path.join(d, f"{tag}.cubes")
             meta = do_split([4, 4], "full", N, cnf, cubes, "-d 12",
-                            symmetry_break=True)
-            assert meta["symmetry_break"] is True, meta
+                            symmetry_break=variant)
+            assert meta["symmetry_break"] == variant, meta
             if meta["solved"] is not None:
-                return meta["solved"]
+                return meta["solved"], meta
             nvars, clause_lines = read_cnf(cnf)
             cube_lits = read_cube_lits(cubes)
             r = conquer_slice(meta, nvars, clause_lines, cube_lits, 0, 1,
                               30, d, False, "-d 6", 0)
-            return r["status"]
+            return r["status"], meta
 
-        assert decide(34) == "SAT", "N=34 (< W(4,2)) must stay SAT under SB"
-        assert decide(35) == "UNSAT", "N=35 (== W(4,2)) must stay UNSAT under SB"
+        plain34_status, plain34_meta = decide(34, False, "plain34")
+        for variant in ("split", "conquer"):
+            sat_status, _ = decide(34, variant, f"{variant}34")
+            unsat_status, _ = decide(35, variant, f"{variant}35")
+            assert sat_status == "SAT", (variant, "N=34 must stay SAT under SB")
+            assert unsat_status == "UNSAT", (variant, "N=35 must stay UNSAT")
+
+        # SB-4 headline property: "conquer" mode's split is IDENTICAL to the
+        # plain split (same ncubes; both decided the N=34 case via march_cu
+        # look-ahead here rather than emitting cubes, so compare that they
+        # agree on ncubes/solved rather than assuming a cube file exists).
+        _, conquer34_meta = decide(34, "conquer", "conquer34_check")
+        assert conquer34_meta["ncubes"] == plain34_meta["ncubes"], \
+            (conquer34_meta, plain34_meta)
+        assert conquer34_meta["solved"] == plain34_meta["solved"], \
+            (conquer34_meta, plain34_meta)
 
 
 def main():
