@@ -192,6 +192,7 @@ jobs:
       - name: aggregate the shard verdicts
         run: |
           python3 code/vdw_cnc.py aggregate --results-dir results \
+            --expected-nshards ${{ inputs.nshards }} \
             --outdir results --json-out results/verdict.json \
             | tee "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"

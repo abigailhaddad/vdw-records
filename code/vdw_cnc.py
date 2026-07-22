@@ -394,19 +394,36 @@ def do_solve(t, n_lo, n_hi, outdir, march_opts, cap, resplit_opts, max_depth):
             "conjecture_source": src}
 
 
-def aggregate(shard_results):
-    """Combine shard verdicts into an instance verdict."""
+def aggregate(shard_results, expected_nshards):
+    """Combine shard verdicts into an instance verdict.
+
+    UNSAT is the load-bearing claim of this whole campaign, so it is only
+    ever returned when EVERY expected shard reported and every one was UNSAT.
+    The dangerous failure mode this guards against: an empty (or partial)
+    shard list is vacuously "no SAT and no UNRESOLVED", which the old code
+    read as UNSAT -- so a cancelled run with zero collected evidence
+    committed a false "UNSAT, n_shards=0" verdict. Verdict rules:
+      - any shard SAT              -> SAT (one satisfiable cube decides it);
+      - all expected shards present and all UNSAT -> UNSAT;
+      - anything else (a missing shard, any UNRESOLVED cube) -> UNDETERMINED.
+    Shard status stays UNRESOLVED; only the instance verdict is UNDETERMINED,
+    keeping the two levels distinct."""
     sat = [r for r in shard_results if r["status"] == "SAT"]
     unresolved = [r for r in shard_results if r["status"] == "UNRESOLVED"]
+    present_shards = {r["shard"] for r in shard_results}
+    missing_shards = sorted(set(range(expected_nshards)) - present_shards)
     if sat:
         verdict = "SAT"
-    elif unresolved:
-        verdict = "UNRESOLVED"
-    else:
+    elif not missing_shards and not unresolved:
         verdict = "UNSAT"
+    else:
+        verdict = "UNDETERMINED"
     remaining = sorted(g for r in unresolved for g in r["unresolved_cubes"])
     return {"verdict": verdict,
+            "expected_nshards": expected_nshards,
             "n_shards": len(shard_results),
+            "present_shards": sorted(present_shards),
+            "missing_shards": missing_shards,
             "total_cubes_solved": sum(r["n_unsat"] for r in shard_results)
             + len(sat),
             "sat_shard": sat[0]["shard"] if sat else None,
@@ -449,6 +466,10 @@ def main():
                           "(default '-d 6' -- a modest extra split per level)")
     ap.add_argument("--results-dir", default=None,
                      help="aggregate: directory of per-shard conquer JSONs")
+    ap.add_argument("--expected-nshards", type=int, default=None,
+                     help="aggregate: how many shards the run dispatched. "
+                          "UNSAT is only returned when all of them reported; "
+                          "a missing shard makes the verdict UNDETERMINED.")
     ap.add_argument("--n-lo", type=int, default=None,
                      help="solve: low end of the N sweep (default: "
                           "conjectured p - 2)")
@@ -476,6 +497,10 @@ def main():
         return
 
     if args.mode == "aggregate":
+        if args.expected_nshards is None:
+            ap.error("aggregate needs --expected-nshards (the shard count the "
+                     "run dispatched) so a missing shard can't be read as "
+                     "vacuous UNSAT")
         shard_results = []
         for p in sorted(glob.glob(os.path.join(args.results_dir, "**",
                                                "*.json"), recursive=True)):
@@ -485,12 +510,15 @@ def main():
                 continue
             if "shard" in obj and "status" in obj:  # a conquer result
                 shard_results.append(obj)
-        agg = aggregate(shard_results)
+        agg = aggregate(shard_results, args.expected_nshards)
         t = shard_results[0]["t"] if shard_results else "?"
         N = shard_results[0]["N"] if shard_results else "?"
         print(f"=== pdw(2;3,{t}) N={N}: {agg['verdict']} "
-              f"across {agg['n_shards']} shards, "
-              f"{agg['total_cubes_solved']} cubes decided ===", flush=True)
+              f"({agg['n_shards']}/{agg['expected_nshards']} shards reported, "
+              f"{agg['total_cubes_solved']} cubes decided) ===", flush=True)
+        if agg["missing_shards"]:
+            print(f"  missing shards (never reported): "
+                  f"{agg['missing_shards']}", flush=True)
         if agg["unresolved_cubes"]:
             print(f"  unresolved cubes (re-dispatch these): "
                   f"{agg['unresolved_cubes']}", flush=True)
@@ -546,7 +574,7 @@ def main():
                           args.nshards, args.cap_seconds, args.outdir,
                           args.certified, args.resplit_march_opts,
                           args.max_resplit_depth))
-    agg = aggregate(shard_results)
+    agg = aggregate(shard_results, args.nshards)
     print(f"\n=== pdw(2;3,{args.t}) N={args.N}: {agg['verdict']} "
           f"({agg['total_cubes_solved']}/{meta['ncubes']} cubes decided) ===",
           flush=True)
