@@ -49,6 +49,14 @@ coverage, that's the pdw(2;3,26) upper-bound half.
    path until a frontier point's monolithic sweep exceeds 6h (t=28+?).
 3. Nail the exact (p,q) reading rule off the sweep map (open question #2)
    before claiming a value for a NEW t.
+4. STRATEGIC PIVOT for Fable to weigh in on: `RESEARCH_diagonal_W_k_2.md`
+   (repo root). A mathematician's reality check on a 2026-07-22 call — the
+   off-diagonal w(2;3,t) family we've been computing is a sideshow; the numbers
+   people care about are the DIAGONAL W(k,2) (W(6,2)=1132 was Kouril's thesis;
+   W(7,2) he called "NEVER"). The doc lays out a diagonal program (calibration
+   ladder to quantify the wall; a machine-checkable certificate of W(6,2) as
+   the artifact that would actually justify building PLAN task 9) and the open
+   math questions only a mathematician can answer.
 
 **Resume basics:** every script is a self-contained CLI (see docstrings).
 Fast local sanity before any commit:
