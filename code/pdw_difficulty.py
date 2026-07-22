@@ -156,6 +156,91 @@ def fit_and_project(pts, wall_seconds):
     return b, a, proj_t, by_t
 
 
+def collect_cnc(paths):
+    """Harvest cube-and-conquer shard results (code/vdw_cnc.py conquer JSON,
+    identified by a top-level 'per_solve' list) and group them by (t, N).
+    CnC changes the reachability question: the wall is no longer set by one
+    exponential solve but by total cube work / parallelism, and re-splitting
+    keeps the hardest single cube bounded -- so we track cube COUNT and the
+    per-cube time distribution, not one solve time."""
+    runs = {}
+    for p in paths:
+        if not p.endswith(".json"):
+            continue
+        try:
+            obj = json.load(open(p))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if "aggregate" in obj or "per_solve" not in obj:
+            continue  # verdict.json / non-CnC files
+        key = (obj.get("t"), obj.get("N"))
+        r = runs.setdefault(key, {"t": key[0], "N": key[1], "base_cubes": 0,
+                                  "leaf_secs": [], "n_resplit": 0,
+                                  "nshards": obj.get("nshards"),
+                                  "shard_walls": [], "statuses": []})
+        r["base_cubes"] += obj.get("n_cubes_in_slice", 0)
+        r["shard_walls"].append(obj.get("slice_seconds", 0.0))
+        r["statuses"].append(obj.get("status"))
+        for s in obj.get("per_solve", []):
+            if s.get("status") in ("SAT", "UNSAT") and s.get("seconds"):
+                r["leaf_secs"].append(s["seconds"])
+            if "." in str(s.get("tag", "")):
+                r["n_resplit"] += 1
+    return runs
+
+
+def report_cnc(runs, wall_seconds):
+    if not runs:
+        return
+    print("=== CUBE-AND-CONQUER runs ===")
+    growth = []
+    for key in sorted(runs, key=lambda k: (k[0] or 0, k[1] or 0)):
+        r = runs[key]
+        secs = sorted(r["leaf_secs"])
+        if not secs:
+            continue
+        total = sum(secs)
+        mx = secs[-1]
+        med = secs[len(secs) // 2]
+        wall = max(r["shard_walls"]) if r["shard_walls"] else 0.0
+        statuses = set(r["statuses"])
+        verdict = ("SAT" if "SAT" in statuses else
+                   "UNRESOLVED" if "UNRESOLVED" in statuses else "UNSAT")
+        print(f"  pdw(2;3,{r['t']}) N={r['N']}: {verdict}  "
+              f"| {r['base_cubes']} base cubes across {r['nshards']} shards, "
+              f"{len(secs)} leaf solves ({r['n_resplit']} via re-split)")
+        print(f"     per-cube  median={med:.2f}s  max={mx:.2f}s  "
+              f"total={total:.1f}s  | slowest shard wall {wall/60:.1f} min")
+        growth.append((r["t"], total, r["base_cubes"], mx))
+
+    # The point of CnC: the hardest single cube (max) stays bounded via
+    # re-splitting, so reach is limited by total cube-work / parallelism,
+    # not by one exponential solve. Model total cube-work vs t.
+    by_t = {}
+    for t, total, _, _ in growth:
+        if t is not None:
+            by_t[t] = max(by_t.get(t, 0.0), total)
+    if len(by_t) >= 2:
+        ts = sorted(by_t)
+        b, a = np.polyfit(np.array(ts, float),
+                          np.log(np.array([by_t[t] for t in ts], float)), 1)
+        maxes = {t: mx for t, _, _, mx in growth if t is not None}
+        print(f"  total cube-work grows ~x{np.exp(b):.2f} per +1 t; "
+              f"hardest single cube stays ~{max(maxes.values()):.1f}s "
+              f"(bounded by re-splitting)")
+        # With P shards, wall ~ total/P. Solve total(t)=P*wall for t.
+        for P in (20, 100):
+            proj = (np.log(wall_seconds * P) - a) / b if b > 0 else None
+            if proj:
+                print(f"    projected CnC reach with {P} shards: "
+                      f"t ~ {proj:.1f} before per-shard work exceeds "
+                      f"the {wall_seconds/3600:g}h wall")
+    else:
+        print("  (need CnC runs at >=2 distinct t to model cube-work growth)")
+    print("  (CnC reach far exceeds the monolithic wall: split deeper / add "
+          "shards to trade the single-solve exponential for parallel width.)\n")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -213,6 +298,8 @@ def main():
                   f"solve hits the {args.wall_hours:g}h wall")
         print("  (projection is a log-linear extrapolation; trust it only "
               "as far as the finished-point spread above.)\n")
+
+    report_cnc(collect_cnc(sorted(set(paths))), wall)
 
 
 if __name__ == "__main__":
