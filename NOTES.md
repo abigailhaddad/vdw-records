@@ -17,13 +17,15 @@ bottom of this file. Full builder spec for the current pipeline work:
 
 **Pipeline state:** the sharded CnC decision pipeline (`cnc_pipeline.yml` +
 `code/vdw_cnc.py`) is green on GitHub (t=20 N=381 -> UNSAT, run
-29918948801). PLAN tasks 1-7 landed 2026-07-22 (commits 98b6ca8..67be420,
-detailed in the builder-pass note in the Phase-3 section below): the
-vacuous-UNSAT bug is fixed and coverage is now VERIFIED, killed shards
-checkpoint + recover via per-cube JSONL, unresolved cubes re-dispatch by
-index, cubes batch through one iglucose (1.9x faster), and a pilot gate
-projects cost before fanning out. `test_cnc.py` (14 tests) + `regression.yml`
-green.
+29918948801). PLAN tasks 1-8, 10, and 6.3 ALL landed 2026-07-22 (commits
+98b6ca8..1a21b72; see the builder-pass note in the Phase-3 section for
+details): vacuous-UNSAT fixed + coverage VERIFIED, killed-shard JSONL
+checkpoint/recovery, --cube-indices re-dispatch, one-iglucose batching (1.9x),
+pilot cost gate, tool-build cache, parallel `solve` sweeps (+ a march_cu
+look-ahead-decision soundness fix), and pilots folded into the reach model.
+`test_cnc.py` (15 tests) + `regression.yml` green. Only PLAN task 9 (the
+stitched parallel certificate) is left, and it is deliberately deferred to
+its own session (see next actions).
 
 **READY TO FIRE (not yet run on GH) — tuned t=26 dispatch:**
 ```
@@ -35,15 +37,18 @@ re-split (depth 3) + batching must clear. If it lands UNSAT with full
 coverage, that's the pdw(2;3,26) upper-bound half.
 
 **Next actions:**
-1. Fire the t=26 dispatch above; if UNSAT, move to the t=28/29 frontier.
-2. PLAN task 9 — stitched PARALLEL certificate (open question #1): the
-   sharded pipeline DECIDES but does not yet emit one drat-trim-checkable
-   proof. Needed to CERTIFY a frontier value whose monolithic sweep exceeds
-   6h. Its own session; research Heule's tooling first.
-3. PLAN task 8 — parallelize the `solve` sweep (independent N per worker).
-4. Nail the exact (p,q) reading rule off the sweep map (open question #2)
+1. Fire the tuned t=26 DECISION above. If UNSAT, CERTIFY it with a single
+   `vdw_cnc.py prove` job (`cnc_prove.yml`) — the pilot puts total cube-work
+   at ~1.9 core-hours, so the monolithic sequential proof likely fits under
+   the 6h wall, NO stitcher needed. Then move to t=28/29.
+2. PLAN task 9 — stitched PARALLEL certificate (open question #1). Research
+   DONE this session: no drop-in merger exists in Heule's tooling, so it
+   must be built from the recipe (details in the Phase-3 builder-pass note).
+   Deferred on purpose: it's a soundness-critical DRAT transformer (build it
+   as its own session with drat-trim iteration) AND it's not on the critical
+   path until a frontier point's monolithic sweep exceeds 6h (t=28+?).
+3. Nail the exact (p,q) reading rule off the sweep map (open question #2)
    before claiming a value for a NEW t.
-5. Deferred: task 6.3 (fold pilot JSON into pdw_difficulty.py reach model).
 
 **Resume basics:** every script is a self-contained CLI (see docstrings).
 Fast local sanity before any commit:
@@ -369,10 +374,46 @@ the gate passes -- but the 22.5% heavy tail is real; rely on re-split
 (depth 3) + batching to clear it. This is the tuned dispatch the plan's
 Task 4 note calls for. NOT yet run on GH.
 
-Still TODO from the plan: task 6.3 (fold pilot JSON into pdw_difficulty.py
-reach model -- deferred), task 8 (parallelize `solve` sweeps), task 9
-(stitched parallel certificate -- its own session), task 10 (commit
-crosscheck_records.py, gitignore/known_values_out, restructure this file).
+Tasks 8, 10, and 6.3 also landed (commits c93feb5, 8a6522a, 6e4b6cd,
+1a21b72):
+- Task 8: `solve` sweeps parallelize via --sweep-workers (process pool, each
+  point in its own dir). Surfaced + fixed a real SOUNDNESS bug: march_cu
+  DECIDES some instances during look-ahead (exit 10=SAT / 20=UNSAT, no
+  cubes); do_split now returns meta["solved"] instead of raising, and a
+  0-cube split can never be read as a vacuous UNSAT (aggregate guard). t=15
+  window 197-207 @workers=4 reproduces SSSSUSUSUUU.
+- Task 6.3: pilot JSON carries t/N; pdw_difficulty folds pilot projections
+  into the cube-work-vs-t reach model (lower bounds only pull reach down).
+- Task 10: crosscheck_records.py committed; known_values_out/, cnc_out/,
+  crosscheck_results.log gitignored; NOTES restructured (CURRENT STATE up
+  top, concluded campaigns archived at bottom).
+
+TASK 9 (stitched parallel certificate) -- RESEARCH DONE, BUILD NOT STARTED
+(deliberately; see below). Checked Heule's local CnC checkout + the CnC
+tutorial paper for a drop-in cube-proof merger: THERE IS NONE.
+`cube-glucose-proof.sh` is the MONOLITHIC proof (all cubes, one iglucose,
+one DRAT) -- exactly what `vdw_cnc.py prove` already does. `apply.sh` builds
+a single cube's residual CNF. `par-cube-glucose.sh` is a decision-only
+parallel runner (like our pipeline), no combined proof. So the stitcher must
+be built from the plan's recipe (transform each phi&cube_i DRAT into a
+phi |- ~cube_i derivation by appending ~cube_i's literals to every
+lemma/deletion; then a tautology proof over the cube tree pairing sibling
+leaves upward; drat-trim vs the base CNF). Validation gate: it must come back
+`s VERIFIED` on t=20 N=381 where `prove` already gives a verified monolithic
+cert to diff against.
+
+WHY NOT BUILT NOW: (a) it's a soundness-critical custom DRAT transformer --
+a subtle bug yields a "VERIFIED" that's actually unsound, the worst failure
+mode for this campaign, so it wants a focused session with tight drat-trim
+iteration, exactly as the plan says ("its own session"); (b) it is NOT on
+the immediate critical path -- the t=26 pilot puts total cube-work at ~1.9
+core-hours, i.e. the MONOLITHIC `vdw_cnc.py prove` (one sequential job)
+likely fits under the 6h wall, so t=26 can be CERTIFIED today without any
+stitcher. The stitcher only becomes necessary when a frontier point's
+monolithic sequential sweep exceeds 6h (t=28+?). Recommended order: fire the
+sharded DECISION for t=26 (fast), and if UNSAT, certify it with a single
+`prove` job; build the stitcher when a point actually blows the monolithic
+wall.
 
 ### Open questions for Fable (things I'm not sure about)
 
