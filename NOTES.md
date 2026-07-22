@@ -27,14 +27,38 @@ look-ahead-decision soundness fix), and pilots folded into the reach model.
 stitched parallel certificate) is left, and it is deliberately deferred to
 its own session (see next actions).
 
-**READY TO FIRE (not yet run on GH) — tuned t=26 dispatch:**
-```
-gh workflow run cnc_pipeline.yml -f t=26 -f N=635 -f march_opts="-d 12"
-```
-Pilot on that split (4022 cubes, vs 51k at the bad -d 16): projected >=1.88
-core-hours (< 40 budget, so the gate passes), with a 22.5% heavy tail that
-re-split (depth 3) + batching must clear. If it lands UNSAT with full
-coverage, that's the pdw(2;3,26) upper-bound half.
+**t=26 STATE (2026-07-22 evening, Fable session):** the tuned N=635 dispatch
+RAN (run 29926501414): 15/16 shards finished, shard 5 hit the 350-min job
+wall 3 cubes from done — first real exercise of the checkpoint/recovery
+path, which worked exactly as designed: JSONL checkpoints recovered 4019/4022
+cubes, `--cube-indices 3989,4005,4021` re-dispatch (run 29953461926) closed
+the rest, cube-level merge = **UNSAT 4022/4022, official** (committed:
+gh_actions_results/cnc-run-29926501414-merged-29953461926/). Four-fact cells
+for pdw(2;3,26)=(634,643) per the resolved reading rule: p+1=635 UNSAT DONE
+(certified `prove` run dispatched, 29962546998); q-1=642 SAT witness VERIFIED
+palindromic (3452s local — NB t=26 SAT cells are hours-hard monolithically);
+p-1=633 TIMED OUT at 1h local cap, re-dispatched to GH with 5h cap (run
+29964214297, sat_pipeline `--point 26 633 sat`); q+1=644 decision dispatched
+(run 29962548794). When all four land, t=26 is the first proof-logged
+reproduction of an AKS palindromic pair beyond their published artifacts.
+
+**DIAGONAL VERDICT (2026-07-22, Fable): the W(6,2) wall is INTRINSIC —
+no-go confirmed; ladder shipped as `RESULTS_diagonal_ladder.md`.** The SB
+probe (PLAN_sb_probe.md, builder-implemented, 5 commits) found: (a) SB
+clauses visible to march_cu are a 3.5x PESSIMIZATION (march branches on lex
+aux vars — 100% of cubes polluted); (b) SB at solve time only (split plain,
+augment per-cube — sound, cubes cover position space) is free but worthless
+at k=5 (87.7s vs 77.8s baseline), as the order-4 symmetry group predicts
+(only affine maps preserving [1,N] and APs are id + reflection, x color
+swap); (c) k=6 with solve-time SB, same cubes as baseline: 200/200 timeout
+@5s, 6/6 @1800s incl. bake-off cube 331. Floor stays >=2048 core-hours,
+cert projects to tens of TB. The feasible prestige artifact is instead
+**W(5,2)=178 in Lean via LRAT-Catcher** (artifact verified real: no-Mathlib,
+builds in ~25s, its own flagship upper bounds NOT shipped — field is open;
+dress rehearsal running: PHP(4,3) contract rehearsal -> 3627 CaDiCaL LRATs ->
+cover cert -> composed Lean theorem). Remaining mile after the rehearsal: a
+verified encoding lemma (CNF <-> vdW statement) — Fable to review
+LRAT-Catcher's Schur/Ramsey encodings as the template.
 
 **Next actions:**
 1. Fire the tuned t=26 DECISION above. If UNSAT, CERTIFY it with a single
