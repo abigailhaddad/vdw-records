@@ -2,59 +2,96 @@ name: vdw-sat-pipeline
 
 # Runs the phase-1 SAT pipeline (code/vdw_pdw_validate.py,
 # code/vdw_pdw_attack.py) on GitHub-hosted runners instead of a laptop.
-# Manual trigger only -- this is compute-heavy (some single instances
-# take 30+ minutes even on a fast machine; see the t=26/27 validation
-# cells). Public repo: GitHub-hosted minutes are free, no monthly cap
-# to worry about (see .github/workflows/scan.yml's note on this).
+# Manual trigger only -- this is compute-heavy.
 #
-# Sharded one job per t value, matching scan.yml's build-once/run-many
-# pattern: a single job builds kissat + cadical + drat-trim from source
-# and packages them as an artifact; every shard job downloads that
-# instead of rebuilding, then runs one t value's worth of work.
-
-# contents: write so the collect job can commit results back to main
-# with the default GITHUB_TOKEN (no extra setup needed for that part).
-# A broader-scoped PAT is also stashed as the repo secret GH_PAT (same
-# token this machine's `gh` CLI uses -- repo+workflow scopes) for
-# anything GITHUB_TOKEN can't do, e.g. triggering ANOTHER workflow run
-# from within this one (GITHUB_TOKEN-triggered events deliberately don't
-# cascade into other workflows, to prevent accidental infinite loops).
-# See the optional "chain" job at the bottom.
+# ONE INSTANCE PER JOB. The hard direction here is proving a point UNSAT,
+# and a single UNSAT instance can want HOURS. GitHub-hosted public runners
+# cap a job at 360 minutes (6h), so the only way to give one instance
+# hours is to put exactly one instance in one job. You hand this workflow
+# a `shards` list -- a JSON array of argument strings, one per job -- and
+# it fans them out as a matrix, each with its own multi-hour per-instance
+# `cap_seconds`. Examples:
+#   runner=validate  shards=["--ts 26 --only p+1","--ts 26 --only q+1"]
+#     -> two jobs, each proving one AKS Table-6 UNSAT cell.
+#   runner=validate  shards=["--point 28 728 unsat","--point 29 810 unsat"]
+#     -> hammer specific frontier ceilings past AKS's t=27, proof-logged.
+#   runner=attack    shards=["--ts 28","--ts 29"]
+#     -> the exploratory SAT-boundary bracket walk, one t per job.
+#
+# WHY the previous "one t per job" shape kept dying "cancelled": each probe
+# was capped at 30 min internally, a job ran many probes back-to-back, and
+# the job's own timeout-minutes wall guillotined it mid-probe (GitHub
+# reports a timeout-minutes kill as conclusion=cancelled). Keep
+# cap_seconds STRICTLY below timeout_minutes*60 so the solver, not the job
+# wall, is what bounds a run.
+#
+# contents: write so the collect job can commit results back to main with
+# the default GITHUB_TOKEN. A broader-scoped PAT is stashed as the repo
+# secret GH_PAT for the chain job (GITHUB_TOKEN-triggered dispatches are
+# blocked from cascading into other workflow runs by GitHub's loop
+# prevention, so chaining needs a real token).
 permissions:
   contents: write
+
+# Serialize whole runs: a second dispatch queues (pending) behind a
+# running one rather than overlapping. cancel-in-progress is false on
+# purpose -- these jobs are long and expensive; never kill one just
+# because a newer dispatch arrived. (Shards within a single run still run
+# in parallel; this only gates run-vs-run.)
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 on:
   workflow_dispatch:
     inputs:
-      mode:
-        description: "validate (AKS Table 6 cells) or attack (t=28/29 frontier)"
+      runner:
+        description: "which script: validate or attack"
         default: "validate"
         type: choice
         options: ["validate", "attack"]
-      ts:
-        description: "space-separated t values to run as separate shards"
-        default: "26 27"
-      lrat:
-        description: "attack mode only: use cadical native LRAT instead of kissat+DRAT"
-        default: "false"
-        type: choice
-        options: ["false", "true"]
+      shards:
+        description: 'JSON array of arg-strings, one job each, e.g. ["--ts 26 --only p+1","--ts 26 --only q+1"]'
+        default: '["--ts 26 --only p+1","--ts 26 --only q+1"]'
+      cap_seconds:
+        description: "per-instance solver timeout in seconds (must be < timeout_minutes*60)"
+        default: "18000"
       timeout_minutes:
         description: "per-shard job timeout (<=360 on standard public runners)"
-        default: "340"
-      chain_next:
-        description: "after this run finishes, auto-dispatch this same workflow again with a different mode/ts (chaining). Empty = don't chain."
+        default: "350"
+      chain_runner:
+        description: "chain: runner for the auto-dispatched next run (empty chain_shards = no chain)"
+        default: "validate"
+      chain_shards:
+        description: "chain: JSON array of arg-strings for the next run. Empty = don't chain."
         default: ""
 
 jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
-      ts: ${{ steps.gen.outputs.ts }}
+      matrix: ${{ steps.gen.outputs.matrix }}
     steps:
       - id: gen
+        env:
+          SHARDS: ${{ inputs.shards }}
+        # Turn the shards array into a matrix `include` list, giving each
+        # shard a filesystem-safe slug (used for its log/json names and
+        # artifact name) derived from its args, prefixed by index to stay
+        # unique even if two shards sanitize to the same string.
         run: |
-          echo "ts=$(python3 -c "import json,sys; print(json.dumps('${{ inputs.ts }}'.split()))")" >> "$GITHUB_OUTPUT"
+          matrix=$(python3 - <<'PY'
+          import json, os, re
+          shards = json.loads(os.environ["SHARDS"])
+          out = []
+          for i, s in enumerate(shards):
+              slug = re.sub(r"[^0-9a-zA-Z]+", "-", s).strip("-").lower()
+              out.append({"args": s, "slug": f"{i:02d}-{slug}"})
+          print(json.dumps(out))
+          PY
+          )
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix"
 
   build_tools:
     runs-on: ubuntu-latest
@@ -93,7 +130,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        t: ${{ fromJSON(needs.setup.outputs.ts) }}
+        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -109,37 +146,32 @@ jobs:
           kissat --version || true
           cadical --version || true
           ./tools/drat-trim/drat-trim --help || true
-      - name: run validate shard
-        if: ${{ inputs.mode == 'validate' }}
+      - name: run shard
+        # $ARGS is intentionally unquoted: it is a space-separated arg
+        # string (e.g. "--ts 26 --only p+1") that must word-split into
+        # separate argv entries. Manual-dispatch-only + repo-owner input,
+        # same trust model as the rest of this workflow.
+        env:
+          ARGS: ${{ matrix.args }}
         run: |
           mkdir -p out
-          python3 code/vdw_pdw_validate.py --ts ${{ matrix.t }} \
-            --outdir out --json-out out/t${{ matrix.t }}.json \
-            | tee out/t${{ matrix.t }}.log
-      - name: run attack shard
-        if: ${{ inputs.mode == 'attack' }}
-        run: |
-          mkdir -p out
-          args=(--ts ${{ matrix.t }} --outdir out --json-out "out/t${{ matrix.t }}.json")
-          if [ "${{ inputs.lrat }}" = "true" ]; then
-            args+=(--lrat)
-          fi
-          python3 code/vdw_pdw_attack.py "${args[@]}" | tee "out/t${{ matrix.t }}.log"
-      # if: always() is the whole point here: if this shard hits its
-      # timeout-minutes cap (or is cancelled), GitHub Actions still runs
-      # always()-steps before tearing the job down, so whatever the
-      # scripts had already printed to out/*.log (they flush=True every
-      # line as they go) gets uploaded rather than lost. out/*.json only
-      # exists if the script reached its own final json.dump(), which
-      # won't happen on a mid-shard kill -- the log is the durable record
-      # in that case, which is why the collect step below reads logs, not
-      # just JSON.
+          python3 code/vdw_pdw_${{ inputs.runner }}.py $ARGS \
+            --cap-seconds ${{ inputs.cap_seconds }} \
+            --outdir out --json-out "out/${{ matrix.slug }}.json" \
+            | tee "out/${{ matrix.slug }}.log"
+      # if: always() is the whole point: if this shard hits its
+      # timeout-minutes cap (or is cancelled), always()-steps still run
+      # before teardown, so whatever the script already flushed to
+      # out/*.log gets uploaded rather than lost. out/*.json only exists
+      # if the script reached its final json.dump() -- so on a mid-shard
+      # kill the log is the durable record, which is why collect reads
+      # logs, not just JSON.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: results-t${{ matrix.t }}
-          # CNF/proof files can be large (100s of MB); only ship the
-          # logs and JSON summaries by default, not the raw artifacts.
+          name: results-${{ matrix.slug }}
+          # CNF/proof files can be large (100s of MB); ship only the logs
+          # and JSON summaries, not the raw artifacts.
           path: |
             out/*.log
             out/*.json
@@ -154,21 +186,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # default GITHUB_TOKEN is enough for a same-repo push given
-          # permissions.contents=write above; actions/checkout wires it
-          # into the local git credential helper automatically.
           persist-credentials: true
       - uses: actions/download-artifact@v4
         with:
-          pattern: results-t*
+          pattern: results-*
           path: results
           merge-multiple: true
       - name: summarize
         run: |
           {
-            echo "# vdw-sat-pipeline results (mode=${{ inputs.mode }}, ts=${{ inputs.ts }}, run ${{ github.run_id }})"
+            echo "# vdw-sat-pipeline results (runner=${{ inputs.runner }}, cap=${{ inputs.cap_seconds }}s, run ${{ github.run_id }})"
+            echo
+            echo "shards: ${{ inputs.shards }}"
             echo
             for f in results/*.log; do
+              [ -e "$f" ] || continue
               echo "## $(basename "$f")"
               echo '```'
               tail -60 "$f"
@@ -190,34 +222,38 @@ jobs:
             echo "nothing to commit (no result files produced)"
             exit 0
           fi
-          git commit -m "GH Actions: vdw-sat-pipeline results (mode=${{ inputs.mode }}, ts=${{ inputs.ts }}, run ${{ github.run_id }})"
-          # retry a few times in case main moved under us during the run
+          git commit -m "GH Actions: vdw-sat-pipeline results (runner=${{ inputs.runner }}, run ${{ github.run_id }})"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main && break
             echo "push attempt $i failed, retrying..."; sleep 5
           done
 
-  # Optional chaining: only runs if the dispatch set chain_next to a
-  # non-empty "mode ts" string (e.g. "attack 28 29"). Uses GH_PAT, not
-  # GITHUB_TOKEN, because GITHUB_TOKEN-triggered workflow_dispatch calls
-  # from within a running workflow are blocked by GitHub's loop
-  # prevention; a real token is required to actually kick off the next
-  # run.
+  # Optional chaining: dispatch this same workflow again after collect,
+  # but ONLY if no other run of it is already active. This is the fix for
+  # the overlap problem -- the guard means a chain can never pile a second
+  # run on top of one still going, and combined with the run-level
+  # concurrency group above there is at most one live run at a time.
+  # Uses GH_PAT, not GITHUB_TOKEN (GITHUB_TOKEN dispatches don't cascade).
   chain:
     needs: collect
-    if: ${{ inputs.chain_next != '' }}
+    if: ${{ inputs.chain_shards != '' }}
     runs-on: ubuntu-latest
     steps:
-      - name: dispatch next run
+      - name: dispatch next run (guarded against overlap)
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
+          CHAIN_SHARDS: ${{ inputs.chain_shards }}
         run: |
-          set -- ${{ inputs.chain_next }}
-          next_mode="$1"; shift
-          next_ts="$*"
+          active=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/sat_pipeline.yml/runs?per_page=50" \
+            --jq "[.workflow_runs[] | select(.status==\"in_progress\" or .status==\"queued\") | select(.id != ${{ github.run_id }})] | length")
+          if [ "$active" -gt 0 ]; then
+            echo "another vdw-sat-pipeline run is active ($active); NOT chaining, to avoid overlap"
+            exit 0
+          fi
           gh workflow run sat_pipeline.yml \
             --repo ${{ github.repository }} \
-            -f mode="$next_mode" \
-            -f ts="$next_ts" \
-            -f lrat=${{ inputs.lrat }} \
+            -f runner="${{ inputs.chain_runner }}" \
+            -f shards="$CHAIN_SHARDS" \
+            -f cap_seconds=${{ inputs.cap_seconds }} \
             -f timeout_minutes=${{ inputs.timeout_minutes }}

@@ -134,12 +134,12 @@ def locate_boundary(prober, believed, expect_low_sat, max_extra=10):
     return None
 
 
-def attack_t(t, outdir, use_cadical_lrat=False, max_extra=10):
+def attack_t(t, outdir, use_cadical_lrat=False, max_extra=10, cap=PROBE_CAP):
     p0, q0 = AKS_TABLE_7_CONJECTURED[t]
     print(f"\n=== attacking pdw(2;3,{t}); AKS conjectured (p,q)=({p0},{q0}) "
           f"===", flush=True)
     t_start = time.time()
-    prober = Prober(t, outdir)
+    prober = Prober(t, outdir, cap=cap)
 
     print("  bracketing p ...", flush=True)
     p = locate_boundary(prober, p0, expect_low_sat=True, max_extra=max_extra)
@@ -202,6 +202,13 @@ def main():
                      help="use cadical native LRAT instead of kissat+DRAT "
                           "for the final proof-logged UNSAT runs")
     ap.add_argument("--max-extra", type=int, default=10)
+    ap.add_argument("--cap-seconds", type=int, default=PROBE_CAP,
+                     help="per-probe solver timeout in seconds (default "
+                          "%(default)s = 30 min). Raise to give each bracket "
+                          "probe more time; keep it below the GitHub job "
+                          "timeout-minutes*60. To throw hours at ONE specific "
+                          "point instead of a bracket walk, use "
+                          "vdw_pdw_validate.py --point.")
     ap.add_argument("--json-out", default=None)
     ap.add_argument("--stop-if-unresolved", action="store_true",
                      help="don't attempt later ts if an earlier one didn't "
@@ -215,7 +222,7 @@ def main():
     results = []
     for t in args.ts:
         res = attack_t(t, outdir, use_cadical_lrat=args.lrat,
-                        max_extra=args.max_extra)
+                        max_extra=args.max_extra, cap=args.cap_seconds)
         results.append(res)
         if args.stop_if_unresolved and not res.get("resolved"):
             break

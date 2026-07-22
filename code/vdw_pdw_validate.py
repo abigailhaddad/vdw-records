@@ -87,6 +87,11 @@ AKS_TABLE_7_CONJECTURED = {
 
 DEFAULT_TS = [3, 4, 5, 6, 7, 15, 20, 26, 27]
 
+# The four cells of the Theorem-5.1 certification for one t, in the order
+# validate_t runs them. --only takes any subset; the two "+1" cells are
+# the hard (proof-logged UNSAT) direction worth a job each.
+CELLS = ("p-1", "q-1", "p+1", "q+1")
+
 
 def is_palindrome(colors, N):
     return all(colors[i] == colors[N + 1 - i] for i in range(1, N + 1))
@@ -193,10 +198,12 @@ def check_sat_point(t, N, outdir, tag, cap=TIME_CAP):
     return row
 
 
-def check_unsat_point(t, N, outdir, tag, use_cadical_lrat=False):
+def check_unsat_point(t, N, outdir, tag, use_cadical_lrat=False, cap=TIME_CAP):
     """Proof-logged check that NO good palindromic partition exists at N,
     for pdw(2;3,t). Verified with drat-trim (kissat+DRAT) or lrat-check
-    (cadical+LRAT)."""
+    (cadical+LRAT). `cap` is the per-instance solver timeout in seconds --
+    this is the direction that needs hours, so it is threaded all the way
+    down to the solver subprocess (not left at the 30-min default)."""
     lengths = [3, t]
     clauses, nvars = encode_palindromic(lengths, N)
     cnf_path = os.path.join(outdir, f"{tag}_N{N}.cnf")
@@ -206,11 +213,11 @@ def check_unsat_point(t, N, outdir, tag, use_cadical_lrat=False):
 
     if use_cadical_lrat:
         proof_path = os.path.join(outdir, f"{tag}_N{N}.lrat")
-        res, elapsed, status = run_cadical_lrat(cnf_path, proof_path)
+        res, elapsed, status = run_cadical_lrat(cnf_path, proof_path, cap)
         row["engine"] = "cadical+LRAT"
     else:
         proof_path = os.path.join(outdir, f"{tag}_N{N}.drat")
-        res, elapsed, status = run_kissat(cnf_path, proof_path)
+        res, elapsed, status = run_kissat(cnf_path, proof_path, cap)
         row["engine"] = "kissat+DRAT"
     row["status"] = status
     row["time"] = elapsed
@@ -222,67 +229,114 @@ def check_unsat_point(t, N, outdir, tag, use_cadical_lrat=False):
     if res is False and os.path.exists(proof_path):
         proof_size = os.path.getsize(proof_path)
         if use_cadical_lrat:
-            checked, t_check, _ = run_lrat_check(cnf_path, proof_path)
+            checked, t_check, _ = run_lrat_check(cnf_path, proof_path, cap)
         else:
-            checked, t_check, _ = run_drat_trim(cnf_path, proof_path)
+            checked, t_check, _ = run_drat_trim(cnf_path, proof_path, cap)
     row["proof_size_bytes"] = proof_size
     row["proof_checked"] = bool(checked)
     row["proof_check_time"] = t_check
     return row
 
 
-def validate_t(t, outdir, comparison=False):
+def validate_t(t, outdir, comparison=False, cap=TIME_CAP, only=None):
     """Run the 4-point Theorem-5.1 certification for pdw(2;3,t) against
     the published AKS value. comparison=True additionally re-runs both
-    UNSAT points with cadical+LRAT (for the kissat-vs-cadical writeup)."""
+    UNSAT points with cadical+LRAT (for the kissat-vs-cadical writeup).
+
+    `cap` is the per-instance solver timeout in seconds. `only` restricts
+    which of the four cells (subset of CELLS: p-1, q-1, p+1, q+1) actually
+    run; the rest come back None. Running a single cell per invocation is
+    how one GitHub Actions job can throw hours at ONE hard instance and
+    still fit under the 6h public-runner ceiling -- see sat_pipeline.yml.
+    With fewer than all four cells run, `certified` is None (undetermined)
+    rather than False, so a partial shard is not misread as a failure."""
     p, q = AKS_TABLE_6[t]
     tag = f"pdw_t{t}"
-    print(f"\n=== pdw(2;3,{t}) published=({p},{q}) ===", flush=True)
+    run = set(CELLS) if only is None else set(only)
+    print(f"\n=== pdw(2;3,{t}) published=({p},{q}) cells={sorted(run)} "
+          f"cap={cap}s ===", flush=True)
 
-    r_p = check_sat_point(t, p - 1, outdir, tag)
-    print(f"  SAT  n=p-1={p-1}: {r_p['status']} in {r_p['time']:.3f}s "
-          f"witness_ok={r_p['witness_ok']} palindrome={r_p['is_palindrome']}",
-          flush=True)
-    r_q = check_sat_point(t, q - 1, outdir, tag)
-    print(f"  SAT  n=q-1={q-1}: {r_q['status']} in {r_q['time']:.3f}s "
-          f"witness_ok={r_q['witness_ok']} palindrome={r_q['is_palindrome']}",
-          flush=True)
-    r_pp = check_unsat_point(t, p + 1, outdir, tag)
-    print(f"  UNSAT n=p+1={p+1}: {r_pp['status']} in {r_pp['time']:.3f}s "
-          f"proof={r_pp['proof_size_bytes']}B checked={r_pp['proof_checked']}",
-          flush=True)
-    r_qq = check_unsat_point(t, q + 1, outdir, tag)
-    print(f"  UNSAT n=q+1={q+1}: {r_qq['status']} in {r_qq['time']:.3f}s "
-          f"proof={r_qq['proof_size_bytes']}B checked={r_qq['proof_checked']}",
-          flush=True)
+    r_p = r_q = r_pp = r_qq = None
+    if "p-1" in run:
+        r_p = check_sat_point(t, p - 1, outdir, tag, cap=cap)
+        print(f"  SAT  n=p-1={p-1}: {r_p['status']} in {r_p['time']:.3f}s "
+              f"witness_ok={r_p['witness_ok']} palindrome={r_p['is_palindrome']}",
+              flush=True)
+    if "q-1" in run:
+        r_q = check_sat_point(t, q - 1, outdir, tag, cap=cap)
+        print(f"  SAT  n=q-1={q-1}: {r_q['status']} in {r_q['time']:.3f}s "
+              f"witness_ok={r_q['witness_ok']} palindrome={r_q['is_palindrome']}",
+              flush=True)
+    if "p+1" in run:
+        r_pp = check_unsat_point(t, p + 1, outdir, tag, cap=cap)
+        print(f"  UNSAT n=p+1={p+1}: {r_pp['status']} in {r_pp['time']:.3f}s "
+              f"proof={r_pp['proof_size_bytes']}B checked={r_pp['proof_checked']}",
+              flush=True)
+    if "q+1" in run:
+        r_qq = check_unsat_point(t, q + 1, outdir, tag, cap=cap)
+        print(f"  UNSAT n=q+1={q+1}: {r_qq['status']} in {r_qq['time']:.3f}s "
+              f"proof={r_qq['proof_size_bytes']}B checked={r_qq['proof_checked']}",
+              flush=True)
 
-    ok = (r_p["match"] and r_p["witness_ok"] and r_p["is_palindrome"] and
-          r_q["match"] and r_q["witness_ok"] and r_q["is_palindrome"] and
-          r_pp["match"] and r_pp["proof_checked"] and
-          r_qq["match"] and r_qq["proof_checked"])
-    if not ok:
-        print(f"  *** pdw(2;3,{t}) FAILED CERTIFICATION against published "
-              f"value ({p},{q}) -- SEE ABOVE ***", flush=True)
+    if all(x is not None for x in (r_p, r_q, r_pp, r_qq)):
+        ok = (r_p["match"] and r_p["witness_ok"] and r_p["is_palindrome"] and
+              r_q["match"] and r_q["witness_ok"] and r_q["is_palindrome"] and
+              r_pp["match"] and r_pp["proof_checked"] and
+              r_qq["match"] and r_qq["proof_checked"])
+        if not ok:
+            print(f"  *** pdw(2;3,{t}) FAILED CERTIFICATION against published "
+                  f"value ({p},{q}) -- SEE ABOVE ***", flush=True)
+    else:
+        ok = None  # partial shard: certification undetermined, not failed
+        print(f"  (partial run of cells {sorted(run)} -- certification "
+              f"undetermined for t={t})", flush=True)
 
     comp = None
-    if comparison:
-        print("  -- cadical+LRAT comparison run on the same two UNSAT "
-              "points --", flush=True)
-        c_pp = check_unsat_point(t, p + 1, outdir, tag + "_lrat",
-                                  use_cadical_lrat=True)
-        c_qq = check_unsat_point(t, q + 1, outdir, tag + "_lrat",
-                                  use_cadical_lrat=True)
-        print(f"    cadical+LRAT n=p+1={p+1}: {c_pp['status']} in "
-              f"{c_pp['time']:.3f}s proof={c_pp['proof_size_bytes']}B "
-              f"checked={c_pp['proof_checked']}", flush=True)
-        print(f"    cadical+LRAT n=q+1={q+1}: {c_qq['status']} in "
-              f"{c_qq['time']:.3f}s proof={c_qq['proof_size_bytes']}B "
-              f"checked={c_qq['proof_checked']}", flush=True)
+    if comparison and ("p+1" in run or "q+1" in run):
+        print("  -- cadical+LRAT comparison run on the UNSAT points in this "
+              "shard --", flush=True)
+        c_pp = c_qq = None
+        if "p+1" in run:
+            c_pp = check_unsat_point(t, p + 1, outdir, tag + "_lrat",
+                                      use_cadical_lrat=True, cap=cap)
+            print(f"    cadical+LRAT n=p+1={p+1}: {c_pp['status']} in "
+                  f"{c_pp['time']:.3f}s proof={c_pp['proof_size_bytes']}B "
+                  f"checked={c_pp['proof_checked']}", flush=True)
+        if "q+1" in run:
+            c_qq = check_unsat_point(t, q + 1, outdir, tag + "_lrat",
+                                      use_cadical_lrat=True, cap=cap)
+            print(f"    cadical+LRAT n=q+1={q+1}: {c_qq['status']} in "
+                  f"{c_qq['time']:.3f}s proof={c_qq['proof_size_bytes']}B "
+                  f"checked={c_qq['proof_checked']}", flush=True)
         comp = {"kissat_drat": [r_pp, r_qq], "cadical_lrat": [c_pp, c_qq]}
 
     return {"t": t, "p": p, "q": q, "p_minus_1": r_p, "q_minus_1": r_q,
             "p_plus_1": r_pp, "q_plus_1": r_qq, "certified": ok,
             "comparison": comp}
+
+
+def run_single_point(t, N, kind, outdir, cap=TIME_CAP, use_cadical_lrat=False):
+    """Run exactly ONE arbitrary instance pdw(2;3,t) at length N. kind is
+    'sat' (cheap witness search) or 'unsat' (proof-logged + drat/lrat
+    checked). This is the primitive for hammering a single frontier point
+    -- e.g. a conjectured UNSAT ceiling past AKS's t=27 -- in its own
+    GitHub job with a multi-hour `cap`, where the bracket walk in
+    vdw_pdw_attack.py would otherwise spend its whole budget on cheaper
+    neighbouring probes."""
+    tag = f"pdw_t{t}_point"
+    if kind == "sat":
+        row = check_sat_point(t, N, outdir, tag, cap=cap)
+        row.pop("colors", None)
+        print(f"  point pdw(2;3,{t}) N={N} expect SAT: {row['status']} in "
+              f"{row['time']:.3f}s witness_ok={row['witness_ok']} "
+              f"palindrome={row['is_palindrome']}", flush=True)
+    else:
+        row = check_unsat_point(t, N, outdir, tag,
+                                use_cadical_lrat=use_cadical_lrat, cap=cap)
+        print(f"  point pdw(2;3,{t}) N={N} expect UNSAT: {row['status']} in "
+              f"{row['time']:.3f}s proof={row['proof_size_bytes']}B "
+              f"checked={row['proof_checked']}", flush=True)
+    return {"t": t, "N": N, "kind": kind, "cap": cap, "result": row}
 
 
 def main():
@@ -293,15 +347,50 @@ def main():
                      help="run the cadical-LRAT vs kissat-DRAT comparison "
                           "on this t (must be in --ts)")
     ap.add_argument("--json-out", default=None)
+    ap.add_argument("--cap-seconds", type=int, default=TIME_CAP,
+                     help="per-instance solver timeout in seconds (default "
+                          "%(default)s = 30 min). Raise this to give a hard "
+                          "UNSAT instance hours -- but keep it BELOW the "
+                          "GitHub job timeout-minutes*60, or the job wall "
+                          "kills the shard before the solver finishes.")
+    ap.add_argument("--only", nargs="+", choices=list(CELLS), default=None,
+                     help="run only these cells of the 4-point certification "
+                          "(default: all four). One cell per GitHub job is "
+                          "how you get hours per instance under the 6h "
+                          "public-runner ceiling.")
+    ap.add_argument("--point", nargs=3, metavar=("T", "N", "KIND"),
+                     default=None,
+                     help="run ONE arbitrary instance pdw(2;3,T) at length N, "
+                          "KIND in {sat,unsat}; unsat is proof-logged and "
+                          "checked. Overrides --ts/--only; for hammering a "
+                          "single frontier point in its own long job.")
     args = ap.parse_args()
 
+    cap = args.cap_seconds
     outdir = args.outdir or os.path.join(REPO_ROOT, "pdw_validate_out")
     os.makedirs(outdir, exist_ok=True)
+
+    if args.point:
+        pt_t, pt_n, kind = int(args.point[0]), int(args.point[1]), \
+            args.point[2].lower()
+        if kind not in ("sat", "unsat"):
+            ap.error("--point KIND must be 'sat' or 'unsat'")
+        t0 = time.time()
+        res = run_single_point(pt_t, pt_n, kind, outdir, cap=cap)
+        total = time.time() - t0
+        print(f"\ntotal wall time: {total:.1f}s ({total/60:.1f} min)")
+        if args.json_out:
+            with open(args.json_out, "w") as f:
+                json.dump({"point": res, "total_wall_seconds": total}, f,
+                          indent=2)
+        return
 
     t0 = time.time()
     results = []
     for t in args.ts:
-        results.append(validate_t(t, outdir, comparison=(t == args.comparison_t)))
+        results.append(validate_t(t, outdir,
+                                  comparison=(t == args.comparison_t),
+                                  cap=cap, only=args.only))
     total = time.time() - t0
 
     print("\n\n================ PALINDROMIC VALIDATION REPORT ================\n")
@@ -309,16 +398,21 @@ def main():
     print(hdr)
     print("-" * len(hdr))
     for r in results:
+        cert = ("yes" if r["certified"] else
+                "partial" if r["certified"] is None else "NO")
         print(f"{r['t']:>4}{'(' + str(r['p']) + ',' + str(r['q']) + ')':>20}"
-              f"{'yes' if r['certified'] else 'NO':>12}")
-    all_ok = all(r["certified"] for r in results)
+              f"{cert:>12}")
+    # None (partial shard) is undetermined, not a failure -- only an
+    # explicit False counts against "all certified".
+    all_ok = all(r["certified"] is not False for r in results)
     print(f"\nall certified: {'yes' if all_ok else 'NO -- SEE ABOVE'}")
     print(f"total wall time: {total:.1f}s ({total/60:.1f} min)")
 
     if args.json_out:
         for r in results:
             for k in ("p_minus_1", "q_minus_1"):
-                r[k] = {kk: vv for kk, vv in r[k].items() if kk != "colors"}
+                if r[k] is not None:  # cell may have been skipped by --only
+                    r[k] = {kk: vv for kk, vv in r[k].items() if kk != "colors"}
         with open(args.json_out, "w") as f:
             json.dump({"results": results, "total_wall_seconds": total}, f, indent=2)
 

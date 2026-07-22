@@ -495,6 +495,89 @@ Levers identified so far, roughly by leverage:
   try building tawSolver (Kullmann's GitHub, OKlibrary) before buying
   compute; also SAT-Comp-2025-winner kissat variants are public.
 
+### Phase-3 results — pipeline BUILT & VALIDATED (2026-07-21 night)
+
+Built in code/ (mostly by a sonnet build subagent, to spec):
+- `code/vdw_sat.py` — mixed-vdW CNF encoder (r=2: one boolean/integer;
+  r>=3: one-hot; one clause per AP; NO symmetry breaking — unsound on
+  mixed instances). CLI + importable.
+- `code/vdw_sat_validate.py` — validates the encoder by re-deriving known
+  exact values both directions (SAT at W-1 with witness brute-checked;
+  proof-logged UNSAT at W via drat-trim).
+- `code/vdw_pdw_validate.py` / `code/vdw_pdw_attack.py` — palindromic
+  path pdw(2;3,t): variable folding (mirror positions share a var).
+- Toolchain: kissat + cadical (Homebrew), drat-trim + march_cu/CnC built
+  from source in `tools/`; `satenv/` = pysat venv.
+
+RESULT: **pdw(2;3,20) = (380,389) fully REPRODUCED with machine-checked
+proofs, both components** — SAT witnesses at N=379/388 verified &
+confirmed palindromic; UNSAT at N=381 (116 MB cert) and N=390 (281 MB
+cert), both drat-trim-checked. Calibration curve: t=15 UNSAT sub-second
+(~1 MB cert) -> t=20 UNSAT 45-112s (116-281 MB cert). The machinery
+works end-to-end in the HARD (UNSAT/exact) direction.
+
+GitHub Actions: `.github/workflows/sat_pipeline.yml` (Abigail's standard
+self-chaining PAT-secret pattern; `GH_PAT` secret; repo PUBLIC for free
+minutes) shards by t: mode=validate (26 27) / mode=attack (28 29); runs
+dispatched. **NEXT REAL TARGET: pdw(2;3,28)/(29)** — genuinely-new values
+past AKS's t=27 ceiling. NB: a 2026-07-21-night session mixup (main
+assistant misread a user-directed build subagent as rogue, briefly
+reverted/disabled things) was fully resolved — repo public, workflow
+enabled, GH_PAT intact, runs re-dispatched; see memory
+incident-misread-user-directed-agent.
+
+### Phase-3 run 2026-07-22 (overnight) — what landed, and the timeout fix
+
+First real GH-Actions overnight run of validate 26/27 + attack 28/29.
+Results committed to gh_actions_results/run-29885808402 (26/27) and
+run-29885809480 (28/29).
+
+What we got:
+- SAT direction (a good palindromic partition exists = lower bound):
+  solves fine. New verified palindromic witnesses from the attack walk:
+  t=28 SAT up to N=725 (p-side) and N=740 (q-side); t=29 SAT up to N=808
+  (p-side). All witness-checked and confirmed palindromic. These are
+  honest lower bounds, nothing more.
+- UNSAT direction (no partition = the upper bound, the mathematically
+  interesting half): EVERY point timed out. Both engines — kissat+DRAT
+  and cadical+LRAT — hit the cap on the t=27 comparison cells. Zero
+  proofs generated. So NOTHING certified: not the 26/27 Table-6 cells,
+  not any 28/29 frontier value.
+
+Root cause, and it was NOT the chain: the per-instance cap was 30 min
+(TIME_CAP), a job ran many instances/probes back-to-back, and the job's
+own timeout-minutes wall (340) killed it mid-instance. GitHub reports a
+timeout-minutes kill as conclusion=cancelled — which is why 28/29 looked
+"cancelled" (its run jobs ended at exactly start+340min; the chain job
+was skipped). The earlier six cancels were just re-dispatched batches
+superseding each other.
+
+The fix (this session): these UNSAT instances need HOURS, not 30 min, and
+a public runner caps a job at 360 min (6h) — so the only way to give one
+instance hours is ONE INSTANCE PER JOB.
+- code/vdw_pdw_validate.py: added --cap-seconds (threaded all the way to
+  the solver AND the drat/lrat proof check), --only {p-1,q-1,p+1,q+1} to
+  run a single certification cell, and --point T N {sat,unsat} to hammer
+  one arbitrary point (e.g. a frontier ceiling) proof-logged in its own
+  job. Partial shards report certified=None (undetermined), not False.
+- code/vdw_pdw_attack.py: added --cap-seconds (per-probe).
+- .github/workflows/sat_pipeline.yml: rewritten to a shards model. You
+  pass shards=<JSON array of arg-strings>, one job each, fanned out as a
+  matrix; runner=validate|attack; cap_seconds (default 18000=5h);
+  timeout_minutes (default 350, must stay > cap/60 and <=360). Chain job
+  now guards against overlap (won't dispatch if another run is active)
+  and a run-level concurrency group serializes runs. KEEP cap_seconds
+  BELOW timeout_minutes*60 or the job wall bites again.
+
+Next overnight target: prove one frontier ceiling UNSAT with a checked
+proof, each in its own 5h job, e.g.
+  runner=validate cap_seconds=18000 timeout_minutes=350
+  shards=["--point 28 728 unsat","--point 29 810 unsat",
+          "--ts 26 --only p+1","--ts 26 --only q+1"]
+A single checked UNSAT at a t=28/29 point is a genuinely-new pdw value.
+Open question if 5h still isn't enough: cube-and-conquer (march_cu is
+already built in tools/CnC) rather than a single monolithic solve.
+
 ## Methodology lessons (the running theme)
 
 - Search strategy > search effort: symmetry restriction collapsed 2^1176 to
@@ -525,7 +608,14 @@ the record prime. Run it with:
   python3 code/vdw_reach.py --hours 8               # overnight reach+hunt
   python3 code/vdw_reach.py --near 3e10 --workers 4 # cap the pool width
 
-Next actions if resuming: (1) actually run a long reach/hunt scan to try
-for a bigger frontier prime or a max-run<=17 prime (would beat W(3,17/18));
-(2) the Monroe-format write-up + outreach email (see outreach package
-above); (3) if throughput still matters, the C/Rust port (see open moves).
+CURRENT active work is PHASE 3 (exact values via SAT) — see "Phase-3
+results" above. The lower-bound reach work below is essentially done.
+
+Next actions if resuming (phase 3 first): (1) check the GitHub Actions
+runs (sat_pipeline.yml) — validate 26/27 and attack 28/29; if a t=28/29
+UNSAT lands with a checked proof that's a genuinely-new pdw value;
+(2) extend the calibration curve toward w(2;3,20) proper (non-palindromic
+diagonal cell, the confirm-Kouril target); (3) Monroe/AKS-format write-up
+of any new exact value. Older lower-bound options: run a long reach/hunt
+scan for a max-run<=17 prime (would beat W(3,17/18)); Monroe-format
+write-up + outreach for the W(3,19..25) records.
