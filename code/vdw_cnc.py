@@ -81,36 +81,48 @@ def do_split(t, N, cnf_path, cubes_path, march_opts):
             "march_opts": march_opts, "split_seconds": split_time}
 
 
-def read_cnf_clauses(cnf_path):
-    """DIMACS clause lines (drop comments and the p-line); returned as-is so
-    they can be spliced under a 'p inccnf' header."""
+def read_cnf(cnf_path):
+    """Return (nvars, clause_lines). clause_lines drop comments and the
+    p-line so they can be spliced under a 'p inccnf' header or a fresh
+    'p cnf' header (for re-splitting a hard cube)."""
+    nvars = 0
     out = []
     for ln in open(cnf_path):
-        if ln.startswith("c") or ln.startswith("p "):
+        if ln.startswith("c"):
+            continue
+        if ln.startswith("p "):
+            parts = ln.split()
+            if len(parts) >= 3:
+                nvars = int(parts[2])
             continue
         if ln.strip():
             out.append(ln if ln.endswith("\n") else ln + "\n")
-    return out
+    return nvars, out
 
 
-def read_cubes(cubes_path):
-    return [ln if ln.endswith("\n") else ln + "\n"
-            for ln in open(cubes_path) if ln.startswith("a ")]
+def read_cube_lits(cubes_path):
+    """Each march_cu cube line 'a l1 l2 ... 0' -> [l1, l2, ...]."""
+    cubes = []
+    for ln in open(cubes_path):
+        if not ln.startswith("a "):
+            continue
+        cubes.append([int(x) for x in ln.split()[1:] if x != "0"])
+    return cubes
 
 
-def solve_one_cube(clause_lines, cube_line, cap, workdir, gidx, certified):
-    """Solve CNF-under-one-cube as a single-cube inccnf with iglucose.
-    Returns (status, seconds, model_or_None). status in
+def solve_lits(clause_lines, cube_lits, cap, workdir, tag, certified):
+    """Solve (CNF and the cube's literals) as a single-cube inccnf with
+    iglucose. Returns (status, seconds, model_or_None); status in
     SAT / UNSAT / TIMEOUT / ERR(...)."""
-    icnf = os.path.join(workdir, f"cube{gidx}.icnf")
+    icnf = os.path.join(workdir, f"{tag}.icnf")
     with open(icnf, "w") as f:
         f.write("p inccnf\n")
         f.writelines(clause_lines)
-        f.write(cube_line)
+        f.write("a " + " ".join(str(l) for l in cube_lits) + " 0\n")
     cmd = [IGLUCOSE, icnf, "-verb=0"]
     if certified:
         cmd += ["-certified",
-                f"-certified-output={os.path.join(workdir, f'cube{gidx}.drat')}"]
+                f"-certified-output={os.path.join(workdir, tag + '.drat')}"]
     t0 = time.time()
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=cap)
@@ -134,31 +146,98 @@ def solve_one_cube(clause_lines, cube_line, cap, workdir, gidx, certified):
     return f"ERR(rc={proc.returncode})", el, None
 
 
-def conquer_slice(meta, clause_lines, cubes, shard, nshards, cap, outdir,
-                  certified):
-    """Solve this shard's round-robin slice (cube i goes to shard i%nshards),
-    one cube at a time. First SAT wins (formula SAT); otherwise every cube
-    must be UNSAT for the slice to be decisive. TIMEOUTs are recorded by
-    global cube index so exactly those can be re-dispatched."""
+def split_residual(nvars, clause_lines, cube_lits, workdir, tag, march_opts):
+    """Re-split a hard cube: build the residual CNF (base clauses + the
+    cube's literals as unit clauses), run march_cu on it, and return the
+    sub-cubes (each a literal list, relative to the residual). Empty list
+    means march_cu did not produce a finer split (already refuted, or it
+    bottomed out)."""
+    cnf = os.path.join(workdir, f"{tag}_res.cnf")
+    with open(cnf, "w") as f:
+        f.write(f"p cnf {nvars} {len(clause_lines) + len(cube_lits)}\n")
+        f.writelines(clause_lines)
+        for l in cube_lits:
+            f.write(f"{l} 0\n")
+    subs_path = os.path.join(workdir, f"{tag}_res.cubes")
+    try:
+        subprocess.run([MARCH, cnf, "-o", subs_path] + march_opts.split(),
+                       capture_output=True, text=True)
+        subs = read_cube_lits(subs_path) if os.path.exists(subs_path) else []
+    finally:
+        for p in (cnf, subs_path):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+    return subs
+
+
+def conquer_cube(nvars, clause_lines, cube_lits, cap, workdir, tag,
+                 resplit_opts, max_depth, depth, certified, records):
+    """Solve one cube; if it TIMEOUTs and we have re-split budget left,
+    re-split it deeper with march_cu and recurse on the sub-cubes (adaptive
+    cube-and-conquer -- the hard tail is exactly a few stubborn cubes, and
+    splitting them again usually makes each piece easy). Returns
+    (verdict, model_or_None): SAT (with model) short-circuits; UNSAT means
+    every descendant refuted; UNRESOLVED means a leaf still timed out at
+    max depth."""
+    status, secs, model = solve_lits(clause_lines, cube_lits, cap, workdir,
+                                     tag, certified)
+    records.append({"tag": tag, "depth": depth, "nlits": len(cube_lits),
+                    "status": status, "seconds": secs})
+    print(f"    cube {tag} (depth {depth}, {len(cube_lits)} lits): "
+          f"{status} in {secs:.2f}s", flush=True)
+    if status == "SAT":
+        return "SAT", model
+    if status == "UNSAT":
+        return "UNSAT", None
+    # TIMEOUT (or solver error): try to re-split if we still can.
+    if depth >= max_depth:
+        return "UNRESOLVED", None
+    subs = split_residual(nvars, clause_lines, cube_lits, workdir, tag,
+                          resplit_opts)
+    if not subs:
+        return "UNRESOLVED", None
+    print(f"    cube {tag} TIMEOUT -> re-split into {len(subs)} sub-cubes "
+          f"(depth {depth + 1})", flush=True)
+    any_unresolved = False
+    for j, sub in enumerate(subs):
+        verdict, m = conquer_cube(nvars, clause_lines, cube_lits + sub, cap,
+                                  workdir, f"{tag}.{j}", resplit_opts,
+                                  max_depth, depth + 1, certified, records)
+        if verdict == "SAT":
+            return "SAT", m
+        if verdict == "UNRESOLVED":
+            any_unresolved = True
+    return ("UNRESOLVED" if any_unresolved else "UNSAT"), None
+
+
+def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
+                  outdir, certified, resplit_opts, max_resplit_depth):
+    """Solve this shard's round-robin slice (cube i goes to shard i%nshards).
+    First SAT wins (formula SAT); otherwise every cube must refute for the
+    slice to be decisive. Hard cubes are re-split up to max_resplit_depth
+    before being given up as UNRESOLVED (recorded by global cube index so
+    exactly those can be re-dispatched)."""
     t, N = meta["t"], meta["N"]
     workdir = os.path.join(outdir, f"cnc_t{t}_N{N}_shard{shard}")
     os.makedirs(workdir, exist_ok=True)
     mine = [(i, c) for i, c in enumerate(cubes) if i % nshards == shard]
     print(f"  shard {shard}/{nshards}: {len(mine)} of {len(cubes)} cubes, "
-          f"per-cube cap {cap}s", flush=True)
+          f"per-cube cap {cap}s, re-split depth {max_resplit_depth}",
+          flush=True)
 
-    per_cube = []
+    records = []
     n_unsat = 0
     unresolved = []
     sat_gidx = None
     witness = None
     t0 = time.time()
-    for gidx, cube in mine:
-        status, secs, model = solve_one_cube(clause_lines, cube, cap, workdir,
-                                              gidx, certified)
-        per_cube.append({"cube": gidx, "status": status, "seconds": secs})
-        print(f"    cube {gidx}: {status} in {secs:.2f}s", flush=True)
-        if status == "SAT":
+    for gidx, cube_lits in mine:
+        verdict, model = conquer_cube(nvars, clause_lines, cube_lits, cap,
+                                      workdir, str(gidx), resplit_opts,
+                                      max_resplit_depth, 0, certified, records)
+        if verdict == "SAT":
             colors = decode_palindromic(model, N, 2)
             bad = independent_ap_check(colors, [3, t], N)
             witness = {"cube": gidx, "witness_ok": bad is None,
@@ -168,7 +247,7 @@ def conquer_slice(meta, clause_lines, cubes, shard, nshards, cap, outdir,
                   f"witness_ok={witness['witness_ok']} "
                   f"palindrome={witness['is_palindrome']}", flush=True)
             break
-        if status == "UNSAT":
+        if verdict == "UNSAT":
             n_unsat += 1
         else:
             unresolved.append(gidx)
@@ -180,10 +259,12 @@ def conquer_slice(meta, clause_lines, cubes, shard, nshards, cap, outdir,
     else:
         status = "UNSAT"
     return {"t": t, "N": N, "shard": shard, "nshards": nshards,
-            "cap_seconds": cap, "n_cubes_in_slice": len(mine),
-            "n_unsat": n_unsat, "unresolved_cubes": unresolved,
-            "sat_cube": sat_gidx, "witness": witness, "status": status,
-            "slice_seconds": time.time() - t0, "per_cube": per_cube}
+            "cap_seconds": cap, "max_resplit_depth": max_resplit_depth,
+            "n_cubes_in_slice": len(mine), "n_unsat": n_unsat,
+            "unresolved_cubes": unresolved, "sat_cube": sat_gidx,
+            "witness": witness, "status": status,
+            "slice_seconds": time.time() - t0,
+            "n_solves": len(records), "per_solve": records}
 
 
 def aggregate(shard_results):
@@ -228,6 +309,15 @@ def main():
     ap.add_argument("--certified", action="store_true",
                      help="have each cube emit its DRAT proof (for later "
                           "stitching into one combined certificate)")
+    ap.add_argument("--max-resplit-depth", type=int, default=0,
+                     help="adaptive cube-and-conquer: when a cube times out, "
+                          "re-split it with march_cu and recurse, up to this "
+                          "many levels (default 0 = never re-split, just "
+                          "report the cube unresolved). 2-3 usually clears the "
+                          "hard tail near the frontier.")
+    ap.add_argument("--resplit-march-opts", default="-d 6",
+                     help="march_cu options for re-splitting a hard cube "
+                          "(default '-d 6' -- a modest extra split per level)")
     ap.add_argument("--results-dir", default=None,
                      help="aggregate: directory of per-shard conquer JSONs")
     ap.add_argument("--json-out", default=None)
@@ -270,11 +360,12 @@ def main():
 
     if args.mode == "conquer":
         meta = {"t": args.t, "N": args.N}
-        clause_lines = read_cnf_clauses(args.cnf)
-        cubes = read_cubes(args.cubes)
-        res = conquer_slice(meta, clause_lines, cubes, args.shard,
+        nvars, clause_lines = read_cnf(args.cnf)
+        cubes = read_cube_lits(args.cubes)
+        res = conquer_slice(meta, nvars, clause_lines, cubes, args.shard,
                             args.nshards, args.cap_seconds, args.outdir,
-                            args.certified)
+                            args.certified, args.resplit_march_opts,
+                            args.max_resplit_depth)
         print(f"\n  shard {args.shard} verdict: {res['status']} "
               f"({res['n_unsat']} UNSAT, {len(res['unresolved_cubes'])} "
               f"unresolved) in {res['slice_seconds']:.1f}s", flush=True)
@@ -286,13 +377,15 @@ def main():
     cnf = os.path.join(args.outdir, f"cnc_t{args.t}_N{args.N}.cnf")
     cubes = os.path.join(args.outdir, f"cnc_t{args.t}_N{args.N}.cubes")
     meta = do_split(args.t, args.N, cnf, cubes, args.march_opts)
-    clause_lines = read_cnf_clauses(cnf)
-    cube_lines = read_cubes(cubes)
+    nvars, clause_lines = read_cnf(cnf)
+    cube_lits = read_cube_lits(cubes)
     shard_results = []
     for s in range(args.nshards):
         shard_results.append(
-            conquer_slice(meta, clause_lines, cube_lines, s, args.nshards,
-                          args.cap_seconds, args.outdir, args.certified))
+            conquer_slice(meta, nvars, clause_lines, cube_lits, s,
+                          args.nshards, args.cap_seconds, args.outdir,
+                          args.certified, args.resplit_march_opts,
+                          args.max_resplit_depth))
     agg = aggregate(shard_results)
     print(f"\n=== pdw(2;3,{args.t}) N={args.N}: {agg['verdict']} "
           f"({agg['total_cubes_solved']}/{meta['ncubes']} cubes decided) ===",

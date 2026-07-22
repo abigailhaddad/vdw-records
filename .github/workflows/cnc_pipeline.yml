@@ -39,6 +39,12 @@ on:
       cap_seconds:
         description: "per-CUBE solver timeout in seconds (a cube should be easy)"
         default: "1800"
+      max_resplit_depth:
+        description: "adaptive: re-split a timed-out cube this many levels before giving up (0=off)"
+        default: "2"
+      resplit_march_opts:
+        description: "march_cu options for re-splitting a hard cube"
+        default: "-d 6"
       timeout_minutes:
         description: "per-shard job timeout (<=360 on standard public runners)"
         default: "350"
@@ -153,6 +159,8 @@ jobs:
             --cubes cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cubes \
             --shard ${{ matrix.shard }} --nshards ${{ inputs.nshards }} \
             --cap-seconds ${{ inputs.cap_seconds }} $certflag \
+            --max-resplit-depth ${{ inputs.max_resplit_depth }} \
+            --resplit-march-opts "${{ inputs.resplit_march_opts }}" \
             --outdir cnc_out --json-out cnc_out/shard-${{ matrix.shard }}.json \
             | tee cnc_out/shard-${{ matrix.shard }}.log
       # always(): a shard that hits the job wall still uploads its log (each
