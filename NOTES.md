@@ -54,11 +54,33 @@ swap); (c) k=6 with solve-time SB, same cubes as baseline: 200/200 timeout
 @5s, 6/6 @1800s incl. bake-off cube 331. Floor stays >=2048 core-hours,
 cert projects to tens of TB. The feasible prestige artifact is instead
 **W(5,2)=178 in Lean via LRAT-Catcher** (artifact verified real: no-Mathlib,
-builds in ~25s, its own flagship upper bounds NOT shipped — field is open;
-dress rehearsal running: PHP(4,3) contract rehearsal -> 3627 CaDiCaL LRATs ->
-cover cert -> composed Lean theorem). Remaining mile after the rehearsal: a
-verified encoding lemma (CNF <-> vdW statement) — Fable to review
-LRAT-Catcher's Schur/Ramsey encodings as the template.
+builds in ~25s, its own flagship upper bounds NOT shipped — field is open).
+
+**W(5,2) LEAN DRESS REHEARSAL: SUCCEEDED (2026-07-22 night, sonnet agent).**
+`LRATCatcher.Generated.W52b.base_unsat : base.Unsat` is built and checked,
+where base = parseDimacs of OUR W(5,2) N=178 CNF (178 vars, 7744 clauses).
+Axioms: propext/Classical.choice/Quot.sound + 74 native_decide (73 chunks +
+cover). Full recipe, ~20 min end to end, all regenerable from committed code:
+(1) `vdw_cnc.py split --lengths 5,5 --N 178 --march-opts "-d 12"` -> 3627
+cubes (iCNF a-lines, LRAT-Catcher-native); (2) `lake exe lratcatch-export
+base.cnf cubes.icnf leaves/` -> leaf CNFs (cube units PREPENDED to base) +
+negcubes.cnf; (3) `cadical --lrat --no-binary --no-factor` per leaf (xargs
+-P8, 23s wall, ~1.0 GB total LRAT, largest leaf 1.4 MB) + same on
+negcubes.cnf -> cover.lrat; (4) `lake exe lratcatch-cover-parallel base.cnf
+cubes.icnf leaves/leaf cover.lrat W52b 50` -> 73 chunk modules + build.sh;
+(5) whole build <15 min. TWO UPSTREAM BUGS found (report to Szeider):
+(a) generated Base.lean lacks `set_option maxRecDepth 1000000` (Main.lean
+has it; 3627-term append chain blows default depth) — one-line patch to the
+GENERATED file; (b) chunkSize=1 (the tool's recommended default) is
+infeasible at ~3600 cubes on a 16 GB host — Main's kernel-side composition
+term ran 46+ min at >1.4 GB RSS and swapped the disk to 0 bytes free before
+being killed; chunkSize=50 is the practical setting. Artifacts live in the
+session scratchpad (disposable by design — the recipe above is the record).
+REMAINING MILE to a claimable "W(5,2)=178 in Lean": (i) verified encoding
+lemma (base.Unsat <-> no good 2-coloring of [1,178]) — LRAT-Catcher's
+Schur/Ramsey encodings (schurNumber pattern, S3 theorem) are the template,
+Fable to review/spec; (ii) N=177 lower-bound witness via native_decide
+(their schur4_lower pattern); (iii) compose into vdwNumber 2 5 = 178.
 
 **Next actions:**
 1. Fire the tuned t=26 DECISION above. If UNSAT, CERTIFY it with a single
