@@ -1,0 +1,47 @@
+name: vdw-regression
+
+# Correctness tripwire: recompute small, known AKS Table-6 palindromic
+# values (code/test_known_values.py) both directions from scratch and fail
+# if any stops certifying. Runs on changes to the SAT code so an encoder or
+# toolchain regression is caught here -- on a cheap, known instance -- long
+# before it can manufacture a wrong "new value" in a frontier run.
+
+on:
+  push:
+    paths:
+      - "code/vdw_sat.py"
+      - "code/vdw_sat_validate.py"
+      - "code/vdw_pdw_validate.py"
+      - "code/vdw_cnc.py"
+      - "code/test_known_values.py"
+      - ".github/workflows/regression.yml"
+  workflow_dispatch:
+    inputs:
+      ts:
+        description: "space-separated t values to check"
+        default: "3 4 5 6 7 8 10 12"
+
+jobs:
+  known-values:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: build solvers (kissat + cadical + drat-trim)
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y build-essential git
+          git clone --depth 1 https://github.com/arminbiere/kissat.git /tmp/kissat
+          ( cd /tmp/kissat && ./configure && make -j"$(nproc)" )
+          git clone --depth 1 https://github.com/arminbiere/cadical.git /tmp/cadical
+          ( cd /tmp/cadical && ./configure && make -j"$(nproc)" )
+          git clone --depth 1 https://github.com/marijnheule/drat-trim.git /tmp/drat-trim
+          ( cd /tmp/drat-trim && make )
+          mkdir -p bin tools/drat-trim
+          cp /tmp/kissat/build/kissat /tmp/cadical/build/cadical bin/
+          cp /tmp/drat-trim/drat-trim /tmp/drat-trim/lrat-check tools/drat-trim/
+          chmod +x bin/* tools/drat-trim/*
+      - name: recompute known values
+        run: |
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+          export PATH="$PWD/bin:$PATH"
+          python3 code/test_known_values.py --ts ${{ github.event.inputs.ts || '3 4 5 6 7 8 10 12' }}
