@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "t": 21,
+      "p": 400,
+      "q": 405,
+      "p_minus_1": null,
+      "q_minus_1": null,
+      "p_plus_1": {
+        "N": 401,
+        "expect": "UNSAT",
+        "nvars": 201,
+        "nclauses": 21976,
+        "engine": "kissat+DRAT",
+        "status": "UNSAT",
+        "time": 126.54704976081848,
+        "match": true,
+        "proof_size_bytes": 255177357,
+        "proof_checked": true,
+        "proof_check_time": 287.02745270729065
+      },
+      "q_plus_1": null,
+      "certified": null,
+      "comparison": null
+    }
+  ],
+  "total_wall_seconds": 413.7215766906738
+}
