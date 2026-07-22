@@ -56,7 +56,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vdw_sat import (encode, encode_palindromic, write_dimacs,  # noqa: E402
-                     decode, decode_palindromic)
+                     decode, decode_palindromic, symmetry_break_clauses)
 from vdw_sat_validate import independent_ap_check, TIME_CAP  # noqa: E402
 from vdw_pdw_validate import AKS_TABLE_6  # noqa: E402
 try:
@@ -126,16 +126,24 @@ def instance_slug(lengths, encoding, N, symmetry_break=False):
     build by hand from --t/--N depends on that exact string, and back-compat
     (acceptance test (c), the t=20 regression) requires it survive untouched.
     Full mode is new territory, so it gets a fresh, self-describing scheme,
-    e.g. lengths=[6,6] N=1132 -> "w6_6_N1132". symmetry_break=True appends
-    "_sb" (e.g. "w6_6_N1132_sb") so SB and non-SB artifacts of the SAME
-    instance can never collide on disk (PLAN_sb_probe.md SB-2) -- in
-    practice this only ever fires in full mode (palindromic + SB is refused
-    upstream), but the suffix is applied uniformly here for robustness."""
+    e.g. lengths=[6,6] N=1132 -> "w6_6_N1132".
+
+    symmetry_break is now a TRI-STATE (PLAN_sb_probe.md SB-4): False (off),
+    "split" (SB-1/SB-2: baked into the CNF march_cu splits on -- the slower
+    measurement variant kept behind --sb-in-split), or "conquer" (SB-4
+    default: split stays PLAIN, SB added only at solve time). "split" keeps
+    the original "_sb" suffix (e.g. "w6_6_N1132_sb") for byte-for-byte
+    continuity with already-committed SB-2 artifacts/tests; "conquer" gets
+    its own "_sbc" suffix, so all three variants of the SAME instance
+    (none/split/conquer) can never collide on disk. In practice this only
+    ever fires in full mode (palindromic + SB is refused upstream), but the
+    suffix logic is applied uniformly here for robustness."""
     if encoding == "palindromic":
         base = f"t{lengths[1]}_N{N}"
     else:
         base = "w" + "_".join(str(x) for x in lengths) + f"_N{N}"
-    return base + ("_sb" if symmetry_break else "")
+    suffix = {"split": "_sb", "conquer": "_sbc"}.get(symmetry_break, "")
+    return base + suffix
 
 
 def check_witness(model, N, lengths, encoding):
@@ -203,8 +211,13 @@ def check_sb_allowed(lengths, encoding, symmetry_break):
       - mixed r=2 (t1 != t2) has no color-swap symmetry to begin with (see
         vdw_sat.encode's own guard) -- refused here too, before any CNF work
         is spent, for a clearer error at the CLI layer.
-    A no-op when symmetry_break is False, so every existing call site is
-    unaffected."""
+    symmetry_break is a TRI-STATE (SB-4): False (off), "split" (SB clauses
+    baked into what march_cu sees), or "conquer" (SB added only at solve
+    time). Both non-False variants are subject to the SAME two restrictions
+    above -- this function only cares whether SB is active at all (Python
+    falsiness: False is falsy, "split"/"conquer" are truthy strings), not
+    WHERE it gets applied. A no-op when symmetry_break is False, so every
+    existing call site is unaffected."""
     if not symmetry_break:
         return
     if encoding != "full":
@@ -220,16 +233,67 @@ def check_sb_allowed(lengths, encoding, symmetry_break):
             "when t1 != t2 (PLAN_sb_probe.md scope guard)")
 
 
+def sb_augment_clause_lines(clause_lines, nvars, symmetry_break):
+    """SB-4 (PLAN_sb_probe.md): the one place a PLAIN clause set (the exact
+    clauses march_cu split on, `nvars` position variables) turns into
+    base+SB -- and ONLY for the SOLVER (iglucose), never for march_cu.
+
+    symmetry_break == "conquer": append
+    vdw_sat.symmetry_break_clauses(nvars, nvars + 1) as DIMACS text lines.
+    aux vars start at nvars + 1 -- EXACTLY the numbering
+    vdw_sat.encode(..., symmetry_break=True) uses internally when it builds
+    the SAME base clauses itself (nvars is set to N *before* that call, so
+    its aux_start is also N+1 -- see encode()'s r==2 branch). This identity
+    was checked directly (not just argued) before this function was wired
+    in: encode(lengths, N, symmetry_break=True)'s clause list is exactly
+    encode(lengths, N, symmetry_break=False)'s clauses followed by
+    symmetry_break_clauses(N, N+1)'s clauses, same aux ids throughout --
+    see the SB-4 report for the check. That identity is why "split" mode
+    (SB baked into the split CNF) and "conquer" mode (SB appended here, at
+    solve time, to a plain-split CNF) end up solving literally the same
+    base+SB formula -- they only differ in what march_cu sees.
+
+    Anything other than "conquer" (False, "split", or a palindromic
+    instance where SB never applies) is a no-op: returns clause_lines
+    unchanged and augmented_nvars=None, since "split" mode's clause_lines
+    already has SB baked in by do_split, and False means no SB at all.
+    Callers use augmented_nvars is not None as the "did augmentation
+    happen" signal."""
+    if symmetry_break != "conquer":
+        return clause_lines, None
+    sb_clauses, n_aux, _ = symmetry_break_clauses(nvars, nvars + 1)
+    lines = clause_lines + [" ".join(str(l) for l in cl) + " 0\n"
+                            for cl in sb_clauses]
+    return lines, nvars + n_aux
+
+
 def do_split(lengths, encoding, N, cnf_path, cubes_path, march_opts,
             symmetry_break=False):
     """Encode the instance (lengths, encoding) at length N (expect the
     caller is probing UNSAT) and split it into cubes with march_cu.
-    encoding=="palindromic" -> encode_palindromic (pdw tool ONLY);
-    encoding=="full" -> encode, optionally with the lex-leader
-    symmetry-breaking layer (symmetry_break=True; r=2 diagonal only -- see
-    check_sb_allowed / vdw_sat.encode). DECISION-only: the SB clauses are
-    never RAT-justified anywhere in this pipeline, so a split with
-    symmetry_break=True must never feed `prove` (enforced at the CLI layer).
+    encoding=="palindromic" -> encode_palindromic (pdw tool ONLY, SB never
+    applies -- check_sb_allowed refuses it upstream); encoding=="full" ->
+    encode(), where symmetry_break picks what march_cu actually SEES:
+      - False:      plain base clauses only (no SB anywhere).
+      - "split":    base + SB clauses baked in together (SB-1/SB-2's
+                    original behavior, kept behind --sb-in-split as the
+                    slower measurement variant) -- march_cu branches on aux
+                    variables, and the CNF written to cnf_path already has
+                    everything iglucose needs.
+      - "conquer":  base clauses ONLY -- identical in every respect to the
+                    False case (march_cu NEVER sees an aux variable, so
+                    cube count/structure exactly match the no-SB baseline).
+                    SB is added later, only when a cube is actually solved,
+                    by sb_augment_clause_lines() inside conquer_slice /
+                    do_pilot -- see that function and PLAN_sb_probe.md SB-4
+                    for the soundness argument (base ∧ SB ∧ cube_i UNSAT for
+                    every i => base ∧ SB UNSAT => original UNSAT via
+                    SAT-equivalence; a per-cube UNSAT flip that wouldn't
+                    happen under base ∧ cube_i alone is EXPECTED and fine,
+                    only the global verdict matters).
+    DECISION-only either way: the SB clauses are never RAT-justified
+    anywhere in this pipeline, so symmetry_break truthy must never feed
+    `prove` (enforced at the CLI layer, both variants).
 
     march_cu can also DECIDE the instance during look-ahead instead of
     emitting cubes -- it exits 10 (SATISFIABLE) or 20 (UNSATISFIABLE), like
@@ -237,17 +301,25 @@ def do_split(lengths, encoding, N, cnf_path, cubes_path, march_opts,
     ("SAT"/"UNSAT", else None) with ncubes 0. Callers MUST honour it: a
     0-cube split fed to conquer would otherwise be read as a vacuous UNSAT
     (no cubes to refute), which for a rc=10 SAT short-circuit is dead wrong.
-    Note: march_cu branches on whatever variables are in the CNF, aux SB
-    variables included -- it has no notion of "position" vs "auxiliary"."""
+    Note: in "split" mode march_cu branches on whatever variables are in the
+    CNF, aux SB variables included -- it has no notion of "position" vs
+    "auxiliary". In "conquer" mode (and False) it never sees an aux
+    variable at all, by construction."""
     check_sb_allowed(lengths, encoding, symmetry_break)
     if encoding == "palindromic":
         clauses, nvars = encode_palindromic(lengths, N)
+    elif symmetry_break == "split":
+        clauses, nvars = encode(lengths, N, symmetry_break=True)
     else:
-        clauses, nvars = encode(lengths, N, symmetry_break=symmetry_break)
+        # False or "conquer" -> the split step is identical: PLAIN clauses
+        # only. "conquer" mode's SB layer is added later, at solve time.
+        clauses, nvars = encode(lengths, N, symmetry_break=False)
     label = instance_label(lengths, encoding, N)
+    sb_tag = {"split": " +sb(split)",
+             "conquer": " +sb(conquer, added at solve time)"
+             }.get(symmetry_break, "")
     write_dimacs(clauses, nvars, cnf_path,
-                 comment=f"{label} {encoding} (cube-and-conquer)"
-                 + (" +sb" if symmetry_break else ""))
+                 comment=f"{label} {encoding} (cube-and-conquer){sb_tag}")
     cmd = [MARCH, cnf_path, "-o", cubes_path] + march_opts.split()
     print(f"  split: {' '.join(cmd)}", flush=True)
     t0 = time.time()
@@ -418,17 +490,34 @@ def split_residual(nvars, clause_lines, cube_lits, workdir, tag, march_opts):
     return subs
 
 
-def conquer_cube(nvars, clause_lines, cube_lits, cap, workdir, tag,
-                 resplit_opts, max_depth, depth, certified, records):
+def conquer_cube(nvars, clause_lines, solve_clause_lines, cube_lits, cap,
+                 workdir, tag, resplit_opts, max_depth, depth, certified,
+                 records):
     """Solve one cube; if it TIMEOUTs and we have re-split budget left,
     re-split it deeper with march_cu and recurse on the sub-cubes (adaptive
     cube-and-conquer -- the hard tail is exactly a few stubborn cubes, and
     splitting them again usually makes each piece easy). Returns
     (verdict, model_or_None): SAT (with model) short-circuits; UNSAT means
     every descendant refuted; UNRESOLVED means a leaf still timed out at
-    max depth."""
-    status, secs, model = solve_lits(clause_lines, cube_lits, cap, workdir,
-                                     tag, certified)
+    max depth.
+
+    SB-4 (PLAN_sb_probe.md): `clause_lines`/`nvars` (PLAIN) and
+    `solve_clause_lines` (PLAIN, or PLAIN+SB in "conquer" mode -- see
+    sb_augment_clause_lines) are deliberately two separate arguments and
+    must stay that way through the recursion:
+      - solve_lits (the actual iglucose call) always uses
+        solve_clause_lines -- that's the formula being decided.
+      - split_residual (re-splitting a timed-out cube with march_cu) always
+        uses the PLAIN (nvars, clause_lines) pair, NEVER solve_clause_lines
+        -- march_cu must never see an aux variable, even on a recursive
+        re-split, or cube count/structure would stop matching the no-SB
+        baseline exactly (the whole point of SB-4). solve_clause_lines is
+        instance-constant (doesn't depend on cube_lits/depth), so it is
+        passed through the recursion unchanged -- the SB clauses "rejoin"
+        automatically the moment a (possibly re-split) child cube is
+        actually solved."""
+    status, secs, model = solve_lits(solve_clause_lines, cube_lits, cap,
+                                     workdir, tag, certified)
     records.append({"tag": tag, "depth": depth, "nlits": len(cube_lits),
                     "status": status, "seconds": secs})
     print(f"    cube {tag} (depth {depth}, {len(cube_lits)} lits): "
@@ -448,9 +537,10 @@ def conquer_cube(nvars, clause_lines, cube_lits, cap, workdir, tag,
           f"(depth {depth + 1})", flush=True)
     any_unresolved = False
     for j, sub in enumerate(subs):
-        verdict, m = conquer_cube(nvars, clause_lines, cube_lits + sub, cap,
-                                  workdir, f"{tag}.{j}", resplit_opts,
-                                  max_depth, depth + 1, certified, records)
+        verdict, m = conquer_cube(nvars, clause_lines, solve_clause_lines,
+                                  cube_lits + sub, cap, workdir,
+                                  f"{tag}.{j}", resplit_opts, max_depth,
+                                  depth + 1, certified, records)
         if verdict == "SAT":
             return "SAT", m
         if verdict == "UNRESOLVED":
@@ -473,6 +563,14 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     slug = instance_slug(lengths, encoding, N, symmetry_break)
     workdir = os.path.join(outdir, f"cnc_{slug}_shard{shard}")
     os.makedirs(workdir, exist_ok=True)
+    # SB-4: `clause_lines`/`nvars` stay PLAIN throughout (that's what
+    # march_cu split on, and what split_residual must keep re-splitting
+    # against); solve_clause_lines is what iglucose actually solves --
+    # base+SB in "conquer" mode, else identical to clause_lines. See
+    # sb_augment_clause_lines and conquer_cube's docstring.
+    solve_clause_lines, aug_nvars = sb_augment_clause_lines(
+        clause_lines, nvars, symmetry_break)
+    n_solve_aux_vars = (aug_nvars - nvars) if aug_nvars is not None else 0
     if cube_indices is not None:
         members, mode = list(cube_indices), "explicit"
     else:
@@ -518,9 +616,10 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
         record it, and return True if SAT (the shard short-circuits)."""
         nonlocal n_unsat, sat_gidx, witness
         c0 = time.time()
-        verdict, model = conquer_cube(nvars, clause_lines, cube_lits, cap,
-                                      workdir, str(gidx), resplit_opts,
-                                      max_resplit_depth, 0, certified, records)
+        verdict, model = conquer_cube(nvars, clause_lines, solve_clause_lines,
+                                      cube_lits, cap, workdir, str(gidx),
+                                      resplit_opts, max_resplit_depth, 0,
+                                      certified, records)
         record(gidx, verdict, time.time() - c0)
         if verdict == "SAT":
             wit = check_witness(model, N, lengths, encoding)
@@ -548,7 +647,7 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
                 break
             continue
         wall = min(len(batch) * cap, BATCH_WALL_CAP_MAX)
-        status, secs, _ = solve_batch(clause_lines, [c for _, c in batch],
+        status, secs, _ = solve_batch(solve_clause_lines, [c for _, c in batch],
                                       wall, workdir, f"batch{start}")
         if status == "UNSAT":
             # sound: batch UNSAT => every cube in the batch is UNSAT (see
@@ -581,6 +680,7 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     return {"lengths": lengths, "encoding": encoding,
             "t": (lengths[1] if encoding == "palindromic" else None),
             "N": N, "symmetry_break": symmetry_break,
+            "n_solve_aux_vars": n_solve_aux_vars,
             "shard": shard, "nshards": nshards, "mode": mode,
             "ncubes": len(cubes), "members": members,
             "cap_seconds": cap, "max_resplit_depth": max_resplit_depth,
@@ -667,11 +767,18 @@ def _pilot_solve_one(job):
     """Solve ONE sampled pilot cube in its own process (module-level so
     ProcessPoolExecutor can pickle it). Re-reads the CNF rather than having
     the parent pickle 10^5 clause lines to every worker (the file read is
-    <1s; pickling the clause list to K workers is not). Returns
+    <1s; pickling the clause list to K workers is not). SB-4: in "conquer"
+    mode the on-disk CNF is PLAIN (see do_split), so each worker also
+    re-derives the base+SB clause set via sb_augment_clause_lines (cheap --
+    a few thousand short clauses even at k=6 scale) rather than trying to
+    ship it across the process boundary; nvars comes straight off the file,
+    so no separate N needs to be threaded into the job tuple. Returns
     (gidx, status, secs)."""
-    cnf_path, gidx, cube_lits, cap, workdir = job
-    _, clause_lines = read_cnf(cnf_path)
-    status, secs, _ = solve_lits(clause_lines, cube_lits, cap, workdir,
+    cnf_path, gidx, cube_lits, cap, workdir, symmetry_break = job
+    nvars, clause_lines = read_cnf(cnf_path)
+    solve_clause_lines, _ = sb_augment_clause_lines(clause_lines, nvars,
+                                                     symmetry_break)
+    status, secs, _ = solve_lits(solve_clause_lines, cube_lits, cap, workdir,
                                  f"pilot{gidx}", False)
     return gidx, status, secs
 
@@ -697,16 +804,23 @@ def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, lengths=None,
     the fan-out projection assumes -- one cube per core). Worst-case wall is
     ceil(k/workers)*cap. Measurement only; touches no verdict/soundness path.
 
-    symmetry_break is a LABEL ONLY here (pilot reads a pre-built --cnf/--cubes
-    pair -- whatever SB clauses are or aren't already baked into that CNF are
-    what actually gets solved; this flag is not re-validated against the file
-    and exists so pilot.json carries it per the scope guard's "every
-    artifact" rule and so a labeled instance is checked with check_sb_allowed
-    for a fast, clear error on an obviously wrong combination)."""
+    symmetry_break (SB-4, tri-state False/"split"/"conquer"): for "split"
+    mode this is still a LABEL ONLY (the on-disk --cnf already has SB baked
+    in, so whatever pilot reads off disk is already the right formula). For
+    "conquer" mode it is NOT just a label: do_split writes a PLAIN CNF for
+    "conquer" too (that's the whole point of SB-4 -- march_cu never sees an
+    aux var), so pilot must itself augment with sb_augment_clause_lines
+    before solving, or it would silently measure the WRONG (undercounted,
+    SB-free) per-cube cost. lengths is still only used for the
+    check_sb_allowed sanity check when given (pilot can run label-free with
+    lengths=None, in which case no augmentation-correctness check happens
+    beyond what sb_augment_clause_lines itself does from nvars)."""
     import random
     if lengths is not None:
         check_sb_allowed(lengths, encoding, symmetry_break)
     nvars, clause_lines = read_cnf(cnf_path)
+    solve_clause_lines, aug_nvars = sb_augment_clause_lines(
+        clause_lines, nvars, symmetry_break)
     cubes = read_cube_lits(cubes_path)
     ncubes = len(cubes)
     k = min(k, ncubes)
@@ -714,7 +828,9 @@ def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, lengths=None,
     workdir = os.path.join(outdir, "pilot")
     os.makedirs(workdir, exist_ok=True)
     print(f"  pilot: {k} of {ncubes} cubes, cap {cap}s, seed {seed}, "
-          f"workers {workers}", flush=True)
+          f"workers {workers}"
+          + (f", +{aug_nvars - nvars} SB aux vars added at solve time"
+             if aug_nvars is not None else ""), flush=True)
 
     results = {}
 
@@ -725,14 +841,15 @@ def do_pilot(cnf_path, cubes_path, outdir, k, cap, seed, lengths=None,
 
     if workers > 1:
         from concurrent.futures import ProcessPoolExecutor, as_completed
-        jobs = [(cnf_path, gidx, cubes[gidx], cap, workdir) for gidx in sample]
+        jobs = [(cnf_path, gidx, cubes[gidx], cap, workdir, symmetry_break)
+                for gidx in sample]
         with ProcessPoolExecutor(max_workers=workers) as ex:
             for f in as_completed([ex.submit(_pilot_solve_one, j)
                                    for j in jobs]):
                 note_one(*f.result())
     else:
         for gidx in sample:
-            status, secs, _ = solve_lits(clause_lines, cubes[gidx], cap,
+            status, secs, _ = solve_lits(solve_clause_lines, cubes[gidx], cap,
                                          workdir, f"pilot{gidx}", False)
             note_one(gidx, status, secs)
 
@@ -1048,13 +1165,19 @@ def merge_jsonl_verdicts(results_dir):
     invariant #2), so that disagreement is refused exactly like ncubes'.
     Older meta lines that predate this field (lengths/encoding absent) are
     treated as "no opinion" and don't trigger the check. Same treatment for
-    symmetry_break (PLAN_sb_probe.md scope guard): an SB shard and a non-SB
-    shard of the SAME instance are still two DIFFERENT formulas (one has
-    extra clauses), so merging them would silently mix results across
-    formulas -- refused like the others. When the merged verdict IS from an
-    SB run, "encoding" is reported as "full+sb" (never plain "full") so
-    nothing downstream (crosscheck_records.py, NOTES claims) can mistake it
-    for a result about the ORIGINAL formula."""
+    symmetry_break (PLAN_sb_probe.md scope guard) -- now a TRI-STATE
+    (False / "split" / "conquer", SB-4): an SB shard and a non-SB shard of
+    the SAME instance are still two DIFFERENT formulas (one has extra
+    clauses), and "split" vs "conquer" shards must never mix EITHER (same
+    base+SB formula, but if they were built by different do_split() calls
+    that took different code paths, mixing them is exactly the kind of
+    thing this guard exists to catch) -- any pairwise disagreement among
+    False/"split"/"conquer" is refused like the others. When the merged
+    verdict IS from an SB run (either variant), "encoding" is reported as
+    "full+sb" (never plain "full") so nothing downstream
+    (crosscheck_records.py, NOTES claims) can mistake it for a result about
+    the ORIGINAL formula; the "symmetry_break" field in the return value
+    keeps the split/conquer distinction (never coerced to a plain bool)."""
     ncubes = None
     lengths = None
     encoding = None
@@ -1100,7 +1223,8 @@ def merge_jsonl_verdicts(results_dir):
     encoding_out = ("full+sb" if (encoding == "full" and symmetry_break)
                     else encoding)
     return {"verdict": status, "lengths": lengths, "encoding": encoding_out,
-            "symmetry_break": bool(symmetry_break), "ncubes": ncubes,
+            "symmetry_break": (symmetry_break if symmetry_break is not None
+                               else False), "ncubes": ncubes,
             "n_cubes_refuted": len(unsat & set(range(ncubes))) if ncubes
             else len(unsat),
             "cubes_without_unsat": missing, "sat_cubes": sorted(sat)}
@@ -1138,11 +1262,13 @@ def aggregate(shard_results, expected_nshards):
     another's cubes. Shards that predate this field (lengths/encoding
     absent, e.g. hand-built dicts in older unit tests) are "no opinion" and
     don't trigger it. symmetry_break gets the same treatment (PLAN_sb_probe.md
-    scope guard) -- SB and non-SB shards are different formulas, never
-    combinable -- and when the resulting verdict IS from an SB run, this
-    function's returned "encoding" is "full+sb" (never plain "full"), so
-    an SB decision can never be misread downstream as a claim about the
-    ORIGINAL formula."""
+    scope guard) -- now a tri-state (False/"split"/"conquer", SB-4): any
+    pairwise disagreement (SB vs non-SB, or "split" vs "conquer") is
+    refused, never combinable -- and when the resulting verdict IS from an
+    SB run (either variant), this function's returned "encoding" is
+    "full+sb" (never plain "full"), so an SB decision can never be misread
+    downstream as a claim about the ORIGINAL formula. The returned
+    "symmetry_break" keeps the raw tri-state value (never coerced to bool)."""
     li = [r["lengths"] for r in shard_results if r.get("lengths") is not None]
     if len({tuple(x) for x in li}) > 1:
         raise ValueError(f"shard results disagree on lengths: {li}")
@@ -1227,13 +1353,31 @@ def main():
     ap.add_argument("--symmetry-break", action="store_true",
                      help="add the lex-leader symmetry-breaking layer "
                           "(color-swap + reflection + both) to the full r=2 "
-                          "DIAGONAL encoding -- split/pilot/local/solve only "
-                          "(lengths mode, t1==t2). DECISION-only: `prove` "
-                          "REFUSES this flag, since the SB clauses are never "
-                          "RAT-justified in any certificate this pipeline "
-                          "produces -- an SB UNSAT decision is NOT a "
-                          "machine-checked claim about the original formula. "
-                          "See PLAN_sb_probe.md scope guard.")
+                          "DIAGONAL encoding -- split/pilot/local/solve/"
+                          "conquer only (lengths mode, t1==t2). DEFAULT "
+                          "variant (SB-4) is 'conquer': march_cu splits the "
+                          "PLAIN formula (cube count/structure identical to "
+                          "the no-SB baseline) and SB is added only when a "
+                          "cube is actually solved. Pass --sb-in-split for "
+                          "the original, SLOWER variant (SB baked into what "
+                          "march_cu splits on -- measured to make cube "
+                          "solving noticeably harder per cube, see "
+                          "PLAN_sb_probe.md SB-4 report; kept only for "
+                          "comparison). DECISION-only either way: `prove` "
+                          "REFUSES this flag (both variants), since the SB "
+                          "clauses are never RAT-justified in any "
+                          "certificate this pipeline produces -- an SB "
+                          "UNSAT decision is NOT a machine-checked claim "
+                          "about the original formula. See PLAN_sb_probe.md "
+                          "scope guard.")
+    ap.add_argument("--sb-in-split", action="store_true",
+                     help="modifier for --symmetry-break: bake the SB "
+                          "clauses into the CNF march_cu splits on (the "
+                          "original SB-1/SB-2 behavior), instead of the "
+                          "SB-4 default of adding them only at solve time. "
+                          "Requires --symmetry-break. Measurement/"
+                          "comparison artifact -- the default ('conquer') "
+                          "variant is the one to use in practice.")
     ap.add_argument("--N", type=int)
     ap.add_argument("--outdir", default=os.path.join(REPO_ROOT, "cnc_out"))
     ap.add_argument("--cnf", default=None, help="conquer: CNF from split")
@@ -1316,6 +1460,15 @@ def main():
     args = ap.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
 
+    if args.sb_in_split and not args.symmetry_break:
+        ap.error("--sb-in-split requires --symmetry-break")
+    # sb_mode is the tri-state SB-4 uses everywhere below: False (off),
+    # "split" (--symmetry-break --sb-in-split, the slower measurement
+    # variant), or "conquer" (--symmetry-break alone, the SB-4 default).
+    sb_mode = False
+    if args.symmetry_break:
+        sb_mode = "split" if args.sb_in_split else "conquer"
+
     if args.mode == "solve":
         lengths, encoding = resolve_instance(args)
         n_lo, n_hi = args.n_lo, args.n_hi
@@ -1339,7 +1492,7 @@ def main():
                        args.resplit_march_opts, args.max_resplit_depth,
                        batch_size=args.batch_size,
                        sweep_workers=args.sweep_workers,
-                       symmetry_break=args.symmetry_break)
+                       symmetry_break=sb_mode)
         if args.json_out:
             json.dump(res, open(args.json_out, "w"), indent=2)
         return
@@ -1401,7 +1554,7 @@ def main():
         res = do_pilot(args.cnf, args.cubes, args.outdir, args.pilot_k,
                        args.pilot_cap_seconds, args.seed, lengths=lengths,
                        encoding=encoding, N=args.N, workers=args.pilot_workers,
-                       symmetry_break=args.symmetry_break)
+                       symmetry_break=sb_mode)
         over = (args.budget_core_hours is not None
                 and res["projected_core_hours"] > args.budget_core_hours)
         res["budget_core_hours"] = args.budget_core_hours
@@ -1418,7 +1571,7 @@ def main():
         return
 
     if args.mode == "prove":
-        if args.symmetry_break:
+        if sb_mode:
             raise SystemExit(
                 "prove refuses --symmetry-break: this pipeline never "
                 "RAT-justifies the SB clauses in any certificate, so a "
@@ -1439,11 +1592,11 @@ def main():
 
     if args.mode == "split":
         lengths, encoding = resolve_instance(args)
-        slug = instance_slug(lengths, encoding, args.N, args.symmetry_break)
+        slug = instance_slug(lengths, encoding, args.N, sb_mode)
         cnf = args.cnf or os.path.join(args.outdir, f"cnc_{slug}.cnf")
         cubes = args.cubes or os.path.join(args.outdir, f"cnc_{slug}.cubes")
         meta = do_split(lengths, encoding, args.N, cnf, cubes, args.march_opts,
-                        symmetry_break=args.symmetry_break)
+                        symmetry_break=sb_mode)
         if args.json_out:
             json.dump(meta, open(args.json_out, "w"), indent=2)
         return
@@ -1451,14 +1604,22 @@ def main():
     if args.mode == "conquer":
         lengths, encoding = resolve_instance(args)
         # conquer solves a pre-built --cnf/--cubes pair (from a separate
-        # split job/process); symmetry_break here is a LABEL trusted from
-        # the CLI (same trust level as --lengths/--encoding already are in
-        # this branch) -- whatever the CNF actually contains is what gets
-        # solved regardless of this flag, but every artifact must carry it
-        # (scope guard), so it is stamped into meta the same way.
+        # split job/process). SB-4: this flag is trusted from the CLI (same
+        # trust level --lengths/--encoding already get here) but it is NOT
+        # merely a label for "conquer" mode -- conquer_slice reads
+        # meta["symmetry_break"] and, when it is "conquer", actively adds
+        # the SB clauses at solve time via sb_augment_clause_lines (the
+        # whole SB-4 design: --cnf here is expected to be the PLAIN split
+        # do_split produces for "conquer" mode). For "split" mode it IS
+        # still just a label -- the SB clauses are already baked into
+        # whatever --cnf points at, and sb_augment_clause_lines is a no-op
+        # for anything other than "conquer". Passing --symmetry-break here
+        # against a --cnf built by the WRONG variant silently solves the
+        # wrong formula -- --cnf/--cubes provenance is the caller's
+        # responsibility (same as --lengths/--encoding already are).
         meta = {"lengths": lengths, "encoding": encoding, "N": args.N,
                 "t": (lengths[1] if encoding == "palindromic" else None),
-                "symmetry_break": args.symmetry_break}
+                "symmetry_break": sb_mode}
         nvars, clause_lines = read_cnf(args.cnf)
         cubes = read_cube_lits(args.cubes)
         cube_indices = None
@@ -1479,12 +1640,12 @@ def main():
 
     # local: split then conquer every shard in-process
     lengths, encoding = resolve_instance(args)
-    slug = instance_slug(lengths, encoding, args.N, args.symmetry_break)
+    slug = instance_slug(lengths, encoding, args.N, sb_mode)
     label = instance_label(lengths, encoding, args.N)
     cnf = os.path.join(args.outdir, f"cnc_{slug}.cnf")
     cubes = os.path.join(args.outdir, f"cnc_{slug}.cubes")
     meta = do_split(lengths, encoding, args.N, cnf, cubes, args.march_opts,
-                    symmetry_break=args.symmetry_break)
+                    symmetry_break=sb_mode)
     if meta["solved"]:
         # march_cu decided the instance during the split -> no cubes to
         # conquer; report its verdict directly rather than "conquering" an
