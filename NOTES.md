@@ -578,6 +578,65 @@ A single checked UNSAT at a t=28/29 point is a genuinely-new pdw value.
 Open question if 5h still isn't enough: cube-and-conquer (march_cu is
 already built in tools/CnC) rather than a single monolithic solve.
 
+### Phase-3: cube-and-conquer built (2026-07-22)
+
+Answered the "5h isn't enough" question by building the cube-and-conquer
+path -- the standard method for hard UNSAT combinatorics (how the exact
+vdW / Schur / Pythagorean-triple numbers were settled). Split one instance
+into cubes with march_cu (look-ahead), solve the cubes independently with
+iglucose, shard them across parallel GitHub jobs. This flattens a
+monolithic multi-hour exponential solve into thousands of independent
+sub-second cubes, sidestepping the 6h single-job wall.
+
+Why it works / soundness: march_cu's cubes are a complete case split, so
+all-cubes-UNSAT => formula UNSAT; any cube SAT => a full model (decoded and
+independently verified as a good palindrome). Demonstrated locally: t=20
+N=381 (45-112s monolithic) split into 5254 cubes, hardest single cube
+0.20s.
+
+New pieces:
+- `code/vdw_cnc.py` -- split / conquer / aggregate / local modes. conquer
+  solves its round-robin cube slice one cube at a time (a timeout costs one
+  cube, logged by global index for re-dispatch). ADAPTIVE RE-SPLITTING: a
+  timed-out cube is re-split with march_cu (residual CNF = base + cube lits
+  as units) and recursed on, up to --max-resplit-depth -- this clears the
+  hard tail of stubborn cubes near the frontier instead of stalling
+  (verified: coarse split + 1s cap on t=20 leaves 5 cubes timing out, each
+  re-splits into ~60 children that all solve -> UNSAT, 0 unresolved).
+  Solver paths overridable via $MARCH_CU / $IGLUCOSE.
+- `.github/workflows/cnc_pipeline.yml` -- build_tools clones+builds
+  march_cu + iglucose from github.com/marijnheule/CnC (NOT tracked here;
+  binaries are platform-specific). BUILD GOTCHA: march_cu is old C with
+  header globals; GCC 10+ defaults to -fno-common -> "multiple definition"
+  link errors. Fixed with `make CC="gcc -fcommon"` (Apple clang tolerates
+  it, so it builds on a mac but not on the ubuntu runner without the flag).
+  Then split -> conquer matrix (nshards jobs) -> collect aggregates the
+  verdict and commits it. Inputs: t, N, nshards, march_opts, cap_seconds
+  (per-cube), max_resplit_depth, timeout_minutes.
+- `code/test_known_values.py` + `.github/workflows/regression.yml` --
+  recompute small AKS Table-6 cells both directions on every SAT-code
+  change; tripwire so an encoder/toolchain regression can't silently mint a
+  wrong frontier result.
+- `code/pdw_difficulty.py` extended to ingest CnC runs: per-cube time
+  distributions + a CnC-reach model (hardest cube stays bounded via
+  re-splitting, so reach is limited by parallel width / total work, not one
+  exponential solve).
+
+Run it:
+  gh workflow run cnc_pipeline.yml -f t=26 -f N=635 -f nshards=20 \
+    -f march_opts="-d 16" -f cap_seconds=1800 -f max_resplit_depth=2
+Note: nshards=20 saturates the free 20-job concurrency limit, so other
+workflows queue behind it. First real target: t=26 N=635 (AKS Table-6 p+1
+UNSAT cell that timed out monolithically), then the t=28/29 frontier.
+
+Status as of this update: first GitHub CnC run (t=26 N=635) dispatched and
+its 20 conquer shards running. Not yet confirmed green end-to-end on GH.
+NEXT after it lands: (1) the "solve t" orchestrator (binary-search N with
+CnC on the UNSAT side + cheap SAT witness side -> the exact value);
+(2) combined machine-checked proof (stitch per-cube DRAT + march_cu
+tautology proof -> one drat-trim-checkable certificate; --certified already
+captures per-cube proofs).
+
 ## Methodology lessons (the running theme)
 
 - Search strategy > search effort: symmetry restriction collapsed 2^1176 to
