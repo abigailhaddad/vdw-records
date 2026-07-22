@@ -1,0 +1,60 @@
+{
+  "results": [
+    {
+      "t": 26,
+      "p": 634,
+      "q": 643,
+      "p_minus_1": {
+        "N": 633,
+        "expect": "SAT",
+        "nvars": 317,
+        "nclauses": 53873,
+        "status": "SAT",
+        "time": 73.98294949531555,
+        "match": true,
+        "witness_ok": true,
+        "is_palindrome": true
+      },
+      "q_minus_1": {
+        "N": 642,
+        "expect": "SAT",
+        "nvars": 321,
+        "nclauses": 55259,
+        "status": "TIMEOUT",
+        "time": 1800.0071911811829,
+        "match": false,
+        "witness_ok": null,
+        "is_palindrome": null
+      },
+      "p_plus_1": {
+        "N": 635,
+        "expect": "UNSAT",
+        "nvars": 318,
+        "nclauses": 54215,
+        "engine": "kissat+DRAT",
+        "status": "TIMEOUT",
+        "time": 1800.0033509731293,
+        "match": false,
+        "proof_size_bytes": null,
+        "proof_checked": false,
+        "proof_check_time": null
+      },
+      "q_plus_1": {
+        "N": 644,
+        "expect": "UNSAT",
+        "nvars": 322,
+        "nclauses": 55605,
+        "engine": "kissat+DRAT",
+        "status": "TIMEOUT",
+        "time": 1800.00345993042,
+        "match": false,
+        "proof_size_bytes": null,
+        "proof_checked": false,
+        "proof_check_time": null
+      },
+      "certified": false,
+      "comparison": null
+    }
+  ],
+  "total_wall_seconds": 5475.501962900162
+}

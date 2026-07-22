@@ -1,0 +1,117 @@
+{
+  "results": [
+    {
+      "t": 27,
+      "p": 664,
+      "q": 699,
+      "p_minus_1": {
+        "N": 663,
+        "expect": "SAT",
+        "nvars": 332,
+        "nclauses": 58949,
+        "status": "SAT",
+        "time": 203.8475203514099,
+        "match": true,
+        "witness_ok": true,
+        "is_palindrome": true
+      },
+      "q_minus_1": {
+        "N": 698,
+        "expect": "SAT",
+        "nvars": 349,
+        "nclauses": 65160,
+        "status": "TIMEOUT",
+        "time": 1800.0096192359924,
+        "match": false,
+        "witness_ok": null,
+        "is_palindrome": null
+      },
+      "p_plus_1": {
+        "N": 665,
+        "expect": "UNSAT",
+        "nvars": 333,
+        "nclauses": 59306,
+        "engine": "kissat+DRAT",
+        "status": "TIMEOUT",
+        "time": 1800.0020306110382,
+        "match": false,
+        "proof_size_bytes": null,
+        "proof_checked": false,
+        "proof_check_time": null
+      },
+      "q_plus_1": {
+        "N": 700,
+        "expect": "UNSAT",
+        "nvars": 350,
+        "nclauses": 65535,
+        "engine": "kissat+DRAT",
+        "status": "TIMEOUT",
+        "time": 1800.0038495063782,
+        "match": false,
+        "proof_size_bytes": null,
+        "proof_checked": false,
+        "proof_check_time": null
+      },
+      "certified": false,
+      "comparison": {
+        "kissat_drat": [
+          {
+            "N": 665,
+            "expect": "UNSAT",
+            "nvars": 333,
+            "nclauses": 59306,
+            "engine": "kissat+DRAT",
+            "status": "TIMEOUT",
+            "time": 1800.0020306110382,
+            "match": false,
+            "proof_size_bytes": null,
+            "proof_checked": false,
+            "proof_check_time": null
+          },
+          {
+            "N": 700,
+            "expect": "UNSAT",
+            "nvars": 350,
+            "nclauses": 65535,
+            "engine": "kissat+DRAT",
+            "status": "TIMEOUT",
+            "time": 1800.0038495063782,
+            "match": false,
+            "proof_size_bytes": null,
+            "proof_checked": false,
+            "proof_check_time": null
+          }
+        ],
+        "cadical_lrat": [
+          {
+            "N": 665,
+            "expect": "UNSAT",
+            "nvars": 333,
+            "nclauses": 59306,
+            "engine": "cadical+LRAT",
+            "status": "TIMEOUT",
+            "time": 1800.0016231536865,
+            "match": false,
+            "proof_size_bytes": null,
+            "proof_checked": false,
+            "proof_check_time": null
+          },
+          {
+            "N": 700,
+            "expect": "UNSAT",
+            "nvars": 350,
+            "nclauses": 65535,
+            "engine": "cadical+LRAT",
+            "status": "TIMEOUT",
+            "time": 1800.0079262256622,
+            "match": false,
+            "proof_size_bytes": null,
+            "proof_checked": false,
+            "proof_check_time": null
+          }
+        ]
+      }
+    }
+  ],
+  "total_wall_seconds": 9205.79069018364
+}

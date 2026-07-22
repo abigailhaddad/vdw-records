@@ -1,0 +1,20 @@
+
+=== pdw(2;3,27) published=(664,699) ===
+  SAT  n=p-1=663: SAT in 203.848s witness_ok=True palindrome=True
+  SAT  n=q-1=698: TIMEOUT in 1800.010s witness_ok=None palindrome=None
+  UNSAT n=p+1=665: TIMEOUT in 1800.002s proof=NoneB checked=False
+  UNSAT n=q+1=700: TIMEOUT in 1800.004s proof=NoneB checked=False
+  *** pdw(2;3,27) FAILED CERTIFICATION against published value (664,699) -- SEE ABOVE ***
+  -- cadical+LRAT comparison run on the same two UNSAT points --
+    cadical+LRAT n=p+1=665: TIMEOUT in 1800.002s proof=NoneB checked=False
+    cadical+LRAT n=q+1=700: TIMEOUT in 1800.008s proof=NoneB checked=False
+
+
+================ PALINDROMIC VALIDATION REPORT ================
+
+   t     published (p,q)   certified
+------------------------------------
+  27           (664,699)          NO
+
+all certified: NO -- SEE ABOVE
+total wall time: 9205.8s (153.4 min)

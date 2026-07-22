@@ -1,0 +1,17 @@
+
+=== pdw(2;3,26) published=(634,643) ===
+  SAT  n=p-1=633: SAT in 73.983s witness_ok=True palindrome=True
+  SAT  n=q-1=642: TIMEOUT in 1800.007s witness_ok=None palindrome=None
+  UNSAT n=p+1=635: TIMEOUT in 1800.003s proof=NoneB checked=False
+  UNSAT n=q+1=644: TIMEOUT in 1800.003s proof=NoneB checked=False
+  *** pdw(2;3,26) FAILED CERTIFICATION against published value (634,643) -- SEE ABOVE ***
+
+
+================ PALINDROMIC VALIDATION REPORT ================
+
+   t     published (p,q)   certified
+------------------------------------
+  26           (634,643)          NO
+
+all certified: NO -- SEE ABOVE
+total wall time: 5475.5s (91.3 min)
