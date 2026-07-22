@@ -33,15 +33,18 @@ on:
       nshards:
         description: "number of parallel conquer jobs to split the cubes across"
         default: "20"
+      cube_indices:
+        description: "re-dispatch: comma-separated GLOBAL cube indices to solve (leave empty for a full round-robin run). Split contiguously across nshards jobs."
+        default: ""
       march_opts:
         description: "march_cu split options (deeper -d or -l limit = more, smaller cubes)"
         default: "-d 16"
       cap_seconds:
-        description: "per-CUBE solver timeout in seconds (a cube should be easy)"
-        default: "1800"
+        description: "per-CUBE solver timeout in seconds. Deliberately SMALL: a timed-out cube is re-split (see max_resplit_depth), which clears the heavy tail far faster than letting one stubborn cube burn the whole cap."
+        default: "60"
       max_resplit_depth:
-        description: "adaptive: re-split a timed-out cube this many levels before giving up (0=off)"
-        default: "2"
+        description: "adaptive: re-split a timed-out cube this many levels before giving up (0=off). 3 reliably clears the hard tail near the frontier."
+        default: "3"
       resplit_march_opts:
         description: "march_cu options for re-splitting a hard cube"
         default: "-d 6"
@@ -59,14 +62,38 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
+      nshards: ${{ steps.gen.outputs.nshards }}
     steps:
       - id: gen
         env:
           NSHARDS: ${{ inputs.nshards }}
+          CUBE_INDICES: ${{ inputs.cube_indices }}
+        # Full run: matrix is just [{shard:0}..{shard:n-1}] and each conquer
+        # job solves its round-robin slice. Re-dispatch (cube_indices set):
+        # split that explicit list into n contiguous chunks and hand each job
+        # its chunk via matrix.cube_indices; the effective shard count drops
+        # to at most the number of cubes so aggregate's --expected-nshards
+        # matches the jobs that actually run.
         run: |
-          matrix=$(python3 -c "import json,os; n=int(os.environ['NSHARDS']); print(json.dumps([{'shard': i} for i in range(n)]))")
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "$matrix"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          n = int(os.environ["NSHARDS"])
+          ci = os.environ.get("CUBE_INDICES", "").replace(",", " ").split()
+          if ci:
+              idx = [int(x) for x in ci]
+              n = max(1, min(n, len(idx)))
+              k, m = divmod(len(idx), n)
+              chunks = [idx[i * k + min(i, m):(i + 1) * k + min(i + 1, m)]
+                        for i in range(n)]
+              matrix = [{"shard": i,
+                         "cube_indices": ",".join(str(g) for g in chunks[i])}
+                        for i in range(n)]
+          else:
+              matrix = [{"shard": i} for i in range(n)]
+          print("matrix=" + json.dumps(matrix))
+          print("nshards=" + str(n))
+          PY
+          echo "setup: $(tail -2 "$GITHUB_OUTPUT")"
 
   build_tools:
     runs-on: ubuntu-latest
@@ -154,11 +181,13 @@ jobs:
         run: |
           certflag=""
           [ "${{ inputs.certified }}" = "true" ] && certflag="--certified"
+          ciflag=""
+          [ -n "${{ matrix.cube_indices }}" ] && ciflag="--cube-indices ${{ matrix.cube_indices }}"
           python3 code/vdw_cnc.py conquer --t ${{ inputs.t }} --N ${{ inputs.N }} \
             --cnf cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cnf \
             --cubes cnc_out/cnc_t${{ inputs.t }}_N${{ inputs.N }}.cubes \
-            --shard ${{ matrix.shard }} --nshards ${{ inputs.nshards }} \
-            --cap-seconds ${{ inputs.cap_seconds }} $certflag \
+            --shard ${{ matrix.shard }} --nshards ${{ needs.setup.outputs.nshards }} \
+            --cap-seconds ${{ inputs.cap_seconds }} $certflag $ciflag \
             --max-resplit-depth ${{ inputs.max_resplit_depth }} \
             --resplit-march-opts "${{ inputs.resplit_march_opts }}" \
             --outdir cnc_out --json-out cnc_out/shard-${{ matrix.shard }}.json \
@@ -176,7 +205,7 @@ jobs:
             cnc_out/shard-${{ matrix.shard }}.log
 
   collect:
-    needs: conquer
+    needs: [conquer, setup]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -193,7 +222,7 @@ jobs:
       - name: aggregate the shard verdicts
         run: |
           python3 code/vdw_cnc.py aggregate --results-dir results \
-            --expected-nshards ${{ inputs.nshards }} \
+            --expected-nshards ${{ needs.setup.outputs.nshards }} \
             --outdir results --json-out results/verdict.json \
             | tee "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"

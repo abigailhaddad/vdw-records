@@ -16,7 +16,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vdw_cnc import (aggregate, slice_members, collect_shard_results,  # noqa: E402
-                     reconstruct_shard_from_jsonl)
+                     reconstruct_shard_from_jsonl, merge_jsonl_verdicts)
 
 
 def _shard(shard, status, n_unsat=0, unresolved=None):
@@ -137,6 +137,67 @@ def test_jsonl_recovery_sat_decides_shard():
         results = collect_shard_results(d, expected_nshards=1)
         agg = aggregate(results, expected_nshards=1)
     assert agg["verdict"] == "SAT", agg
+
+
+def _explicit_shard(shard, members, verdict_map):
+    """An explicit-index (re-dispatch) shard result, mode='explicit'."""
+    unresolved = [g for g in members if verdict_map.get(g) != "UNSAT"]
+    return {"t": 20, "N": 381, "shard": shard, "mode": "explicit",
+            "ncubes": 12, "members": members,
+            "status": "UNRESOLVED" if unresolved else "UNSAT",
+            "n_unsat": sum(1 for g in members if verdict_map.get(g) == "UNSAT"),
+            "unresolved_cubes": unresolved}
+
+
+def test_coverage_check_blocks_false_unsat_on_subset():
+    # A re-dispatch run solved cubes {3,7,11} all UNSAT, but the instance has
+    # 12 cubes. "all shards UNSAT" must NOT read as instance UNSAT -- the other
+    # 9 cubes were never covered by THIS run.
+    shards = [_explicit_shard(0, [3, 7, 11],
+                              {3: "UNSAT", 7: "UNSAT", 11: "UNSAT"})]
+    agg = aggregate(shards, expected_nshards=1)
+    assert agg["verdict"] == "UNDETERMINED", agg
+    assert agg["uncovered_cubes"] == [0, 1, 2, 4, 5, 6, 8, 9, 10], agg
+
+
+def test_merge_closes_instance_across_two_runs():
+    # Base run (round-robin, 8 cubes, 2 shards) left cubes 2 and 6 UNRESOLVED;
+    # a re-dispatch run (separate subdir) refuted exactly {2,6}. The cube-level
+    # merge over both must close the instance: verdict UNSAT.
+    with tempfile.TemporaryDirectory() as d:
+        base = os.path.join(d, "base")
+        redis = os.path.join(d, "redispatch")
+        os.makedirs(base)
+        os.makedirs(redis)
+        # base: shard 0 owns {0,2,4,6}, refuted {0,4} (2,6 timed out);
+        #       shard 1 owns {1,3,5,7}, all refuted.
+        _write_jsonl(base, 0, 8, 2, {0: "UNSAT", 4: "UNSAT"})
+        _write_jsonl(base, 1, 8, 2, {1: "UNSAT", 3: "UNSAT",
+                                     5: "UNSAT", 7: "UNSAT"})
+        # re-dispatch of {2,6}: one explicit shard, both now UNSAT. Its meta
+        # still records the full ncubes=8 (from the same cube file).
+        _write_jsonl(redis, 0, 8, 1, {2: "UNSAT", 6: "UNSAT"})
+        m = merge_jsonl_verdicts(d)
+    assert m["verdict"] == "UNSAT", m
+    assert m["cubes_without_unsat"] == [], m
+
+
+def test_merge_undetermined_when_a_cube_still_missing():
+    with tempfile.TemporaryDirectory() as d:
+        _write_jsonl(d, 0, 8, 2, {0: "UNSAT", 4: "UNSAT"})  # 2,6 missing
+        _write_jsonl(d, 1, 8, 2, {1: "UNSAT", 3: "UNSAT",
+                                  5: "UNSAT", 7: "UNSAT"})
+        m = merge_jsonl_verdicts(d)
+    assert m["verdict"] == "UNDETERMINED", m
+    assert m["cubes_without_unsat"] == [2, 6], m
+
+
+def test_merge_sat_cube_decides():
+    with tempfile.TemporaryDirectory() as d:
+        _write_jsonl(d, 0, 4, 1, {0: "UNSAT", 1: "SAT"})
+        m = merge_jsonl_verdicts(d)
+    assert m["verdict"] == "SAT", m
+    assert m["sat_cubes"] == [1], m
 
 
 def main():

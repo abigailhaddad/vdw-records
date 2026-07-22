@@ -228,29 +228,39 @@ def conquer_cube(nvars, clause_lines, cube_lits, cap, workdir, tag,
 
 
 def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
-                  outdir, certified, resplit_opts, max_resplit_depth):
-    """Solve this shard's round-robin slice (cube i goes to shard i%nshards).
-    First SAT wins (formula SAT); otherwise every cube must refute for the
-    slice to be decisive. Hard cubes are re-split up to max_resplit_depth
-    before being given up as UNRESOLVED (recorded by global cube index so
-    exactly those can be re-dispatched)."""
+                  outdir, certified, resplit_opts, max_resplit_depth,
+                  cube_indices=None):
+    """Solve this shard's cubes: normally its round-robin slice (cube i goes
+    to shard i%nshards), but if cube_indices is given, exactly those global
+    cube indices instead (the re-dispatch path -- re-run only the cubes a
+    prior run left unresolved). First SAT wins (formula SAT); otherwise every
+    cube must refute for the slice to be decisive. Hard cubes are re-split up
+    to max_resplit_depth before being given up as UNRESOLVED (recorded by
+    global cube index so exactly those can be re-dispatched)."""
     t, N = meta["t"], meta["N"]
     workdir = os.path.join(outdir, f"cnc_t{t}_N{N}_shard{shard}")
     os.makedirs(workdir, exist_ok=True)
-    mine = [(i, cubes[i]) for i in slice_members(len(cubes), nshards, shard)]
-    print(f"  shard {shard}/{nshards}: {len(mine)} of {len(cubes)} cubes, "
-          f"per-cube cap {cap}s, re-split depth {max_resplit_depth}",
+    if cube_indices is not None:
+        members, mode = list(cube_indices), "explicit"
+    else:
+        members, mode = slice_members(len(cubes), nshards, shard), "round-robin"
+    mine = [(i, cubes[i]) for i in members]
+    print(f"  shard {shard}/{nshards} ({mode}): {len(mine)} of {len(cubes)} "
+          f"cubes, per-cube cap {cap}s, re-split depth {max_resplit_depth}",
           flush=True)
 
     # Per-cube JSONL checkpoint, flushed after every top-level cube: if the
     # job hits the wall mid-slice, aggregate can recover exactly which cubes
-    # were already refuted and re-dispatch only the rest. The meta line's
-    # ncubes lets aggregate reconstruct this shard's slice membership without
-    # the cube file. See read_shard_jsonl / reconstruct_shard_from_jsonl.
+    # were already refuted and re-dispatch only the rest. The meta line lists
+    # this shard's members explicitly (and ncubes/nshards/mode as fallback),
+    # so aggregate can reconstruct membership without the cube file -- in both
+    # round-robin and explicit-index mode. See read_shard_jsonl /
+    # reconstruct_shard_from_jsonl.
     jsonl_path = os.path.join(outdir, f"shard-{shard}.jsonl")
     jf = open(jsonl_path, "w")
     jf.write(json.dumps({"meta": True, "t": t, "N": N, "shard": shard,
-                         "nshards": nshards, "ncubes": len(cubes)}) + "\n")
+                         "nshards": nshards, "ncubes": len(cubes),
+                         "mode": mode, "members": members}) + "\n")
     jf.flush()
 
     records = []
@@ -289,7 +299,8 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
         status = "UNRESOLVED"
     else:
         status = "UNSAT"
-    return {"t": t, "N": N, "shard": shard, "nshards": nshards,
+    return {"t": t, "N": N, "shard": shard, "nshards": nshards, "mode": mode,
+            "ncubes": len(cubes), "members": members,
             "cap_seconds": cap, "max_resplit_depth": max_resplit_depth,
             "n_cubes_in_slice": len(mine), "n_unsat": n_unsat,
             "unresolved_cubes": unresolved, "sat_cube": sat_gidx,
@@ -443,12 +454,16 @@ def reconstruct_shard_from_jsonl(meta, verdicts):
     """Rebuild a partial shard-result from a killed shard's JSONL checkpoint.
     A cube logged UNSAT is done; any SAT decides the whole shard; every cube
     this shard owned but never logged as UNSAT is unresolved and must be
-    re-run. Slice membership comes from the meta line's ncubes/nshards, so no
-    cube file is needed."""
+    re-run. Membership comes from the meta line's explicit `members` list
+    (falling back to round-robin ncubes/nshards for old checkpoints), so no
+    cube file is needed and re-dispatch (explicit-index) runs recover too."""
     shard = meta["shard"]
-    members = slice_members(meta["ncubes"], meta["nshards"], shard)
+    members = meta.get("members")
+    if members is None:  # pre-Task-3 checkpoint: derive round-robin slice
+        members = slice_members(meta["ncubes"], meta["nshards"], shard)
     base = {"t": meta.get("t"), "N": meta.get("N"), "shard": shard,
             "nshards": meta["nshards"], "recovered_from": "jsonl",
+            "ncubes": meta["ncubes"], "members": members,
             "n_cubes_in_slice": len(members)}
     sat = [g for g, v in verdicts.items() if v == "SAT"]
     if sat:
@@ -480,12 +495,16 @@ def collect_shard_results(results_dir, expected_nshards):
 
     jsonls = {}
     ncubes = None
+    round_robin = True  # only reconstruct a *fully missing* shard's slice if
     for p in sorted(glob.glob(os.path.join(results_dir, "**", "shard-*.jsonl"),
                               recursive=True)):
         meta, verdicts = read_shard_jsonl(p)
         if meta is not None:
             jsonls[meta["shard"]] = (meta, verdicts)
             ncubes = meta["ncubes"]
+            if meta.get("mode", "round-robin") != "round-robin":
+                round_robin = False  # explicit-index run: membership isn't
+                # derivable from ncubes/nshards, so don't fabricate it.
 
     results = []
     for s in range(expected_nshards):
@@ -493,47 +512,108 @@ def collect_shard_results(results_dir, expected_nshards):
             results.append(finals[s])
         elif s in jsonls:
             results.append(reconstruct_shard_from_jsonl(*jsonls[s]))
-        elif ncubes is not None:
+        elif ncubes is not None and round_robin:
             members = slice_members(ncubes, expected_nshards, s)
             results.append({"shard": s, "nshards": expected_nshards,
                             "status": "UNRESOLVED", "n_unsat": 0,
+                            "ncubes": ncubes, "members": members,
                             "unresolved_cubes": members, "recovered_from":
                             "missing (no result), whole slice re-dispatched"})
-        # else: no evidence and no ncubes -> genuinely missing, aggregate
-        # reports it as such (UNDETERMINED, listed in missing_shards).
+        # else: no evidence (or an explicit-index run where a fully-absent
+        # shard's members can't be reconstructed) -> genuinely missing;
+        # aggregate reports it as such (UNDETERMINED, in missing_shards).
     return results
+
+
+def merge_jsonl_verdicts(results_dir):
+    """Cube-level merge across EVERY shard JSONL under results_dir -- any
+    number of runs (a base run plus one or more --cube-indices re-dispatch
+    runs). A cube is refuted if ANY run logged it UNSAT; the instance is UNSAT
+    iff every cube 0..ncubes-1 is refuted and none is SAT. This is the
+    faithful form of the campaign invariant (every cube refuted), and because
+    it unions per-cube by global index it closes an instance that took several
+    runs -- unlike shard-level aggregate, whose per-shard files collide across
+    runs. ncubes comes from the JSONL meta lines (they must agree)."""
+    ncubes = None
+    unsat, sat = set(), set()
+    for p in sorted(glob.glob(os.path.join(results_dir, "**", "shard-*.jsonl"),
+                              recursive=True)):
+        meta, verdicts = read_shard_jsonl(p)
+        if meta is not None:
+            if ncubes is not None and meta["ncubes"] != ncubes:
+                raise ValueError(f"JSONL files disagree on ncubes: "
+                                 f"{ncubes} vs {meta['ncubes']} in {p}")
+            ncubes = meta["ncubes"]
+        for g, v in verdicts.items():
+            (sat if v == "SAT" else unsat if v == "UNSAT" else set()).add(g)
+    if sat:
+        status = "SAT"
+    elif ncubes is None:
+        status = "UNDETERMINED"
+    else:
+        status = "UNSAT" if len(unsat) >= ncubes and set(
+            range(ncubes)) <= unsat else "UNDETERMINED"
+    missing = sorted(set(range(ncubes)) - unsat) if ncubes is not None else []
+    return {"verdict": status, "ncubes": ncubes,
+            "n_cubes_refuted": len(unsat & set(range(ncubes))) if ncubes
+            else len(unsat),
+            "cubes_without_unsat": missing, "sat_cubes": sorted(sat)}
 
 
 def aggregate(shard_results, expected_nshards):
     """Combine shard verdicts into an instance verdict.
 
     UNSAT is the load-bearing claim of this whole campaign, so it is only
-    ever returned when EVERY expected shard reported and every one was UNSAT.
-    The dangerous failure mode this guards against: an empty (or partial)
-    shard list is vacuously "no SAT and no UNRESOLVED", which the old code
-    read as UNSAT -- so a cancelled run with zero collected evidence
-    committed a false "UNSAT, n_shards=0" verdict. Verdict rules:
+    ever returned when EVERY expected shard reported, every one was UNSAT,
+    AND the shards' cubes together cover the whole cube space. Two failure
+    modes this guards against:
+      - vacuous UNSAT: an empty (or partial) shard list is "no SAT and no
+        UNRESOLVED", which the old code read as UNSAT -- so a cancelled run
+        committed a false "UNSAT, n_shards=0" verdict;
+      - incomplete coverage: a re-dispatch run (explicit --cube-indices)
+        only re-solves the previously-unresolved cubes, so "all its shards
+        UNSAT" means that SUBSET is refuted, NOT the whole instance. When the
+        results carry ncubes/members, aggregate checks that 0..ncubes-1 are
+        all covered and refuses UNSAT (-> UNDETERMINED, uncovered listed) if
+        any cube was never solved. (To close an instance from a re-dispatch,
+        aggregate over the original + re-dispatch results together so the
+        union of members covers every cube.)
+    Verdict rules:
       - any shard SAT              -> SAT (one satisfiable cube decides it);
-      - all expected shards present and all UNSAT -> UNSAT;
-      - anything else (a missing shard, any UNRESOLVED cube) -> UNDETERMINED.
+      - all expected shards present, all UNSAT, full coverage -> UNSAT;
+      - anything else -> UNDETERMINED.
     Shard status stays UNRESOLVED; only the instance verdict is UNDETERMINED,
     keeping the two levels distinct."""
     sat = [r for r in shard_results if r["status"] == "SAT"]
     unresolved = [r for r in shard_results if r["status"] == "UNRESOLVED"]
     present_shards = {r["shard"] for r in shard_results}
     missing_shards = sorted(set(range(expected_nshards)) - present_shards)
+
+    # Coverage: only checkable when results carry ncubes/members (real runs
+    # and JSONL recovery do; the hand-built dicts in unit tests don't, so the
+    # check is skipped there and the old present-and-UNSAT logic stands).
+    ncubes = next((r["ncubes"] for r in shard_results if "ncubes" in r), None)
+    covered = set()
+    for r in shard_results:
+        covered.update(r.get("members", []))
+    uncovered = (sorted(set(range(ncubes)) - covered)
+                 if ncubes is not None else [])
+
     if sat:
         verdict = "SAT"
-    elif not missing_shards and not unresolved:
+    elif not missing_shards and not unresolved and not uncovered:
         verdict = "UNSAT"
     else:
         verdict = "UNDETERMINED"
-    remaining = sorted(g for r in unresolved for g in r["unresolved_cubes"])
+    remaining = sorted(set(g for r in unresolved for g in r["unresolved_cubes"])
+                       | set(uncovered))
     return {"verdict": verdict,
             "expected_nshards": expected_nshards,
             "n_shards": len(shard_results),
             "present_shards": sorted(present_shards),
             "missing_shards": missing_shards,
+            "ncubes": ncubes,
+            "uncovered_cubes": uncovered,
             "total_cubes_solved": sum(r["n_unsat"] for r in shard_results)
             + len(sat),
             "sat_shard": sat[0]["shard"] if sat else None,
@@ -558,10 +638,11 @@ def main():
                      help="march_cu options controlling the split; deeper -d "
                           "or a -l limit = more, smaller cubes (default: "
                           "'-d 12')")
-    ap.add_argument("--cap-seconds", type=int, default=TIME_CAP,
-                     help="per-CUBE solver timeout (default %(default)s). A "
-                          "cube should be easy; if cubes routinely time out, "
-                          "split deeper.")
+    ap.add_argument("--cap-seconds", type=float, default=TIME_CAP,
+                     help="per-CUBE solver timeout in seconds, fractional ok "
+                          "(default %(default)s). A cube should be easy; if "
+                          "cubes routinely time out, split deeper or let "
+                          "re-splitting handle the tail.")
     ap.add_argument("--certified", action="store_true",
                      help="have each cube emit its DRAT proof (for later "
                           "stitching into one combined certificate)")
@@ -574,8 +655,18 @@ def main():
     ap.add_argument("--resplit-march-opts", default="-d 6",
                      help="march_cu options for re-splitting a hard cube "
                           "(default '-d 6' -- a modest extra split per level)")
+    ap.add_argument("--cube-indices", default=None,
+                     help="conquer: comma-separated GLOBAL cube indices to "
+                          "solve instead of this shard's round-robin slice "
+                          "(the re-dispatch path -- re-run only the cubes a "
+                          "prior run left unresolved)")
     ap.add_argument("--results-dir", default=None,
                      help="aggregate: directory of per-shard conquer JSONs")
+    ap.add_argument("--merge-jsonl", action="store_true",
+                     help="aggregate: close the instance by cube-level merge "
+                          "across ALL shard JSONLs under --results-dir (unions "
+                          "per-cube UNSAT across a base run + any re-dispatch "
+                          "runs); UNSAT iff every cube is refuted somewhere")
     ap.add_argument("--expected-nshards", type=int, default=None,
                      help="aggregate: how many shards the run dispatched. "
                           "UNSAT is only returned when all of them reported; "
@@ -606,6 +697,20 @@ def main():
             json.dump(res, open(args.json_out, "w"), indent=2)
         return
 
+    if args.mode == "aggregate" and args.merge_jsonl:
+        m = merge_jsonl_verdicts(args.results_dir)
+        print(f"=== cube-level merge: {m['verdict']} "
+              f"({m['n_cubes_refuted']}/{m['ncubes']} cubes refuted) ===",
+              flush=True)
+        if m["cubes_without_unsat"]:
+            print(f"  cubes not yet refuted: {m['cubes_without_unsat']}",
+                  flush=True)
+        if m["sat_cubes"]:
+            print(f"  SAT at cubes: {m['sat_cubes']}", flush=True)
+        if args.json_out:
+            json.dump(m, open(args.json_out, "w"), indent=2)
+        return
+
     if args.mode == "aggregate":
         if args.expected_nshards is None:
             ap.error("aggregate needs --expected-nshards (the shard count the "
@@ -622,9 +727,16 @@ def main():
         if agg["missing_shards"]:
             print(f"  missing shards (never reported): "
                   f"{agg['missing_shards']}", flush=True)
+        if agg["uncovered_cubes"]:
+            print(f"  cubes never covered by any shard "
+                  f"({len(agg['uncovered_cubes'])} of {agg['ncubes']}): "
+                  f"{agg['uncovered_cubes']}", flush=True)
         if agg["unresolved_cubes"]:
+            idx = ",".join(str(g) for g in agg["unresolved_cubes"])
             print(f"  unresolved cubes (re-dispatch these): "
                   f"{agg['unresolved_cubes']}", flush=True)
+            print(f"  re-dispatch: gh workflow run cnc_pipeline.yml "
+                  f"-f t={t} -f N={N} -f cube_indices={idx}", flush=True)
         if args.json_out:
             json.dump({"aggregate": agg, "shards": shard_results},
                       open(args.json_out, "w"), indent=2)
@@ -653,10 +765,14 @@ def main():
         meta = {"t": args.t, "N": args.N}
         nvars, clause_lines = read_cnf(args.cnf)
         cubes = read_cube_lits(args.cubes)
+        cube_indices = None
+        if args.cube_indices:
+            cube_indices = [int(x) for x in args.cube_indices.split(",")
+                            if x.strip() != ""]
         res = conquer_slice(meta, nvars, clause_lines, cubes, args.shard,
                             args.nshards, args.cap_seconds, args.outdir,
                             args.certified, args.resplit_march_opts,
-                            args.max_resplit_depth)
+                            args.max_resplit_depth, cube_indices=cube_indices)
         print(f"\n  shard {args.shard} verdict: {res['status']} "
               f"({res['n_unsat']} UNSAT, {len(res['unresolved_cubes'])} "
               f"unresolved) in {res['slice_seconds']:.1f}s", flush=True)
