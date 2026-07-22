@@ -637,6 +637,40 @@ CnC on the UNSAT side + cheap SAT witness side -> the exact value);
 tautology proof -> one drat-trim-checkable certificate; --certified already
 captures per-cube proofs).
 
+### Open questions for Fable (things I'm not sure about)
+
+1. **Parallel certified proof (the hard one).** We can now produce a
+   machine-checked UNSAT certificate the EASY way: `vdw_cnc.py prove` runs
+   iglucose over the whole cube set in ONE process with DRAT logging, then
+   drat-trim verifies that proof against the base CNF (confirmed VERIFIED on
+   t=15/t=20 locally, and `cnc_prove.yml` runs it on GH). But that is
+   single-job -- bounded by the 6h wall on the sequential cube sweep. The
+   SHARDED decision (`cnc_pipeline.yml`) is what actually beats the wall,
+   and it does NOT yet produce a combined certificate. To certify a frontier
+   value whose monolithic cube-sweep exceeds 6h we need to STITCH the
+   per-shard proofs into one drat-trim-checkable certificate. I know the
+   shape -- each conquer solve of phi ∧ cube_i gives phi ⊢ ¬cube_i, and you
+   need a final "tautology proof" that ¬cube_1 ∧ ... ∧ ¬cube_m is UNSAT
+   (the cubes are exhaustive) -- but I do NOT know the exact mechanics with
+   these tools: which tool emits march_cu's tautology proof, how to make
+   iglucose emit per-cube proofs that derive ¬cube_i (vs. refuting phi∧cube
+   with the cube as clauses), and how to concatenate + reindex them so
+   drat-trim checks the whole thing against phi. Heule's group does this at
+   scale (Pythagorean triples, 200 TB) so there is a known recipe; I just
+   don't have it. This is the piece to research before betting a night on a
+   frontier proof.
+
+2. **march_cu split-depth tuning.** `-d 16` on t=26 produced a large cube
+   set and the shards ran long (>20 min, still healthy). No principled way
+   yet to pick `-d` / cube count vs. nshards vs. per-cube cap for a given t.
+   A short calibration (cube count and max-cube-time vs -d at fixed t) would
+   let `pdw_difficulty.py` recommend settings instead of guessing.
+
+3. **nshards vs the free concurrency limit.** nshards=20 saturates GitHub's
+   ~20-job free ceiling, so everything else (regression, other runs) queues.
+   Is it worth capping nshards at ~16 to leave headroom, or chaining shard
+   batches? Minor, but affects overnight throughput.
+
 ## Methodology lessons (the running theme)
 
 - Search strategy > search effort: symmetry restriction collapsed 2^1176 to

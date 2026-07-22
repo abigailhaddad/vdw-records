@@ -52,6 +52,8 @@ MARCH = os.environ.get(
 IGLUCOSE = os.environ.get(
     "IGLUCOSE",
     os.path.join(REPO_ROOT, "tools", "CnC", "iglucose", "core", "iglucose"))
+DRAT_TRIM = os.environ.get(
+    "DRAT_TRIM", os.path.join(REPO_ROOT, "tools", "drat-trim", "drat-trim"))
 
 
 def is_palindrome(colors, N):
@@ -267,6 +269,71 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
             "n_solves": len(records), "per_solve": records}
 
 
+def do_prove(t, N, outdir, march_opts, cap):
+    """Produce and CHECK a single machine-verified UNSAT certificate for
+    pdw(2;3,t) at N via cube-and-conquer in one process: split with
+    march_cu, run iglucose over the whole inccnf (all cubes) with DRAT
+    proof logging, then verify that proof against the BASE CNF with
+    drat-trim. This is the certified counterpart to the sharded `conquer`
+    decision -- but single-job, so it is bounded by the 6h wall on the full
+    sequential cube sweep. (The PARALLEL certified proof -- stitching
+    per-shard proofs + march_cu's tautology proof into one certificate --
+    is not done yet; see the open question in NOTES.md.)"""
+    lengths = [3, t]
+    clauses, nvars = encode_palindromic(lengths, N)
+    cnf = os.path.join(outdir, f"prove_t{t}_N{N}.cnf")
+    write_dimacs(clauses, nvars, cnf,
+                 comment=f"pdw(2;3,{t}) N={N} palindromic (prove)")
+    cubes = os.path.join(outdir, f"prove_t{t}_N{N}.cubes")
+    print(f"  split ({nvars} vars, {len(clauses)} clauses) ...", flush=True)
+    subprocess.run([MARCH, cnf, "-o", cubes] + march_opts.split(),
+                   capture_output=True, text=True, check=True)
+    ncubes = sum(1 for ln in open(cubes) if ln.startswith("a "))
+
+    icnf = os.path.join(outdir, f"prove_t{t}_N{N}.icnf")
+    with open(icnf, "w") as f:
+        f.write("p inccnf\n")
+        _, clause_lines = read_cnf(cnf)
+        f.writelines(clause_lines)
+        for ln in open(cubes):
+            if ln.startswith("a "):
+                f.write(ln)
+    proof = os.path.join(outdir, f"prove_t{t}_N{N}.drat")
+    print(f"  conquer {ncubes} cubes with proof logging ...", flush=True)
+    t0 = time.time()
+    try:
+        ig = subprocess.run([IGLUCOSE, icnf, "-verb=0", "-certified",
+                             f"-certified-output={proof}"],
+                            capture_output=True, text=True, timeout=cap)
+    except subprocess.TimeoutExpired:
+        return {"t": t, "N": N, "ncubes": ncubes, "status": "TIMEOUT",
+                "solve_seconds": time.time() - t0, "proof_verified": False}
+    solve_s = time.time() - t0
+    out = ig.stdout
+    if "s SATISFIABLE" in out:
+        return {"t": t, "N": N, "ncubes": ncubes, "status": "SAT",
+                "solve_seconds": solve_s, "proof_verified": False}
+    if "s UNSATISFIABLE" not in out:
+        return {"t": t, "N": N, "ncubes": ncubes,
+                "status": f"ERR(rc={ig.returncode})",
+                "solve_seconds": solve_s, "proof_verified": False}
+
+    proof_bytes = os.path.getsize(proof) if os.path.exists(proof) else 0
+    print(f"  UNSAT in {solve_s:.1f}s, proof {proof_bytes} B; "
+          f"checking with drat-trim ...", flush=True)
+    t1 = time.time()
+    dt = subprocess.run([DRAT_TRIM, cnf, proof], capture_output=True,
+                        text=True)
+    check_s = time.time() - t1
+    verified = "s VERIFIED" in dt.stdout
+    print(f"  drat-trim: {'VERIFIED' if verified else 'NOT VERIFIED'} "
+          f"in {check_s:.1f}s", flush=True)
+    return {"t": t, "N": N, "ncubes": ncubes, "status": "UNSAT",
+            "solve_seconds": solve_s, "proof_bytes": proof_bytes,
+            "proof_verified": verified, "check_seconds": check_s,
+            "proof_path": os.path.relpath(proof, REPO_ROOT)}
+
+
 def aggregate(shard_results):
     """Combine shard verdicts into an instance verdict."""
     sat = [r for r in shard_results if r["status"] == "SAT"]
@@ -290,7 +357,9 @@ def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["split", "conquer", "local", "aggregate"])
+    ap.add_argument("mode",
+                     choices=["split", "conquer", "local", "aggregate",
+                              "prove"])
     ap.add_argument("--t", type=int)
     ap.add_argument("--N", type=int)
     ap.add_argument("--outdir", default=os.path.join(REPO_ROOT, "cnc_out"))
@@ -346,6 +415,15 @@ def main():
         if args.json_out:
             json.dump({"aggregate": agg, "shards": shard_results},
                       open(args.json_out, "w"), indent=2)
+        return
+
+    if args.mode == "prove":
+        res = do_prove(args.t, args.N, args.outdir, args.march_opts,
+                       args.cap_seconds)
+        print(f"\n=== pdw(2;3,{args.t}) N={args.N}: {res['status']} "
+              f"proof_verified={res.get('proof_verified')} ===", flush=True)
+        if args.json_out:
+            json.dump(res, open(args.json_out, "w"), indent=2)
         return
 
     if args.mode == "split":

@@ -1,0 +1,92 @@
+name: vdw-cnc-prove
+
+# Produce and CHECK a single machine-verified UNSAT certificate for one
+# pdw(2;3,t) instance at N, via cube-and-conquer in ONE process
+# (code/vdw_cnc.py prove): split with march_cu, conquer the whole cube set
+# with iglucose emitting a DRAT proof, then verify that proof against the
+# base CNF with drat-trim. This is the certified counterpart to the sharded
+# cnc_pipeline decision -- run it once cnc_pipeline has shown an instance
+# UNSAT and roughly how long the cube sweep takes.
+#
+# LIMITATION: single job, so it is bounded by the 6h runner wall on the
+# full SEQUENTIAL cube sweep. The parallel certified proof (stitch the
+# per-shard proofs) is an open problem -- see NOTES.md.
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      t:
+        description: "t in pdw(2;3,t)"
+        default: "26"
+      N:
+        description: "length N to certify UNSAT"
+        default: "635"
+      march_opts:
+        description: "march_cu split options"
+        default: "-d 16"
+      cap_seconds:
+        description: "cap on the whole single-process cube sweep (seconds)"
+        default: "18000"
+      timeout_minutes:
+        description: "job timeout (<=360 on standard public runners)"
+        default: "350"
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: build march_cu + iglucose + drat-trim
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y build-essential git
+          git clone --depth 1 https://github.com/marijnheule/CnC.git /tmp/CnC
+          # march_cu is old C; GCC 10+ -fno-common -> multiple-definition
+          # link errors, so force -fcommon (see cnc_pipeline.yml).
+          ( cd /tmp/CnC/march_cu && make CC="gcc -fcommon" )
+          ( cd /tmp/CnC/iglucose/core && make )
+          git clone --depth 1 https://github.com/marijnheule/drat-trim.git /tmp/drat-trim
+          ( cd /tmp/drat-trim && make )
+          mkdir -p cncbin
+          cp /tmp/CnC/march_cu/march_cu /tmp/CnC/iglucose/core/iglucose \
+             /tmp/drat-trim/drat-trim cncbin/
+          chmod +x cncbin/*
+      - name: prove + verify
+        env:
+          MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
+          IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
+          DRAT_TRIM: ${{ github.workspace }}/cncbin/drat-trim
+        run: |
+          mkdir -p cnc_out
+          python3 code/vdw_cnc.py prove --t ${{ inputs.t }} --N ${{ inputs.N }} \
+            --march-opts "${{ inputs.march_opts }}" \
+            --cap-seconds ${{ inputs.cap_seconds }} \
+            --outdir cnc_out --json-out cnc_out/prove.json \
+            | tee cnc_out/prove.log
+          { echo "# cnc-prove pdw(2;3,${{ inputs.t }}) N=${{ inputs.N }}"; \
+            echo '```'; cat cnc_out/prove.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: commit the verdict (proof itself can be huge; keep json+log)
+        run: |
+          git config user.name "vdw-cnc-prove[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          dir="gh_actions_results/cnc-prove-${{ github.run_id }}"
+          mkdir -p "$dir"
+          cp cnc_out/prove.json cnc_out/prove.log "$dir/" 2>/dev/null || true
+          git add "$dir"
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "GH Actions: cnc-prove pdw(2;3,${{ inputs.t }}) N=${{ inputs.N }} (run ${{ github.run_id }})"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main && break
+            echo "retry $i"; sleep 5
+          done
