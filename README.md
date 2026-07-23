@@ -103,9 +103,9 @@ skeptical reader).
   lower-bound records.
 - `gh_actions_results/` — committed verdicts of the GitHub runs
   (shard results, merged cube-level verdicts).
-- `PLAN_*.md`, `RESEARCH_*.md`, `RESULTS_*.md` — builder specs, research
-  reviews, and writeups (diagonal ladder no-go, W(5,2) theorem spec,
-  pipeline improvements).
+- `RESEARCH_*.md`, `RESULTS_*.md` — research reviews and writeups
+  (diagonal ladder no-go and its supporting research); concluded builder
+  specs live in `docs/archive/`.
 - `seeds/`, `data/` — verified colorings and cautionary artifacts from
   the concluded Ramsey/records phases.
 
