@@ -34,13 +34,26 @@ path, which worked exactly as designed: JSONL checkpoints recovered 4019/4022
 cubes, `--cube-indices 3989,4005,4021` re-dispatch (run 29953461926) closed
 the rest, cube-level merge = **UNSAT 4022/4022, official** (committed:
 gh_actions_results/cnc-run-29926501414-merged-29953461926/). Four-fact cells
-for pdw(2;3,26)=(634,643) per the resolved reading rule: p+1=635 UNSAT DONE
-(certified `prove` run dispatched, 29962546998); q-1=642 SAT witness VERIFIED
-palindromic (3452s local — NB t=26 SAT cells are hours-hard monolithically);
-p-1=633 TIMED OUT at 1h local cap, re-dispatched to GH with 5h cap (run
-29964214297, sat_pipeline `--point 26 633 sat`); q+1=644 decision dispatched
-(run 29962548794). When all four land, t=26 is the first proof-logged
-reproduction of an AKS palindromic pair beyond their published artifacts.
+for pdw(2;3,26)=(634,643) per the resolved reading rule: p+1=635 UNSAT DONE;
+q-1=642 SAT witness VERIFIED palindromic (3452s local); p-1=633 SAT witness
+VERIFIED (73s on GH after a 1h local timeout — heavy-tailed SAT lottery;
+this motivated PLAN_sat_portfolio.md, builder running 2026-07-23); q+1=644
+decision run 29962548794: 3795/4060 cubes UNSAT, 0 SAT, 7/16 shards walled
+at 350min, 265 unresolved cubes re-dispatched across 8 shards (run
+30002262707, cap 120s). NB N=644 has a REAL tail: one resolved cube took
+4079s; p90 100s vs median 0.37s.
+CERTIFICATION SETBACK: the monolithic `prove` of N=635 (run 29962546998)
+TIMED OUT at its 5h cap — the pilot's ~2 core-hour projection was a lower
+bound and DRAT-logging overhead + tail blew through it. So t=26 CANNOT be
+certified monolithically under the 6h wall; the sharded decision is
+complete but the certificate needs the PARALLEL path. Given the W(5,2)
+LRAT-Catcher success (below), the right build is now clear and REPLACES
+PLAN task 9's hand-rolled DRAT stitcher: shard per-cube LRAT generation
+across GH jobs, verify per-shard, compose in Lean via lratcatch-cover-
+parallel (chunked oleans are small; the multi-GB LRATs never need to be in
+one place). t=26 N=635 is the first real customer. Design session needed
+(estimate LRAT volume first: t=20's monolithic DRAT was 116MB at ~2 core-
+min; t=26 at 2-5+ core-hours of cube work projects several-GB-scale).
 
 **DIAGONAL VERDICT (2026-07-22, Fable): the W(6,2) wall is INTRINSIC —
 no-go confirmed; ladder shipped as `RESULTS_diagonal_ladder.md`.** The SB
