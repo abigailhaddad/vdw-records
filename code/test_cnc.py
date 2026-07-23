@@ -26,7 +26,8 @@ from vdw_cnc import (aggregate, slice_members, collect_shard_results,  # noqa: E
                      _lrat_check_verdict, cert_one_cube, cert_slice,
                      read_cert_jsonl, merge_cert_jsonl, do_cert_cover,
                      cert_aggregate, collect_tool_provenance, sha256_file,
-                     CADICAL, LRAT_TRIM, LRAT_CHECK)
+                     _cake_lpr_verdict,
+                     CADICAL, LRAT_TRIM, LRAT_CHECK, CAKE_LPR)
 
 
 def _shard(shard, status, n_unsat=0, unresolved=None):
@@ -1124,6 +1125,143 @@ def test_live_t15_cert_end_to_end_certifies():
     assert verdict["ncubes"] == ncubes, verdict
     assert verdict["n_cubes_verified"] == ncubes, verdict
     assert verdict["missing_cubes"] == [], verdict
+
+
+# =============================================================================
+# cake_lpr: optional SECOND Tier-A checker (CakeML formally verified LPR/LRAT
+# proof checker, Tan/Heule/Myreen, github.com/tanyongkiam/cake_lpr). These
+# tests are hermetic -- a FAKE cake_lpr shell script fixture, never the real
+# binary -- except the last one, which opts in only when $CAKE_LPR points at
+# a real built binary (skips cleanly otherwise, same pattern as
+# test_leaf_and_negcubes_match_lratcatch_export above).
+# =============================================================================
+
+def _write_fake_checker(path, stdout_lines, exit_code=0):
+    """A minimal fake checker executable for hermetic cake_lpr glue tests --
+    ignores argv entirely (cert_one_cube/do_cert_cover call it as
+    `<path> <cnf> <lrat>`, but this fixture doesn't care), just prints the
+    given lines to stdout and exits with the given code. exit_code is
+    deliberately irrelevant to the outcome -- _cake_lpr_verdict (like
+    _lrat_check_verdict) never consults exit codes, only stdout TEXT --
+    kept as a parameter only for realism / to prove that discipline."""
+    with open(path, "w") as f:
+        f.write("#!/bin/sh\n")
+        for ln in stdout_lines:
+            f.write(f"echo '{ln}'\n")
+        f.write(f"exit {exit_code}\n")
+    os.chmod(path, 0o755)
+
+
+def test_cake_lpr_verdict_exact_line_not_substring():
+    # Mirrors test_lrat_check_verdict_exact_line_not_substring's load-bearing
+    # catch: a crash/failure message that happens to CONTAIN the substring
+    # "VERIFIED" must never be read as a pass -- only the byte-exact success
+    # line "s VERIFIED UNSAT" counts.
+    assert _cake_lpr_verdict("s VERIFIED UNSAT\n") == "VERIFIED"
+    assert _cake_lpr_verdict("s NOT VERIFIED UNSAT\n") == "CHECK_ERR"
+    assert _cake_lpr_verdict(
+        "c some crash mentioning VERIFIED in prose, not the exact line\n"
+    ) == "CHECK_ERR"
+    assert _cake_lpr_verdict("") == "CHECK_ERR"
+
+
+def test_cert_one_cube_cake_lpr_exact_line_not_substring():
+    # Full glue path (not just the pure function above): a fake cake_lpr
+    # that prints failure text CONTAINING the substring "VERIFIED" (but not
+    # the exact success line) must NOT be counted as a pass by cert_one_cube.
+    # Real cadical/lrat-trim/lrat-check chain (same real t=15 split as
+    # test_cert_one_cube_real_chain_verifies) gets lrat-check to VERIFIED
+    # first, so this isolates cake_lpr's own exact-line-matching behavior.
+    with tempfile.TemporaryDirectory() as d:
+        cnf = os.path.join(d, "base.cnf")
+        cubes_path = os.path.join(d, "base.cubes")
+        do_split([3, 15], "palindromic", 206, cnf, cubes_path, "-d 8")
+        nvars, clause_lines = read_cnf(cnf)
+        cube_lits = read_cube_lits(cubes_path)
+        workdir = os.path.join(d, "work")
+        os.makedirs(workdir)
+        fake = os.path.join(d, "fake_cake_lpr.sh")
+        _write_fake_checker(fake, ["s NOT VERIFIED UNSAT"])
+        rec = cert_one_cube(nvars, clause_lines, cube_lits[0], 0, workdir,
+                            20.0, 0.05, CADICAL, LRAT_TRIM, LRAT_CHECK,
+                            cake_lpr=fake)
+    assert rec["checkers"]["lrat_check"] == "VERIFIED", rec
+    assert rec["checkers"]["cake_lpr"] == "CHECK_ERR", rec
+    assert rec["checker"] != "VERIFIED", rec
+    assert rec["checker"] == "CAKE_LPR_CHECK_ERR", rec
+
+
+def test_cert_one_cube_requires_both_checkers_to_certify():
+    # lrat-check VERIFIED (real chain) + cake_lpr FAILING in an unrelated way
+    # (a crash message with no "VERIFIED" substring at all) -- the cube must
+    # still NOT be certified: `checker` requires BOTH checkers to pass, not
+    # just lrat-check.
+    with tempfile.TemporaryDirectory() as d:
+        cnf = os.path.join(d, "base.cnf")
+        cubes_path = os.path.join(d, "base.cubes")
+        do_split([3, 15], "palindromic", 206, cnf, cubes_path, "-d 8")
+        nvars, clause_lines = read_cnf(cnf)
+        cube_lits = read_cube_lits(cubes_path)
+        workdir = os.path.join(d, "work")
+        os.makedirs(workdir)
+        fake = os.path.join(d, "fake_cake_lpr.sh")
+        _write_fake_checker(fake, ["c segfault in the CakeML runtime"],
+                            exit_code=1)
+        rec = cert_one_cube(nvars, clause_lines, cube_lits[0], 0, workdir,
+                            20.0, 0.05, CADICAL, LRAT_TRIM, LRAT_CHECK,
+                            cake_lpr=fake)
+    assert rec["checkers"]["lrat_check"] == "VERIFIED", rec
+    assert rec["checkers"]["cake_lpr"] == "CHECK_ERR", rec
+    assert rec["checker"] != "VERIFIED", rec
+
+
+def test_cert_one_cube_no_cake_lpr_configured_record_shape_unchanged():
+    # Default (cake_lpr not passed, matching $CAKE_LPR unset): the fast
+    # DISK_SKIP path (no real solver invoked at all -- genuinely hermetic
+    # and instant) must produce EXACTLY today's record shape -- no
+    # "checkers" key at all, `checker` untouched by any cake_lpr logic. This
+    # is the "purely additive" guarantee: a machine without cake_lpr must
+    # see byte-identical records to before cake_lpr existed.
+    with tempfile.TemporaryDirectory() as d:
+        workdir = os.path.join(d, "work")
+        os.makedirs(workdir)
+        rec = cert_one_cube(3, ["1 2 3 0\n"], [-1], 0, workdir, 5.0,
+                            1e9, CADICAL, LRAT_TRIM, LRAT_CHECK)
+    assert rec["checker"] == "DISK_SKIP", rec
+    assert "checkers" not in rec, rec
+
+
+def test_live_t15_cert_with_cake_lpr_end_to_end():
+    # Opt-in (skips cleanly, never fails) acceptance check of the SECOND
+    # Tier-A checker against the REAL binary: with $CAKE_LPR pointing at a
+    # real cake_lpr (CakeML formally verified LPR/LRAT checker,
+    # github.com/tanyongkiam/cake_lpr), certify one real t=15 cube through
+    # BOTH checkers and confirm the combined verdict is VERIFIED with both
+    # sub-verdicts recorded. Mirrors test_cert_one_cube_real_chain_verifies
+    # (same base real-chain contract), just with cake_lpr layered on top.
+    if not CAKE_LPR or not os.path.exists(CAKE_LPR):
+        print("    (skipped: set $CAKE_LPR to a built cake_lpr binary -- "
+              "github.com/tanyongkiam/cake_lpr -- to re-run this "
+              "acceptance check)")
+        return
+    with tempfile.TemporaryDirectory() as d:
+        cnf = os.path.join(d, "base.cnf")
+        cubes_path = os.path.join(d, "base.cubes")
+        do_split([3, 15], "palindromic", 206, cnf, cubes_path, "-d 8")
+        nvars, clause_lines = read_cnf(cnf)
+        cube_lits = read_cube_lits(cubes_path)
+        workdir = os.path.join(d, "work")
+        os.makedirs(workdir)
+        rec = cert_one_cube(nvars, clause_lines, cube_lits[0], 0, workdir,
+                            20.0, 0.05, CADICAL, LRAT_TRIM, LRAT_CHECK,
+                            cake_lpr=CAKE_LPR)
+        leftover = os.listdir(workdir)
+    assert rec["checker"] == "VERIFIED", rec
+    assert rec["checkers"] == {"lrat_check": "VERIFIED",
+                               "cake_lpr": "VERIFIED"}, rec
+    assert leftover == [], "leaf/lrat files must be deleted"
+    print(f"    cake_lpr second-checker acceptance: cube 0 VERIFIED by both "
+          f"lrat-check and cake_lpr ({CAKE_LPR})")
 
 
 def test_leaf_and_negcubes_match_lratcatch_export():

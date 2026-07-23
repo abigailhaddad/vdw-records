@@ -91,6 +91,18 @@ LRAT_TRIM = os.environ.get(
     "LRAT_TRIM", os.path.join(REPO_ROOT, "tools", "lrat-trim", "lrat-trim"))
 LRAT_CHECK = os.environ.get(
     "LRAT_CHECK", os.path.join(REPO_ROOT, "tools", "drat-trim", "lrat-check"))
+# Optional SECOND Tier-A checker (purely additive, never required): the
+# CakeML FORMALLY VERIFIED LPR/LRAT proof checker (Tan/Heule/Myreen,
+# github.com/tanyongkiam/cake_lpr) -- its checking code is itself
+# machine-checked correct against the CakeML semantics, unlike lrat-check
+# (an ordinary C program trusted by inspection/convention only). When this
+# is set (or --cake-lpr is passed), cert_one_cube/do_cert_cover run it as a
+# MUST-ALSO-PASS second opinion, AFTER lrat-check has already verified a
+# proof -- see cert_one_cube's docstring for the combined-verdict rule.
+# None (unset -- the default) makes the whole feature a no-op: every cert
+# code path stays BYTE-IDENTICAL to before cake_lpr existed, so a machine
+# without the binary (most local dev boxes) keeps working exactly as today.
+CAKE_LPR = os.environ.get("CAKE_LPR")
 
 # Exact flags recorded in every cert verdict (PLAN's "exact flags" invariant).
 CADICAL_LRAT_ARGS = ["--lrat", "--no-binary", "--no-factor"]
@@ -1822,8 +1834,31 @@ def _lrat_check_verdict(stdout):
     return "CHECK_ERR"
 
 
+def _cake_lpr_verdict(stdout):
+    """cake_lpr (Tan/Heule/Myreen's CakeML FORMALLY VERIFIED LPR/LRAT proof
+    checker, github.com/tanyongkiam/cake_lpr) prints the exact line
+    's VERIFIED UNSAT' on stdout on success (verified locally: `./cake_lpr
+    example.cnf example.lpr` prints exactly that line and nothing else).
+    Same exact-line discipline as _lrat_check_verdict above and for the
+    same reason: NEVER substring-match "VERIFIED" against raw stdout --
+    a failure/usage banner could easily contain that word without meaning
+    success (this is exactly the "c NOT VERIFIED" trap _lrat_check_verdict
+    guards against; the fake-checker test fixtures cover the same trap
+    here). Returns "CHECK_ERR" for anything else -- a crash, a malformed or
+    unrefuted proof (cake_lpr reports those on stderr as free-text messages,
+    e.g. "c empty clause not derived at end of proof", not a second fixed
+    line, so unlike lrat-check there is no distinct "known failure" string
+    to return separately from a bare parse/crash failure). Exit code is
+    never consulted, matching the never-trust-exit-codes rule used
+    everywhere else in this cert pipeline."""
+    lines = [ln.strip() for ln in stdout.splitlines()]
+    if "s VERIFIED UNSAT" in lines:
+        return "VERIFIED"
+    return "CHECK_ERR"
+
+
 def cert_one_cube(nvars, clause_lines, cube_lits, gidx, workdir, cap_seconds,
-                  min_free_gb, cadical, lrat_trim, lrat_check):
+                  min_free_gb, cadical, lrat_trim, lrat_check, cake_lpr=None):
     """Certify ONE cube (PLAN_distributed_cert.md Tier A step 2): leaf CNF
     (cube unit clauses prepended to the base) -> `cadical --lrat --no-binary
     --no-factor` (cap_seconds) -> `lrat-trim` -> `lrat-check` the TRIMMED
@@ -1834,6 +1869,26 @@ def cert_one_cube(nvars, clause_lines, cube_lits, gidx, workdir, cap_seconds,
     bearing soundness invariant of the whole mode (lrat-trim in particular
     is KNOWN to exit non-zero here even when its output verifies -- see the
     module-level LRAT_TRIM_ARGS comment / PLAN_distributed_cert.md).
+
+    cake_lpr (optional SECOND Tier-A checker): a path to the CakeML
+    FORMALLY VERIFIED LPR/LRAT checker (see the module-level CAKE_LPR
+    comment), or None (the default). When given, it runs on the exact same
+    two files lrat-check just checked (leaf CNF, TRIMMED proof) -- but
+    ONLY after lrat-check has ALREADY said VERIFIED (there is nothing sound
+    to hand a second checker if the first one didn't pass). The per-checker
+    detail is recorded under rec["checkers"] (e.g. {"lrat_check":
+    "VERIFIED", "cake_lpr": "VERIFIED"}, or {"lrat_check": "TIMEOUT",
+    "cake_lpr": "NOT_RUN"} if lrat-check itself never got there), and the
+    top-level rec["checker"] becomes the COMBINED verdict: "VERIFIED" iff
+    BOTH checkers agree, else lrat-check's own failure string (if it never
+    verified) or "CAKE_LPR_<verdict>" (if lrat-check verified but cake_lpr
+    didn't). cert_aggregate/merge_cert_jsonl only ever read rec["checker"],
+    so they automatically require both checkers once cake_lpr is
+    configured, with zero changes to their own code.
+    When cake_lpr is None (unset $CAKE_LPR and no --cake-lpr -- the
+    default), this paragraph is a total no-op: rec["checker"] is exactly
+    lrat-check's own verdict and NO rec["checkers"] key is ever added, so
+    the record is byte-identical to before cake_lpr existed.
 
     Disk guard: if free space on --outdir's filesystem is below min_free_gb,
     skip the cube entirely (no cadical run at all) and record
@@ -1850,6 +1905,8 @@ def cert_one_cube(nvars, clause_lines, cube_lits, gidx, workdir, cap_seconds,
         rec.update({"cadical_s": 0.0, "rc": None, "native_bytes": None,
                     "trimmed_bytes": None, "sha256_trimmed": None,
                     "checker": "DISK_SKIP", "free_gb": round(free_gb, 3)})
+        if cake_lpr:
+            rec["checkers"] = {"lrat_check": "DISK_SKIP", "cake_lpr": "NOT_RUN"}
         return rec
     write_leaf_cnf(nvars, clause_lines, cube_lits, leaf)
     t0 = time.time()
@@ -1892,6 +1949,23 @@ def cert_one_cube(nvars, clause_lines, cube_lits, gidx, workdir, cap_seconds,
     rec.update({"cadical_s": round(cadical_s, 3), "rc": rc,
                "native_bytes": native_bytes, "trimmed_bytes": trimmed_bytes,
                "sha256_trimmed": sha_trim, "checker": checker})
+    if cake_lpr:
+        # SECOND checker (optional): only meaningful once lrat-check itself
+        # verified -- on ANY other lrat-check outcome, cake_lpr never runs
+        # (recorded as NOT_RUN) and the combined checker stays exactly
+        # lrat-check's own failure string.
+        cake_verdict = "NOT_RUN"
+        if checker == "VERIFIED":
+            try:
+                cp2 = subprocess.run([cake_lpr, leaf, trimmed],
+                                    capture_output=True, text=True,
+                                    timeout=cap_seconds)
+                cake_verdict = _cake_lpr_verdict(cp2.stdout)
+            except subprocess.TimeoutExpired:
+                cake_verdict = "TIMEOUT"
+        rec["checkers"] = {"lrat_check": checker, "cake_lpr": cake_verdict}
+        if checker == "VERIFIED" and cake_verdict != "VERIFIED":
+            rec["checker"] = f"CAKE_LPR_{cake_verdict}"
     # DELETE the leaf/LRAT files before the next cube -- peak disk is one
     # cube's worth (a monster leaf's native LRAT can be multi-GB at t=26
     # scale, see PLAN_distributed_cert.md's probe numbers), never the whole
@@ -1906,7 +1980,8 @@ def cert_one_cube(nvars, clause_lines, cube_lits, gidx, workdir, cap_seconds,
 
 def cert_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap_seconds,
                outdir, cube_indices=None, min_free_gb=DISK_GUARD_DEFAULT_GB,
-               cadical=CADICAL, lrat_trim=LRAT_TRIM, lrat_check=LRAT_CHECK):
+               cadical=CADICAL, lrat_trim=LRAT_TRIM, lrat_check=LRAT_CHECK,
+               cake_lpr=None):
     """Tier A cert shard (PLAN_distributed_cert.md): certify this shard's
     cubes one at a time via cert_one_cube, checkpointing a JSONL exactly
     like conquer_slice's shard-N.jsonl (meta line first, one record per
@@ -1923,7 +1998,11 @@ def cert_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap_seconds,
     checkpoint format, never a replacement for it, and the two must never
     be confused (a cert record's "checker" field and a decision record's
     "verdict" field mean different things -- see the HARD CONSTRAINT in
-    PLAN_distributed_cert.md that `cert` never touch conquer/aggregate)."""
+    PLAN_distributed_cert.md that `cert` never touch conquer/aggregate).
+
+    cake_lpr: threaded straight through to cert_one_cube for every cube in
+    this shard (see its docstring) -- None (default) means lrat-check-only,
+    byte-identical to before cake_lpr existed."""
     lengths, encoding, N = meta["lengths"], meta["encoding"], meta["N"]
     slug = instance_slug(lengths, encoding, N)
     workdir = os.path.join(outdir, f"cert_{slug}_shard{shard}")
@@ -1934,7 +2013,9 @@ def cert_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap_seconds,
         members, mode = slice_members(len(cubes), nshards, shard), "round-robin"
     print(f"  cert shard {shard}/{nshards} ({mode}): {len(members)} of "
           f"{len(cubes)} cubes, per-cube cadical cap {cap_seconds}s, "
-          f"disk guard {min_free_gb} GB", flush=True)
+          f"disk guard {min_free_gb} GB"
+          + (", cake_lpr second checker ENABLED" if cake_lpr else ""),
+          flush=True)
 
     jsonl_path = os.path.join(outdir, f"cert-shard-{shard}.jsonl")
     jf = open(jsonl_path, "w")
@@ -1944,7 +2025,8 @@ def cert_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap_seconds,
                          "ncubes": len(cubes), "mode": mode, "members": members,
                          "cap_seconds": cap_seconds, "min_free_gb": min_free_gb,
                          "cadical_args": CADICAL_LRAT_ARGS,
-                         "lrat_trim_args": LRAT_TRIM_ARGS}) + "\n")
+                         "lrat_trim_args": LRAT_TRIM_ARGS,
+                         "cake_lpr_configured": bool(cake_lpr)}) + "\n")
     jf.flush()
 
     n_verified = 0
@@ -1952,7 +2034,7 @@ def cert_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap_seconds,
     for gidx in members:
         rec = cert_one_cube(nvars, clause_lines, cubes[gidx], gidx, workdir,
                             cap_seconds, min_free_gb, cadical, lrat_trim,
-                            lrat_check)
+                            lrat_check, cake_lpr=cake_lpr)
         jf.write(json.dumps(rec) + "\n")
         jf.flush()
         records.append(rec)
@@ -2046,7 +2128,7 @@ def merge_cert_jsonl(results_dir):
 
 
 def do_cert_cover(negcubes_path, cover_path, cap_seconds,
-                  cadical=CADICAL, lrat_check=LRAT_CHECK):
+                  cadical=CADICAL, lrat_check=LRAT_CHECK, cake_lpr=None):
     """Tier A cover step (PLAN_distributed_cert.md step 3): refute
     negcubes.cnf (proving the cube set exhausts the whole search space) with
     `cadical --lrat --no-binary --no-factor`, then `lrat-check` the result
@@ -2054,7 +2136,14 @@ def do_cert_cover(negcubes_path, cover_path, cap_seconds,
     cover.lrat is small and is the piece that gets COMMITTED to the repo, so
     it is kept exactly as cadical wrote it, never discarded/replaced. Same
     never-trust-exit-codes rule as cert_one_cube: only lrat-check's TEXT
-    output (_lrat_check_verdict) decides the checker verdict."""
+    output (_lrat_check_verdict) decides the checker verdict.
+
+    cake_lpr (optional SECOND Tier-A checker): identical treatment to
+    cert_one_cube -- when given, it runs on (negcubes_path, cover_path)
+    AFTER lrat-check has already verified the cover, and the combined
+    "checker" is "VERIFIED" only if both agree; per-checker detail goes in
+    "checkers". None (default, unset $CAKE_LPR / no --cake-lpr) -> total
+    no-op, byte-identical result shape to before cake_lpr existed."""
     t0 = time.time()
     timed_out = False
     rc = None
@@ -2083,9 +2172,23 @@ def do_cert_cover(negcubes_path, cover_path, cap_seconds,
         cp = subprocess.run([lrat_check, negcubes_path, cover_path],
                             capture_output=True, text=True)
         checker = _lrat_check_verdict(cp.stdout)
-    return {"cadical_s": round(cadical_s, 3), "rc": rc,
-           "cover_bytes": cover_bytes, "sha256_cover": sha_cover,
-           "checker": checker, "cover_path": cover_path}
+    result = {"cadical_s": round(cadical_s, 3), "rc": rc,
+             "cover_bytes": cover_bytes, "sha256_cover": sha_cover,
+             "checker": checker, "cover_path": cover_path}
+    if cake_lpr:
+        cake_verdict = "NOT_RUN"
+        if checker == "VERIFIED":
+            try:
+                cp2 = subprocess.run([cake_lpr, negcubes_path, cover_path],
+                                    capture_output=True, text=True,
+                                    timeout=cap_seconds)
+                cake_verdict = _cake_lpr_verdict(cp2.stdout)
+            except subprocess.TimeoutExpired:
+                cake_verdict = "TIMEOUT"
+        result["checkers"] = {"lrat_check": checker, "cake_lpr": cake_verdict}
+        if checker == "VERIFIED" and cake_verdict != "VERIFIED":
+            result["checker"] = f"CAKE_LPR_{cake_verdict}"
+    return result
 
 
 def _tool_version(cmd):
@@ -2098,13 +2201,22 @@ def _tool_version(cmd):
 
 
 def collect_tool_provenance(cadical=CADICAL, lrat_trim=LRAT_TRIM,
-                            lrat_check=LRAT_CHECK):
+                            lrat_check=LRAT_CHECK, cake_lpr=CAKE_LPR):
     """Tool identity for the cert verdict JSON (PLAN's 'tool versions +
     exact flags + sha256s' requirement): a version string where the tool
     prints one, AND a sha256 of the binary itself (lrat-check has no
     --version flag, so its binary hash is the only provenance available for
     it; recording it for cadical/lrat-trim too costs nothing and pins
-    exactly which build ran, not just which release string it claims)."""
+    exactly which build ran, not just which release string it claims).
+
+    cake_lpr (optional SECOND Tier-A checker, default CAKE_LPR i.e. whatever
+    $CAKE_LPR/--cake-lpr resolved to): when truthy, a "cake_lpr" entry is
+    added recording its resolved path, a sha256 of the binary (like
+    lrat-check, it has no --version flag this pipeline parses, so the
+    binary hash IS its provenance), and a fixed note identifying it as the
+    CakeML formally verified checker. When cake_lpr is falsy (unset -- the
+    default), NO "cake_lpr" key is added at all -- the returned dict is
+    byte-identical to before cake_lpr existed."""
     def resolve(path):
         if os.path.isabs(path):
             return path if os.path.exists(path) else None
@@ -2113,7 +2225,7 @@ def collect_tool_provenance(cadical=CADICAL, lrat_trim=LRAT_TRIM,
     cad_path = resolve(cadical)
     trim_path = resolve(lrat_trim)
     check_path = resolve(lrat_check)
-    return {
+    out = {
         "cadical": {"path": cad_path,
                    "version": (_tool_version([cadical, "--version"])
                               if cad_path else None),
@@ -2127,6 +2239,20 @@ def collect_tool_provenance(cadical=CADICAL, lrat_trim=LRAT_TRIM,
         "cadical_flags": " ".join(CADICAL_LRAT_ARGS),
         "lrat_trim_flags": " ".join(LRAT_TRIM_ARGS),
     }
+    if cake_lpr:
+        cake_path = resolve(cake_lpr)
+        out["cake_lpr"] = {
+            "path": cake_path,
+            "sha256": sha256_file(cake_path) if cake_path else None,
+            "note": "CakeML formally verified LPR/LRAT proof checker "
+                    "(Tan/Heule/Myreen, github.com/tanyongkiam/cake_lpr) -- "
+                    "a SECOND, must-also-pass Tier-A checker; its checking "
+                    "code is itself machine-checked correct against the "
+                    "CakeML semantics, unlike lrat-check (trusted by "
+                    "inspection/convention). See cert_one_cube's docstring "
+                    "for the combined-verdict rule.",
+        }
+    return out
 
 
 def cert_aggregate(results_dir, cover_result, tool_provenance):
@@ -2325,8 +2451,25 @@ def main():
                      help="cert-aggregate: path to the JSON cert-cover wrote "
                           "(--json-out of a prior cert-cover run). Missing -> "
                           "cover counted as unverified -> UNDETERMINED.")
+    ap.add_argument("--cake-lpr", default=None,
+                     help="cert/cert-cover/cert-aggregate: path to the "
+                          "CakeML FORMALLY VERIFIED LPR/LRAT proof checker "
+                          "(cake_lpr, github.com/tanyongkiam/cake_lpr) -- "
+                          "overrides $CAKE_LPR when both are given. When "
+                          "configured (this flag or $CAKE_LPR), it runs as "
+                          "a SECOND, must-also-pass checker after "
+                          "lrat-check verifies a cube's trimmed proof (or "
+                          "the cover's proof) -- a cube/cover is VERIFIED "
+                          "only if BOTH checkers agree (see cert_one_cube). "
+                          "Leave unset (default) for lrat-check-only "
+                          "behavior, byte-identical to before this flag "
+                          "existed.")
     args = ap.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
+    # --cake-lpr overrides $CAKE_LPR when both are given; neither given ->
+    # None -> every cert code path is a total no-op for cake_lpr (see
+    # CAKE_LPR's module-level comment and cert_one_cube's docstring).
+    cake_lpr = args.cake_lpr or CAKE_LPR or None
 
     if args.sb_in_split and not args.symmetry_break:
         ap.error("--sb-in-split requires --symmetry-break")
@@ -2493,7 +2636,7 @@ def main():
         res = cert_slice(meta, nvars, clause_lines, cubes, args.shard,
                          args.nshards, args.cap_seconds, args.outdir,
                          cube_indices=cube_indices,
-                         min_free_gb=args.min_free_gb)
+                         min_free_gb=args.min_free_gb, cake_lpr=cake_lpr)
         print(f"\n  cert shard {args.shard}: {res['n_verified']}/"
               f"{res['n_cubes_in_slice']} cubes VERIFIED"
               + (f", not verified: {res['not_verified_cubes']}"
@@ -2510,7 +2653,8 @@ def main():
                      f"{negcubes_path} (run `negcubes` first, or pass "
                      f"--negcubes)")
         cover_path = args.cover_out or os.path.join(args.outdir, "cover.lrat")
-        res = do_cert_cover(negcubes_path, cover_path, args.cap_seconds)
+        res = do_cert_cover(negcubes_path, cover_path, args.cap_seconds,
+                            cake_lpr=cake_lpr)
         print(f"\n  cert-cover: {res['checker']} in {res['cadical_s']:.2f}s "
               f"({res['cover_bytes']} bytes) -> {cover_path}", flush=True)
         if args.json_out:
@@ -2524,7 +2668,7 @@ def main():
         cover_result = None
         if args.cover_json and os.path.exists(args.cover_json):
             cover_result = json.load(open(args.cover_json))
-        tool_provenance = collect_tool_provenance()
+        tool_provenance = collect_tool_provenance(cake_lpr=cake_lpr)
         agg = cert_aggregate(args.results_dir, cover_result, tool_provenance)
         print(f"=== cert-aggregate: {agg['verdict']} "
               f"({agg['n_cubes_verified']}/{agg['ncubes']} cubes VERIFIED, "

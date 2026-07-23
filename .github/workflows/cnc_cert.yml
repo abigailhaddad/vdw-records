@@ -22,6 +22,17 @@ name: vdw-cnc-cert
 # github.com/marijnheule/drat-trim (lrat-check) are NOT tracked in this repo
 # (like cnc_pipeline.yml's march_cu/iglucose), so build_tools clones/builds
 # all four fresh on the runner.
+#
+# cake_lpr (github.com/tanyongkiam/cake_lpr, Tan/Heule/Myreen's CakeML
+# FORMALLY VERIFIED LPR/LRAT proof checker) is a SECOND, must-also-pass
+# Tier-A checker, built alongside the other four at a PINNED commit (see
+# build_tools' cake_lpr_rev step) -- unlike lrat-check (an ordinary C
+# program trusted by inspection), cake_lpr's own checking code is itself
+# machine-checked correct. It is built ALWAYS (part of the same cached
+# tools tarball), but only EXPORTED to the cert/cover jobs (as $CAKE_LPR)
+# when the use_cake_lpr input is 'true' (the default) -- 'false' means the
+# env var is simply never set, so code/vdw_cnc.py's cert path runs
+# lrat-check-only, byte-identical to before cake_lpr existed.
 
 permissions:
   contents: write
@@ -73,6 +84,11 @@ on:
       timeout_minutes:
         description: "per-shard job timeout (<=360 on standard public runners)"
         default: "350"
+      use_cake_lpr:
+        description: "run cake_lpr (Tan/Heule/Myreen's CakeML FORMALLY VERIFIED LPR/LRAT checker, github.com/tanyongkiam/cake_lpr) as a SECOND, must-also-pass checker alongside lrat-check, for every cube and the cover. 'false' exports no $CAKE_LPR at all -- lrat-check-only, matching pre-cake_lpr behavior."
+        default: "true"
+        type: choice
+        options: ["true", "false"]
 
 jobs:
   setup:
@@ -162,11 +178,20 @@ jobs:
           sha=$(git ls-remote https://github.com/marijnheule/drat-trim.git HEAD | cut -f1)
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "upstream drat-trim HEAD: $sha"
+      # cake_lpr: PIN the exact commit observed during the cake_lpr-checker
+      # builder session (2026-07-23) -- same never-drift-silently rule as
+      # lrat-trim above. Update this hash deliberately (new PR) if upstream
+      # cake_lpr needs to move.
+      - id: cake_lpr_rev
+        run: |
+          sha=a36874a8b750b43fe4b385b8ddbf5b033e46a3fa
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "pinned cake_lpr: $sha"
       - id: cache
         uses: actions/cache@v4
         with:
           path: pkg/certbin
-          key: cnc-cert-tools-${{ runner.os }}-march${{ steps.march_rev.outputs.sha }}-cad${{ steps.cadical_rev.outputs.sha }}-lrattrim${{ steps.lrat_trim_rev.outputs.sha }}-dt${{ steps.drat_trim_rev.outputs.sha }}
+          key: cnc-cert-tools-${{ runner.os }}-march${{ steps.march_rev.outputs.sha }}-cad${{ steps.cadical_rev.outputs.sha }}-lrattrim${{ steps.lrat_trim_rev.outputs.sha }}-dt${{ steps.drat_trim_rev.outputs.sha }}-cakelpr${{ steps.cake_lpr_rev.outputs.sha }}
       - name: apt prerequisites
         if: steps.cache.outputs.cache-hit != 'true'
         run: sudo apt-get update -y && sudo apt-get install -y build-essential git
@@ -207,6 +232,25 @@ jobs:
           git clone --depth 1 https://github.com/marijnheule/drat-trim.git /tmp/drat-trim-src
           ( cd /tmp/drat-trim-src && make lrat-check )
           cp /tmp/drat-trim-src/lrat-check "$GITHUB_WORKSPACE/pkg/certbin/"
+      - name: clone + build PINNED cake_lpr (${{ steps.cake_lpr_rev.outputs.sha }}, x86-64, 8GB heap / 2GB stack)
+        if: steps.cache.outputs.cache-hit != 'true'
+        # x86-64 target (plain `make` in cake_lpr's Makefile) -- runners are
+        # ubuntu (x86-64), NOT the arm8 target used to build/test this
+        # locally on Abigail's mac. -DCML_HEAP_SIZE=8192 -DCML_STACK_SIZE=2048
+        # (MB) mirrors the vendored Makefile's own `starexec` target's
+        # pattern (64GB heap / 16GB stack there, for starexec's bigger
+        # boxes) scaled down to fit these runners' 16GB RAM with headroom
+        # for monster proofs at t=26+ scale -- always built (part of the
+        # same cached tools tarball as everything else); whether it's
+        # actually EXPORTED to cert/cover is decided per-run by
+        # inputs.use_cake_lpr, not by whether it got built.
+        run: |
+          git clone --quiet https://github.com/tanyongkiam/cake_lpr.git /tmp/cake_lpr-src
+          cd /tmp/cake_lpr-src
+          git checkout --quiet ${{ steps.cake_lpr_rev.outputs.sha }}
+          gcc -O2 basis_ffi.c cake_lpr.S -o cake_lpr -std=c99 \
+            -DCML_HEAP_SIZE=8192 -DCML_STACK_SIZE=2048
+          cp cake_lpr "$GITHUB_WORKSPACE/pkg/certbin/"
       - name: package binaries (from cache or fresh build)
         run: |
           chmod +x pkg/certbin/*
@@ -339,6 +383,9 @@ jobs:
         run: |
           ciflag=""
           [ -n "${{ matrix.cube_indices }}" ] && ciflag="--cube-indices ${{ matrix.cube_indices }}"
+          # use_cake_lpr 'false' -> $CAKE_LPR simply never gets exported, so
+          # cert falls back to lrat-check-only (byte-identical behavior).
+          [ "${{ inputs.use_cake_lpr }}" = "true" ] && export CAKE_LPR="${{ github.workspace }}/certbin/cake_lpr"
           python3 code/vdw_cnc.py cert $INST_ARGS --N ${{ inputs.N }} \
             --cnf cnc_out/cnc_${SLUG}.cnf \
             --cubes cnc_out/cnc_${SLUG}.cubes \
@@ -385,6 +432,9 @@ jobs:
           CADICAL: ${{ github.workspace }}/certbin/cadical
           LRAT_CHECK: ${{ github.workspace }}/certbin/lrat-check
         run: |
+          # use_cake_lpr 'false' -> $CAKE_LPR simply never gets exported, so
+          # cert-cover falls back to lrat-check-only (byte-identical behavior).
+          [ "${{ inputs.use_cake_lpr }}" = "true" ] && export CAKE_LPR="${{ github.workspace }}/certbin/cake_lpr"
           python3 code/vdw_cnc.py cert-cover \
             --negcubes cnc_out/negcubes.cnf \
             --cover-out cnc_out/cover.lrat \
