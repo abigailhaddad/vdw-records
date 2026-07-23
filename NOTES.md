@@ -142,13 +142,18 @@ Fable to review/spec; (ii) N=177 lower-bound witness via native_decide
    projection before speccing the workflow. Mind the two LRAT-Catcher
    gotchas from the W(5,2) rehearsal (maxRecDepth on Base.lean; chunkSize
    ~50 not 1) and per-leaf memory under native_decide.
-4. W(5,2) FULL THEOREM (Fable review then builder): read LRAT-Catcher's
-   Schur/Ramsey verified encodings (scratchpad clone lrat-catcher/, or
-   re-clone github.com/leansolving/lrat-catcher) as the template; spec (i)
-   the vdW encoding lemma (base.Unsat <-> no good 2-coloring of [1,178]),
-   (ii) N=177 witness via native_decide (schur4_lower pattern), (iii)
-   vdwNumber 2 5 = 178 composition. This is the claimable first — as far
-   as we found, NO vdW number has ever been formally verified.
+4. DONE 2026-07-23 (sonnet builder to PLAN_w52_lean_theorem.md spec,
+   Fable-reviewed + independently rebuilt/axiom-checked, commit b1c8c39):
+   **W(5,2)=178 IS A LEAN THEOREM.** vdw_5_2 : vdwNumber2 5 178, a
+   statement purely about 2-colorings. Bridge = clause-set inclusion
+   (base.clauses ⊆ encode2 5 178 clauses, native_decide 21s, 1.2GB RSS);
+   exact equality would have held byte-wise but CNF has no DecidableEq
+   upstream. W(3,2)=9 toy proved first. Axioms: propext/Classical.choice/
+   Quot.sound + 76 native_decide; no sorry. Artifact + recipe: lean/
+   (BUILD.md pins upstream 4ec2168). As far as we found: the FIRST
+   formally verified van der Waerden number. NEXT: the writeup/email
+   (Heule/Kouril/Bill) — Abigail's call on timing; and report the two
+   LRAT-Catcher bugs + this showcase to Szeider.
 5. AFTER t=26 closes: t=27 reproduction is cheap insurance (same drill,
    cells from Table 6 (664,699): 663/665/698/700); the genuinely-NEW
    frontier is t=28+ where Table 7 pairs are only local-search lower
