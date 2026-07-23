@@ -20,7 +20,8 @@ import vdw_cnc  # noqa: E402
 from vdw_cnc import (aggregate, slice_members, collect_shard_results,  # noqa: E402
                      reconstruct_shard_from_jsonl, merge_jsonl_verdicts,
                      resolve_instance, check_sb_allowed, do_split,
-                     conquer_slice, read_cnf, read_cube_lits, MARCH, IGLUCOSE)
+                     conquer_slice, read_cnf, read_cube_lits, MARCH, IGLUCOSE,
+                     read_pdw_pq)
 
 
 def _shard(shard, status, n_unsat=0, unresolved=None):
@@ -560,6 +561,102 @@ def test_local_path_k4_both_sides_with_symmetry_break():
             (conquer34_meta, plain34_meta)
         assert conquer34_meta["solved"] == plain34_meta["solved"], \
             (conquer34_meta, plain34_meta)
+
+
+# --- AKS (p,q) reading rule (Theorem 5.1, arXiv 1102.5433 Sec 5) -----------
+# read_pdw_pq() is the ONE place a swept map turns into the exact pdw pair;
+# these tests build (smap, witness_map) BY HAND -- no solver, no do_solve --
+# matching the hermetic style of every other test in this file. See
+# NOTES.md item 2 (RESOLVED 2026-07-22) for the math this encodes.
+
+def _map(n_lo, pattern):
+    """'SSSSUSUSUUU' starting at n_lo -> {N: "SAT"/"UNSAT"/"UNRESOLVED"}."""
+    codes = {"S": "SAT", "U": "UNSAT", "X": "UNRESOLVED"}
+    return {n_lo + i: codes[c] for i, c in enumerate(pattern)}
+
+
+def test_read_pdw_pq_t15_theorem_example():
+    # The exact case cross-checked in NOTES.md item 2 against AKS Table 6:
+    # N=197..207 = S S S S U S U S U U U must read (p,q)=(200,205), with the
+    # four Theorem-5.1 cert cells at 199/201/204/206 -- and, with SAT
+    # witnesses recorded at both p-1=199 and q-1=204 (the two UNSAT cells
+    # are full-coverage by construction, see read_pdw_pq's docstring), the
+    # pair is CLAIMABLE outright.
+    smap = _map(197, "SSSSUSUSUUU")
+    pq = read_pdw_pq(smap, {199: True, 204: True}, 197, 207)
+    assert pq["valid"], pq
+    assert (pq["p"], pq["q"]) == (200, 205), pq
+    assert set(pq["cert_cells"]) == {199, 201, 204, 206}, pq
+    assert pq["claim"] == "CLAIMABLE", pq
+    assert pq["cert_missing"] == [], pq
+
+
+def test_read_pdw_pq_candidate_when_witness_missing():
+    # Claimable-vs-candidate distinction: SAME map/pair, but no witness was
+    # ever recorded for the p-1 cell (199) -- read_pdw_pq still validly READS
+    # (p,q)=(200,205) (the alternation itself is intact), it just can't call
+    # it CLAIMABLE yet -- exactly the "CANDIDATE, list what's missing" half
+    # of Theorem 5.1's rule.
+    smap = _map(197, "SSSSUSUSUUU")
+    pq = read_pdw_pq(smap, {204: True}, 197, 207)  # 199 never checked
+    assert pq["valid"], pq
+    assert (pq["p"], pq["q"]) == (200, 205), pq
+    assert pq["claim"] == "CANDIDATE", pq
+    assert pq["cert_missing"] == [199], pq
+    assert pq["cert_cells"][199]["verified"] is False, pq
+    assert pq["cert_cells"][204]["verified"] is True, pq
+
+
+def test_read_pdw_pq_undetermined_point_in_alternation_window_blocks_claim():
+    # An UNRESOLVED point INSIDE the p..q alternation window (203, between
+    # p=200 and q=205) must block the claim outright -- no p/q emitted, and
+    # the violation is loud (present in `violations`), same "withhold but
+    # never raise" contract as do_solve's diagonal monotonicity check.
+    smap = _map(197, "SSSSUSXSUUU")  # 203 UNRESOLVED instead of UNSAT
+    pq = read_pdw_pq(smap, {}, 197, 207)
+    assert not pq["valid"], pq
+    assert pq["p"] is None and pq["q"] is None, pq
+    assert pq["claim"] is None, pq
+    assert any("UNDETERMINED" in v for v in pq["violations"]), pq
+
+
+def test_read_pdw_pq_even_gap_violates_corollary_5_1_2():
+    # Corollary 5.1.2 requires q-p ODD. This map's first UNSAT (201) and last
+    # SAT (203) give p=200, q=204 -- an EVEN 4-point gap -- which is refused
+    # loudly (it also, necessarily, breaks strict alternation over the same
+    # range -- the two checks catch the same underlying inconsistency from
+    # different angles, which is fine: both fire).
+    smap = _map(197, "SSSSUUSUU")  # 197-200 S, 201-202 U, 203 S, 204-205 U
+    pq = read_pdw_pq(smap, {}, 197, 205)
+    assert not pq["valid"], pq
+    assert pq["p"] is None and pq["q"] is None, pq
+    assert any("even" in v for v in pq["violations"]), pq
+
+
+def test_read_pdw_pq_sat_reappearing_past_the_alternation_blocks_claim():
+    # A SAT point reappears (208) well after the map looked like it had gone
+    # permanently UNSAT (206, 207) -- exactly the "all n>=q UNSAT" property
+    # (Definition 5.3) failing for real. read_pdw_pq recomputes last_sat as
+    # the TRUE max SAT in the window (208, not the earlier-looking 204), so
+    # the run of UNSATs in between (206, 207) can no longer satisfy strict
+    # single-step alternation out to the new q=209 -- caught, no claim.
+    smap = _map(197, "SSSSUSUSUUUSU")
+    pq = read_pdw_pq(smap, {}, 197, 209)
+    assert not pq["valid"], pq
+    assert pq["p"] is None and pq["q"] is None, pq
+    assert pq["violations"], pq
+
+
+def test_read_pdw_pq_non_unsat_point_above_last_sat_blocks_claim():
+    # Dedicated check for "every swept point above the last SAT is UNSAT":
+    # an UNRESOLVED point (208) sitting ABOVE q=205 (outside the p..q
+    # alternation window, so the alternation check alone would not catch
+    # it) must still block the claim.
+    smap = _map(197, "SSSSUSUSUUUX")  # 208 UNRESOLVED, past q=205
+    pq = read_pdw_pq(smap, {}, 197, 208)
+    assert not pq["valid"], pq
+    assert pq["p"] is None and pq["q"] is None, pq
+    assert any("above the last SAT" in v for v in pq["violations"]), pq
 
 
 def main():

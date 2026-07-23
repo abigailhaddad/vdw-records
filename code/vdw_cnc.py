@@ -897,6 +897,142 @@ def conjectured_pair(t):
     return None, None
 
 
+def read_pdw_pq(smap, witness_map, n_lo, n_hi):
+    """AKS's exact-pair reading rule (Ahmed-Kullmann-Snevily, arXiv
+    1102.5433, Section 5 -- resolved 2026-07-22, see NOTES.md item 2).
+
+    `smap` is a sweep map N -> status ("SAT"/"UNSAT"/anything else means
+    undetermined for this purpose), exactly do_solve's `map` field.
+    `witness_map` is N -> witness_ok (True/False/None), the SAME field
+    check_witness()/conquer_slice()'s "witness" already carries -- no new
+    artifact format, just threaded through do_solve's sweep loop.
+
+    The math (for the record, not separately re-checked here -- see
+    NOTES.md item 2 for the derivation):
+      Definition 5.3: p = largest p such that ALL n<=p are palindromic-SAT;
+        q = smallest q such that ALL n>=q are UNSAT.
+      Corollary 5.1.1: UNSAT at n implies UNSAT at n+2i (removing both
+        endpoints of an AP preserves the palindrome -- monotonicity is
+        per-PARITY, upward only).
+      Corollary 5.1.2: q-p is always ODD, and between p and q verdicts
+        strictly alternate (p SAT, p+1 UNSAT, p+2 SAT, ..., q UNSAT).
+      Theorem 5.1: exactly FOUR facts certify pdw=(p,q): SAT at p-1 and
+        q-1; UNSAT at p+1 and q+1 -- everything else (all n<=p SAT, all
+        n>=q UNSAT) follows by propagating those two facts up/down their
+        parity chains via Corollary 5.1.1.
+
+    The reading rule: p = first_UNSAT - 1, q = last_SAT + 1 off the swept
+    map, but (p, q) is only EMITTED (p/q non-None, valid=True) when every
+    one of these holds over the swept window [n_lo, n_hi]:
+      - every swept point below first_UNSAT is SAT;
+      - every swept point above last_SAT is UNSAT;
+      - q - p is odd (Corollary 5.1.2);
+      - between p and q verdicts strictly alternate in parity exactly as
+        Corollary 5.1.2 dictates;
+      - no swept point is anything other than SAT/UNSAT (an UNRESOLVED --
+        or otherwise undetermined -- point anywhere in the window blocks
+        the claim outright).
+    Any violation is reported (loudly, by the caller) and p/q are withheld
+    (None) -- `candidate_p`/`candidate_q` still carry the raw (possibly
+    unsound) values for diagnostics. This mirrors do_solve's existing
+    "loud but non-fatal" contract for the diagonal monotonicity check: a
+    violation never raises, it's surfaced in the returned dict.
+
+    When (p, q) IS validly read, Theorem 5.1's four certification cells
+    (p-1, p+1, q-1, q+1) are checked against the SAME map/witness_map for
+    already-verified artifacts: a SAT witness (status SAT, witness_ok is
+    True) at p-1 and q-1, and a full-coverage UNSAT verdict at p+1 and
+    q+1 -- "full coverage" needs no separate field here because, in this
+    single-process per-N sweep (_solve_point always runs conquer_slice
+    with nshards=1, shard=0, i.e. every cube), status=="UNSAT" is BY
+    CONSTRUCTION a full-coverage decision (conquer_slice only reports
+    "UNSAT" when unresolved_cubes is empty) -- unlike a multi-shard
+    aggregate, where UNSAT needs a separate coverage check (see
+    aggregate()). A cert cell outside the swept window (smap.get is None)
+    counts as unverified too, so a window that happens to end exactly at
+    p-1/q+1 etc. can't silently read as fully certified.
+    claim is "CLAIMABLE" (all four cells verified) or "CANDIDATE"
+    (cert_missing lists which of the four still need work) whenever
+    valid is True; None when valid is False (no pair to claim anything
+    about)."""
+    swept = list(range(n_lo, n_hi + 1))
+    unsat_ns = [N for N in swept if smap.get(N) == "UNSAT"]
+    sat_ns = [N for N in swept if smap.get(N) == "SAT"]
+    if not unsat_ns or not sat_ns:
+        violations = []
+        if not unsat_ns:
+            violations.append("no UNSAT point in window -- cannot anchor p")
+        if not sat_ns:
+            violations.append("no SAT point in window -- cannot anchor q")
+        return {"p": None, "q": None, "candidate_p": None, "candidate_q": None,
+                "valid": False, "violations": violations, "claim": None,
+                "cert_cells": {}, "cert_missing": []}
+
+    first_unsat = min(unsat_ns)
+    last_sat = max(sat_ns)
+    p = first_unsat - 1
+    q = last_sat + 1
+    violations = []
+
+    below = [N for N in swept if N < first_unsat and smap.get(N) != "SAT"]
+    if below:
+        violations.append(
+            f"not every swept point below the first UNSAT (N={first_unsat}) "
+            f"is SAT: { {N: smap.get(N) for N in below} }")
+
+    above = [N for N in swept if N > last_sat and smap.get(N) != "UNSAT"]
+    if above:
+        violations.append(
+            f"not every swept point above the last SAT (N={last_sat}) is "
+            f"UNSAT: { {N: smap.get(N) for N in above} }")
+
+    if (q - p) % 2 == 0:
+        violations.append(
+            f"q - p = {q - p} is even (Corollary 5.1.2 requires it odd)")
+
+    bad_alt = [(N, "SAT" if (N - p) % 2 == 0 else "UNSAT", smap.get(N))
+               for N in swept if p <= N <= q
+               and smap.get(N) != ("SAT" if (N - p) % 2 == 0 else "UNSAT")]
+    if bad_alt:
+        violations.append(
+            f"verdicts do not strictly alternate between p={p} and q={q} "
+            f"(Corollary 5.1.2): {bad_alt}")
+
+    undetermined = [N for N in swept if smap.get(N) not in ("SAT", "UNSAT")]
+    if undetermined:
+        violations.append(
+            "UNDETERMINED point(s) in the swept window (blocks the claim): "
+            f"{ {N: smap.get(N) for N in undetermined} }")
+
+    if violations:
+        return {"p": None, "q": None, "candidate_p": p, "candidate_q": q,
+                "valid": False, "violations": violations, "claim": None,
+                "cert_cells": {}, "cert_missing": []}
+
+    cert_cells = {}
+    cert_missing = []
+    for N in (p - 1, q - 1):
+        status = smap.get(N)
+        wok = witness_map.get(N) if witness_map else None
+        verified = status == "SAT" and wok is True
+        cert_cells[N] = {"role": "SAT witness", "status": status,
+                         "witness_ok": wok, "verified": verified}
+        if not verified:
+            cert_missing.append(N)
+    for N in (p + 1, q + 1):
+        status = smap.get(N)
+        verified = status == "UNSAT"
+        cert_cells[N] = {"role": "full-coverage UNSAT", "status": status,
+                         "verified": verified}
+        if not verified:
+            cert_missing.append(N)
+
+    claim = "CLAIMABLE" if not cert_missing else "CANDIDATE"
+    return {"p": p, "q": q, "candidate_p": p, "candidate_q": q,
+            "valid": True, "violations": [], "claim": claim,
+            "cert_cells": cert_cells, "cert_missing": sorted(cert_missing)}
+
+
 def _solve_point(lengths, encoding, N, base_outdir, march_opts, cap,
                  resplit_opts, max_depth, batch_size, symmetry_break=False):
     """Decide ONE sweep point (split + conquer) in its OWN work directory, so
@@ -944,9 +1080,15 @@ def do_solve(lengths, encoding, n_lo, n_hi, outdir, march_opts, cap,
     palindromic mode: NOT monotone in N -- between the pdw pair existence
     alternates with period 2 (see vdw_pdw_attack.locate_boundary's soundness
     note), so a bisection can land on an interior alternation point. The
-    full map is reported and SAT->UNSAT transitions are candidates only;
-    reading the exact (p, q) OFF that map per the AKS definition is the
-    subtle part -- see the open question in NOTES.md.
+    full map is always reported, AND (NOTES.md item 2, RESOLVED 2026-07-22)
+    the exact (p, q) is read off it via read_pdw_pq() -- AKS's Theorem 5.1
+    rule (arXiv 1102.5433 Sec 5): p = first_UNSAT - 1, q = last_SAT + 1,
+    refused (loudly, non-fatally -- same "withhold but keep the map"
+    contract as the diagonal monotonicity check below) unless the window
+    validates against Corollary 5.1.2 (odd gap, strict alternation) with no
+    undetermined point in between; and marked CLAIMABLE only when all four
+    Theorem-5.1 certification cells (p-1, p+1, q-1, q+1) already have
+    verified artifacts in this sweep, else CANDIDATE.
 
     full-mode DIAGONAL (lengths=[k,k]): W(k,2) is, BY DEFINITION, monotone
     -- a good 2-coloring avoiding a mono AP-k exists for every N < W(k,2)
@@ -979,9 +1121,11 @@ def do_solve(lengths, encoding, n_lo, n_hi, outdir, march_opts, cap,
               f"    sweeping N={n_lo}..{n_hi} (workers={sweep_workers})",
               flush=True)
     smap = {}
+    witness_map = {}
 
     def note(N, status, wok):
         smap[N] = status
+        witness_map[N] = wok
         print(f"  N={N}: {status}"
               + (f" (witness_ok={wok})" if status == "SAT" else ""), flush=True)
 
@@ -1048,8 +1192,29 @@ def do_solve(lengths, encoding, n_lo, n_hi, outdir, march_opts, cap,
             print("  no SAT->UNSAT transition found in this window",
                   flush=True)
     else:
-        print(f"  SAT->UNSAT transitions at N in {transitions} "
-              f"(candidate thresholds; conjectured pair {pair})", flush=True)
+        pq = read_pdw_pq(smap, witness_map, n_lo, n_hi)
+        result["pq"] = pq
+        if not pq["valid"]:
+            print(f"  *** AKS (p,q) READING RULE VIOLATED (Theorem 5.1, "
+                  f"arXiv 1102.5433 Sec 5): candidate p={pq['candidate_p']} "
+                  f"q={pq['candidate_q']} -- "
+                  + "; ".join(pq["violations"])
+                  + " -- refusing to claim a pair; investigate before "
+                    "trusting any threshold read off this window ***",
+                  flush=True)
+        else:
+            cells = ", ".join(
+                f"{N}:{c['status']}" + ("" if c["verified"] else "(unverified)")
+                for N, c in sorted(pq["cert_cells"].items()))
+            print(f"  pdw(2;3,{lengths[1]}) = ({pq['p']}, {pq['q']}) "
+                  f"[{pq['claim']}] -- Theorem 5.1 cert cells: {cells}",
+                  flush=True)
+            if pq["claim"] == "CANDIDATE":
+                print(f"    still needs certification at N in "
+                      f"{pq['cert_missing']} before this pair is CLAIMABLE",
+                      flush=True)
+        print(f"  (raw SAT->UNSAT transitions at N in {transitions}; "
+              f"conjectured pair {pair} [{src}])", flush=True)
     return result
 
 
