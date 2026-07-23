@@ -18,7 +18,19 @@ permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}
+  # Scoped to (instance, parent_cube) instead of just the workflow name, so a
+  # SPECULATIVE PARALLEL RUN (parent_cube set -- see the parent_cube input
+  # below, NOTES.md t=26 STATE) is NOT serialized behind the main-instance
+  # run it's racing: main-instance runs for the same (t-or-lengths, N) still
+  # share one group and queue behind each other (protects the historical
+  # single-run assumption other jobs/paths rely on), but each distinct
+  # parent_cube gets its OWN group, so idle runners can execute a stubborn
+  # cube's re-split subtree WHILE the main run is still grinding it --
+  # GitHub's keep-only-latest-pending behavior (which this same group
+  # scoping relies on to never silently supersede a queued run) then only
+  # ever collides same-scope dispatches with each other, never a parent run
+  # with the main run or with a different parent's run.
+  group: cnc-${{ inputs.lengths || inputs.t }}-${{ inputs.N }}-${{ inputs.parent_cube || 'main' }}
   cancel-in-progress: false
 
 on:
