@@ -25,19 +25,27 @@ Strategy (the efficiency directives from the task spec, applied):
 
 NOTE on warm-starting: the task's efficiency directives suggest reusing
 a witness for n as phase hints for nearby n (as sat_full.py does via
-pysat's set_phases). We deliberately do NOT do this here. Task 3's
-harness run hit a real bug where pysat's cooperative Cadical195
-interrupt() did not fire on a genuinely hard UNSAT instance
-(w(4;3,3,3,3) at N=76 ran 80+ minutes past its 30-minute cap and had to
-be killed manually -- see the Task 3 report). Since this bracket walk
-deliberately probes points expected to be UNSAT, and phase-hint
-injection is only available through pysat's in-process API (not the
-solver binaries), we use the cadical BINARY via subprocess instead
-(see vdw_pdw_validate.run_cadical_cheap): its timeout is enforced by
-the OS (SIGKILL), reliable regardless of what the solver is doing
-internally. That reliability was judged worth more than the warm-start
-speedup, especially while probing genuinely open (frontier) instances
-where we have no prior guarantee a probe finishes quickly at all.
+pysat's set_phases). We deliberately do NOT do this here (with pysat's
+own cooperative interrupt) -- Task 3's harness run hit a real bug where
+pysat's cooperative Cadical195 interrupt() did not fire on a genuinely
+hard UNSAT instance (w(4;3,3,3,3) at N=76 ran 80+ minutes past its
+30-minute cap and had to be killed manually -- see the Task 3 report).
+Since this bracket walk deliberately probes points expected to be
+UNSAT, the DEFAULT (cheap, no-proof) probe path stays on the cadical
+BINARY via subprocess (see vdw_pdw_validate.run_cadical_cheap): its
+timeout is enforced by the OS (SIGKILL), reliable regardless of what the
+solver is doing internally.
+
+PLAN_sat_portfolio.md update: probe() now defaults to
+sat_portfolio.py's diversified-arm portfolio instead (use_portfolio,
+default True; --no-portfolio restores the single cadical-binary probe
+above). This sidesteps the interrupt-reliability concern entirely --
+every arm (including the pysat-based warm-start arm) is killed via an
+OS-level SIGTERM/SIGKILL on its own subprocess by sat_portfolio.py, not
+pysat's in-process interrupt() -- see sat_portfolio.py's module
+docstring. Final UNSAT boundary checks (p+1/q+1) are unaffected: they
+always go through check_unsat_point, which the portfolio can never
+reach.
 """
 
 import argparse
@@ -50,22 +58,28 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vdw_sat import encode_palindromic, write_dimacs, decode_palindromic  # noqa: E402
 from vdw_sat_validate import independent_ap_check, TIME_CAP  # noqa: E402
 from vdw_pdw_validate import (is_palindrome, check_unsat_point,  # noqa: E402
-                               run_cadical_cheap, AKS_TABLE_7_CONJECTURED,
+                               run_cadical_cheap, run_sat_point_portfolio,
+                               write_witness_json, AKS_TABLE_7_CONJECTURED,
                                REPO_ROOT)
 
 PROBE_CAP = TIME_CAP  # 30 min, same cap as the rest of the pipeline
 
 
 class Prober:
-    """Cheap (no proof) palindromic SAT probes for a fixed t, with a
-    small memo cache. Uses the cadical binary via subprocess (reliable
-    OS-level timeout) -- see the module docstring for why not pysat."""
+    """Palindromic SAT probes for a fixed t, with a small memo cache.
+    use_portfolio=True (default): sat_portfolio.py's diversified-arm
+    race, budget `cap` seconds total per probe -- see module docstring.
+    use_portfolio=False: the single cadical-binary probe this module
+    always used (run_cadical_cheap)."""
 
-    def __init__(self, t, outdir, cap=PROBE_CAP):
+    def __init__(self, t, outdir, cap=PROBE_CAP, use_portfolio=True,
+                 portfolio_workers=None):
         self.lengths = [3, t]
         self.t = t
         self.outdir = outdir
         self.cap = cap
+        self.use_portfolio = use_portfolio
+        self.portfolio_workers = portfolio_workers
         self.cache = {}
 
     def probe(self, n):
@@ -75,13 +89,37 @@ class Prober:
         cnf_path = os.path.join(self.outdir, f"pdw_probe_t{self.t}_N{n}.cnf")
         write_dimacs(clauses, nvars, cnf_path,
                      comment=f"pdw(2;3,{self.t}) N={n} palindromic probe")
-        res, model, elapsed, status = run_cadical_cheap(cnf_path, self.cap)
+        witness_ok = is_pal = None
+        if self.use_portfolio:
+            verdict, model, telemetry = run_sat_point_portfolio(
+                self.t, n, cnf_path, nvars, self.outdir, self.cap,
+                workers=self.portfolio_workers)
+            tele_path = os.path.join(
+                self.outdir, f"pdw_probe_t{self.t}_N{n}_telemetry.json")
+            with open(tele_path, "w") as f:
+                json.dump(telemetry, f, indent=2, default=str)
+            elapsed = telemetry["wall_seconds"]
+            if verdict == "SAT":
+                res, status = True, "SAT"
+            elif verdict == "UNSAT":
+                res, status = False, "UNSAT"
+                print(f"    *** portfolio arm {telemetry.get('deciding_arm')} "
+                      f"reported UNSAT probing n={n} (t={self.t}) ***",
+                      flush=True)
+            else:
+                res, status = None, "TIMEOUT"
+        else:
+            res, model, elapsed, status = run_cadical_cheap(cnf_path, self.cap)
         row = {"n": n, "sat": res, "time": elapsed, "nvars": nvars,
                "nclauses": len(clauses)}
         if res:
             colors = decode_palindromic(model, n, 2)
-            row["witness_ok"] = independent_ap_check(colors, self.lengths, n) is None
-            row["is_palindrome"] = is_palindrome(colors, n)
+            witness_ok = independent_ap_check(colors, self.lengths, n) is None
+            is_pal = is_palindrome(colors, n)
+            row["witness_ok"] = witness_ok
+            row["is_palindrome"] = is_pal
+            if self.use_portfolio and witness_ok and is_pal:
+                write_witness_json(self.outdir, self.t, n, colors)
         self.cache[n] = row
         print(f"    probe n={n}: {status} in {elapsed:.3f}s" +
               (f" witness_ok={row.get('witness_ok')} palindrome={row.get('is_palindrome')}"
@@ -134,12 +172,14 @@ def locate_boundary(prober, believed, expect_low_sat, max_extra=10):
     return None
 
 
-def attack_t(t, outdir, use_cadical_lrat=False, max_extra=10, cap=PROBE_CAP):
+def attack_t(t, outdir, use_cadical_lrat=False, max_extra=10, cap=PROBE_CAP,
+             use_portfolio=True, portfolio_workers=None):
     p0, q0 = AKS_TABLE_7_CONJECTURED[t]
     print(f"\n=== attacking pdw(2;3,{t}); AKS conjectured (p,q)=({p0},{q0}) "
           f"===", flush=True)
     t_start = time.time()
-    prober = Prober(t, outdir, cap=cap)
+    prober = Prober(t, outdir, cap=cap, use_portfolio=use_portfolio,
+                     portfolio_workers=portfolio_workers)
 
     print("  bracketing p ...", flush=True)
     p = locate_boundary(prober, p0, expect_low_sat=True, max_extra=max_extra)
@@ -213,16 +253,25 @@ def main():
     ap.add_argument("--stop-if-unresolved", action="store_true",
                      help="don't attempt later ts if an earlier one didn't "
                           "resolve quickly")
+    ap.add_argument("--no-portfolio", action="store_true",
+                     help="disable sat_portfolio.py for the SAT probes "
+                          "(bracket walk + p-1/q-1) and fall back to the "
+                          "single cadical-binary probe. Default: ON. Never "
+                          "affects the final UNSAT+proof runs at p+1/q+1.")
+    ap.add_argument("--portfolio-workers", type=int, default=None)
     args = ap.parse_args()
 
     outdir = args.outdir or os.path.join(REPO_ROOT, "pdw_attack_out")
     os.makedirs(outdir, exist_ok=True)
+    use_portfolio = not args.no_portfolio
 
     t0 = time.time()
     results = []
     for t in args.ts:
         res = attack_t(t, outdir, use_cadical_lrat=args.lrat,
-                        max_extra=args.max_extra, cap=args.cap_seconds)
+                        max_extra=args.max_extra, cap=args.cap_seconds,
+                        use_portfolio=use_portfolio,
+                        portfolio_workers=args.portfolio_workers)
         results.append(res)
         if args.stop_if_unresolved and not res.get("resolved"):
             break

@@ -48,9 +48,28 @@ Also implements the cadical-native-LRAT proof path (cadical --lrat=true
 alternative to kissat+DRAT+drat-trim for UNSAT points, per the task's
 efficiency directive (cadical>=2.0 supports LRAT natively, which can
 skip a translation step compared to DRAT).
+
+SAT-side cells (--point ... sat, and this module's own p-1/q-1 checks)
+go through code/sat_portfolio.py's diversified-arm portfolio by default
+(PLAN_sat_portfolio.md) -- pass --no-portfolio to fall back to the
+single monolithic cadical solve (run_cadical_cheap) this module always
+used before. UNSAT cells (check_unsat_point) are COMPLETELY untouched by
+this -- the portfolio is unreachable from that path, by design (an
+UNSAT/certificate result must never come from an unverified multi-arm
+race). Whatever model the portfolio returns still goes through the SAME
+independent_ap_check + is_palindrome witness checker as before -- the
+portfolio is trusted for nothing.
+
+The witness JSON + neighbor-lookup + phase-mapping helpers below
+(write_witness_json / find_nearest_witness_file /
+compute_warm_start_phases) are pdw-specific, which is why they live here
+rather than in sat_portfolio.py (which knows nothing about palindromes
+or AKS tables) -- code/vdw_pdw_attack.py imports and reuses them so both
+scripts' SAT probes read from and write to the same witness namespace.
 """
 
 import argparse
+import glob
 import json
 import os
 import subprocess
@@ -62,6 +81,7 @@ from vdw_sat import (encode_palindromic, write_dimacs,  # noqa: E402
                       decode_palindromic)
 from vdw_sat_validate import (run_kissat, run_drat_trim,  # noqa: E402
                                independent_ap_check, TIME_CAP)
+import sat_portfolio as portfolio  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LRAT_CHECK = os.path.join(REPO_ROOT, "tools", "drat-trim", "lrat-check")
@@ -95,6 +115,84 @@ CELLS = ("p-1", "q-1", "p+1", "q+1")
 
 def is_palindrome(colors, N):
     return all(colors[i] == colors[N + 1 - i] for i in range(1, N + 1))
+
+
+# --------------------------------------------------------------------- #
+# Witness JSON + warm-start (the portfolio's "domain arm" support code)
+# --------------------------------------------------------------------- #
+# Canonical filename, independent of whichever tag/outdir combo produced
+# it (validate_t's p-1/q-1 cells, --point sat, or vdw_pdw_attack.py's
+# bracket-walk probes all write/read the SAME namespace per (t, N) in a
+# given outdir) so a witness found by any of those becomes a warm-start
+# source for any other.
+
+def witness_json_path(outdir, t, N):
+    return os.path.join(outdir, f"pdw_t{t}_N{N}_witness.json")
+
+
+def write_witness_json(outdir, t, N, colors):
+    """Persist a VERIFIED (caller's job to check first) palindromic
+    witness for reuse as a future warm-start source. `colors` is the
+    decode_palindromic()-shaped list (index 0 unused, colors[i] for
+    i in 1..N)."""
+    path = witness_json_path(outdir, t, N)
+    with open(path, "w") as f:
+        json.dump({"t": t, "lengths": [3, t], "N": N, "r": 2,
+                    "encoding": "palindromic", "colors": colors}, f)
+    return path
+
+
+def find_nearest_witness_file(outdir, t, target_N):
+    """Any witness JSON in outdir for this t, closest to target_N (ties
+    broken toward the smaller N). Returns (data_dict, path) or None."""
+    candidates = []
+    for path in glob.glob(witness_json_path(outdir, t, "*")):
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if data.get("t") != t or data.get("encoding") != "palindromic":
+            continue
+        candidates.append((abs(data["N"] - target_N), data["N"], path, data))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: (x[0], x[1]))
+    _, _, path, data = candidates[0]
+    return data, path
+
+
+def compute_warm_start_phases(source_colors, source_N, target_N):
+    """Map a source palindromic witness's phases onto a target N's
+    palindromic variables.
+
+    In vdw_sat.py's palindromic encoding, variable v (1..half) IS
+    fold(i, N) = min(i, N+1-i) for i = v (since v <= half), i.e. variable
+    v directly represents "the v-th position counted in from the near
+    edge" (equivalently the v-th ring out from either boundary, by
+    symmetry). Because both the source and target colorings are each
+    symmetric about their OWN midpoint, aligning by equal index v lines
+    up the same-rank ring from the boundary in both -- that is the
+    "center-align by distance from the midpoint" heuristic described in
+    PLAN_sat_portfolio.md. Variables beyond min(half_src, half_tgt) (when
+    the target is bigger) are left unmapped/unphased, exactly as the
+    plan specifies. This is a SEARCH HEURISTIC ONLY: phases only bias
+    which branch CaDiCaL tries first, so a "wrong" mapping (e.g. two
+    different N happening to have structurally unrelated good colorings
+    near the same rank) can only cost time, never soundness -- the
+    result still goes through the independent witness checker.
+
+    Returns a list of signed literals (pysat set_phases format): for
+    variable v, +v if the source's color at v is 2, -v if color 1."""
+    half_src = (source_N + 1) // 2
+    half_tgt = (target_N + 1) // 2
+    phases = []
+    for v in range(1, min(half_src, half_tgt) + 1):
+        c = source_colors[v]
+        if c is None:
+            continue
+        phases.append(v if c == 2 else -v)
+    return phases
 
 
 def run_cadical_lrat(cnf_path, lrat_path, cap=TIME_CAP):
@@ -157,6 +255,80 @@ def run_cadical_cheap(cnf_path, cap, want_model=True):
     return None, None, elapsed, f"ERROR(rc={proc.returncode})"
 
 
+def build_pdw_arms(t, N, outdir, warm_start_from=None, include_yalsat=True):
+    """The v1 arm set (PLAN_sat_portfolio.md): 2 kissat (default +
+    seeded), 2 cadical (default + seeded), the warm-start domain arm
+    (only if a neighbor witness is found), and yalsat (only if it built
+    -- see tools/yalsat/). Returns (arms, warm_start_note, phases_path)
+    -- phases_path is a temp file the caller must clean up (kept in
+    outdir, not sat_portfolio's own tempdir, since it must exist before
+    run_portfolio's tempdir does; see the module docstring)."""
+    arms = [
+        portfolio.kissat_arm("kissat"),
+        portfolio.kissat_arm("kissat_seed_a", seeded=True),
+        portfolio.kissat_arm("kissat_seed_b", seeded=True),
+        portfolio.cadical_arm("cadical"),
+        portfolio.cadical_arm("cadical_seed_a", seeded=True),
+    ]
+    phases_path = None
+    warm_note = {"source_N": None, "n_phased": 0}
+
+    witness_data = None
+    witness_src_desc = None
+    if warm_start_from:
+        try:
+            with open(warm_start_from) as f:
+                witness_data = json.load(f)
+            witness_src_desc = warm_start_from
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"  (--warm-start-from {warm_start_from} unreadable: {e} "
+                  f"-- falling back to auto nearest-witness search)",
+                  flush=True)
+    if witness_data is None:
+        found = find_nearest_witness_file(outdir, t, N)
+        if found:
+            witness_data, witness_src_desc = found
+
+    if witness_data is not None:
+        phases = compute_warm_start_phases(
+            witness_data["colors"], witness_data["N"], N)
+        phases_path = os.path.join(
+            outdir, f"_tmp_warmstart_t{t}_N{N}.json")
+        with open(phases_path, "w") as f:
+            json.dump({"phases": phases, "source_N": witness_data["N"],
+                       "source": witness_src_desc}, f)
+        arms.append(portfolio.warmstart_arm("warmstart", phases_path))
+        warm_note = {"source_N": witness_data["N"], "n_phased": len(phases),
+                     "source": witness_src_desc}
+
+    if include_yalsat and os.path.exists(portfolio.YALSAT):
+        arms.append(portfolio.yalsat_arm("yalsat", seeded=True))
+
+    return arms, warm_note, phases_path
+
+
+def run_sat_point_portfolio(t, N, cnf_path, nvars, outdir, cap,
+                              warm_start_from=None, workers=None):
+    """Build the v1 arm set for pdw(2;3,t) at N and run the portfolio
+    against the ALREADY-WRITTEN cnf_path (the caller already encoded it
+    for the CNF-file record it keeps regardless of --portfolio; the
+    portfolio's arms consume that same file, per spec -- no arm
+    re-encodes anything). Returns (verdict, model, telemetry) -- verdict
+    in {"SAT","UNSAT","UNDETERMINED"}. Writes no files of its own besides
+    an ephemeral phases hint (cleaned up before returning) -- the caller
+    (check_sat_point) owns the telemetry JSON and any witness JSON."""
+    arms, warm_note, phases_path = build_pdw_arms(
+        t, N, outdir, warm_start_from=warm_start_from)
+    try:
+        model, telemetry = portfolio.run_portfolio(
+            cnf_path, nvars, arms, workers=workers, budget_seconds=cap)
+    finally:
+        if phases_path and os.path.exists(phases_path):
+            os.remove(phases_path)
+    telemetry["warm_start"] = warm_note
+    return telemetry["verdict"], model, telemetry
+
+
 def run_lrat_check(cnf_path, lrat_path, cap=TIME_CAP):
     t0 = time.time()
     try:
@@ -171,18 +343,46 @@ def run_lrat_check(cnf_path, lrat_path, cap=TIME_CAP):
     return verified, elapsed, last
 
 
-def check_sat_point(t, N, outdir, tag, cap=TIME_CAP):
-    """Cheap (no proof) check that a good palindromic partition exists at
-    N, for pdw(2;3,t). Returns a result dict; the witness (if any) is
-    independently verified and checked to actually be a palindrome.
-    Uses the cadical binary (see run_cadical_cheap for why, not pysat)."""
+def check_sat_point(t, N, outdir, tag, cap=TIME_CAP, use_portfolio=True,
+                     warm_start_from=None, portfolio_workers=None):
+    """Check that a good palindromic partition exists at N, for
+    pdw(2;3,t). Returns a result dict; the witness (if any) is
+    independently verified and checked to actually be a palindrome --
+    that check is IDENTICAL regardless of which engine found the model.
+
+    use_portfolio=True (default): code/sat_portfolio.py's diversified
+    multi-arm race (kissat x3, cadical x2, warm-start, yalsat), budget
+    `cap` seconds total. A telemetry JSON is written next to the cell's
+    other output files; a verified witness is persisted for future
+    warm-starts. use_portfolio=False: the single monolithic cadical
+    solve this module always used (run_cadical_cheap; see its docstring
+    for why the binary via subprocess, not pysat)."""
     lengths = [3, t]
     clauses, nvars = encode_palindromic(lengths, N)
     row = {"N": N, "expect": "SAT", "nvars": nvars, "nclauses": len(clauses)}
     cnf_path = os.path.join(outdir, f"{tag}_N{N}_sat.cnf")
     write_dimacs(clauses, nvars, cnf_path,
                  comment=f"pdw(2;3,{t}) N={N} palindromic (expect SAT)")
-    res, model, elapsed, status = run_cadical_cheap(cnf_path, cap)
+
+    if use_portfolio:
+        verdict, model, telemetry = run_sat_point_portfolio(
+            t, N, cnf_path, nvars, outdir, cap,
+            warm_start_from=warm_start_from, workers=portfolio_workers)
+        tele_path = os.path.join(outdir, f"{tag}_N{N}_sat_telemetry.json")
+        with open(tele_path, "w") as f:
+            json.dump(telemetry, f, indent=2, default=str)
+        if verdict == "SAT":
+            res, elapsed, status = True, telemetry["wall_seconds"], "SAT"
+        elif verdict == "UNSAT":
+            res, elapsed, status = False, telemetry["wall_seconds"], "UNSAT"
+            print(f"  *** portfolio arm {telemetry.get('deciding_arm')} "
+                  f"reported UNSAT at pdw(2;3,{t}) N={N}, expected SAT -- "
+                  f"surfacing loudly, NOT retrying ***", flush=True)
+        else:  # UNDETERMINED
+            res, elapsed, status = None, telemetry["wall_seconds"], "TIMEOUT"
+    else:
+        res, model, elapsed, status = run_cadical_cheap(cnf_path, cap)
+
     row["status"] = status
     row["time"] = elapsed
     row["match"] = (res is True)
@@ -195,6 +395,8 @@ def check_sat_point(t, N, outdir, tag, cap=TIME_CAP):
         row["witness_ok"] = (bad is None)
         row["is_palindrome"] = is_palindrome(colors, N)
         row["colors"] = colors
+        if row["witness_ok"] and row["is_palindrome"]:
+            write_witness_json(outdir, t, N, colors)
     return row
 
 
@@ -238,7 +440,8 @@ def check_unsat_point(t, N, outdir, tag, use_cadical_lrat=False, cap=TIME_CAP):
     return row
 
 
-def validate_t(t, outdir, comparison=False, cap=TIME_CAP, only=None):
+def validate_t(t, outdir, comparison=False, cap=TIME_CAP, only=None,
+                use_portfolio=True, portfolio_workers=None):
     """Run the 4-point Theorem-5.1 certification for pdw(2;3,t) against
     the published AKS value. comparison=True additionally re-runs both
     UNSAT points with cadical+LRAT (for the kissat-vs-cadical writeup).
@@ -249,7 +452,12 @@ def validate_t(t, outdir, comparison=False, cap=TIME_CAP, only=None):
     how one GitHub Actions job can throw hours at ONE hard instance and
     still fit under the 6h public-runner ceiling -- see sat_pipeline.yml.
     With fewer than all four cells run, `certified` is None (undetermined)
-    rather than False, so a partial shard is not misread as a failure."""
+    rather than False, so a partial shard is not misread as a failure.
+
+    use_portfolio governs ONLY the two SAT cells (p-1, q-1) -- the two
+    UNSAT cells (p+1, q+1) always go through check_unsat_point unchanged,
+    the portfolio is not reachable from that path (PLAN_sat_portfolio.md:
+    UNSAT/certificate path out of scope, must not change)."""
     p, q = AKS_TABLE_6[t]
     tag = f"pdw_t{t}"
     run = set(CELLS) if only is None else set(only)
@@ -258,12 +466,16 @@ def validate_t(t, outdir, comparison=False, cap=TIME_CAP, only=None):
 
     r_p = r_q = r_pp = r_qq = None
     if "p-1" in run:
-        r_p = check_sat_point(t, p - 1, outdir, tag, cap=cap)
+        r_p = check_sat_point(t, p - 1, outdir, tag, cap=cap,
+                               use_portfolio=use_portfolio,
+                               portfolio_workers=portfolio_workers)
         print(f"  SAT  n=p-1={p-1}: {r_p['status']} in {r_p['time']:.3f}s "
               f"witness_ok={r_p['witness_ok']} palindrome={r_p['is_palindrome']}",
               flush=True)
     if "q-1" in run:
-        r_q = check_sat_point(t, q - 1, outdir, tag, cap=cap)
+        r_q = check_sat_point(t, q - 1, outdir, tag, cap=cap,
+                               use_portfolio=use_portfolio,
+                               portfolio_workers=portfolio_workers)
         print(f"  SAT  n=q-1={q-1}: {r_q['status']} in {r_q['time']:.3f}s "
               f"witness_ok={r_q['witness_ok']} palindrome={r_q['is_palindrome']}",
               flush=True)
@@ -315,17 +527,24 @@ def validate_t(t, outdir, comparison=False, cap=TIME_CAP, only=None):
             "comparison": comp}
 
 
-def run_single_point(t, N, kind, outdir, cap=TIME_CAP, use_cadical_lrat=False):
+def run_single_point(t, N, kind, outdir, cap=TIME_CAP, use_cadical_lrat=False,
+                      use_portfolio=True, warm_start_from=None,
+                      portfolio_workers=None):
     """Run exactly ONE arbitrary instance pdw(2;3,t) at length N. kind is
     'sat' (cheap witness search) or 'unsat' (proof-logged + drat/lrat
     checked). This is the primitive for hammering a single frontier point
     -- e.g. a conjectured UNSAT ceiling past AKS's t=27 -- in its own
     GitHub job with a multi-hour `cap`, where the bracket walk in
     vdw_pdw_attack.py would otherwise spend its whole budget on cheaper
-    neighbouring probes."""
+    neighbouring probes. use_portfolio/warm_start_from/portfolio_workers
+    only apply to kind='sat' (the UNSAT path is the certificate path,
+    untouched by the portfolio -- see check_unsat_point)."""
     tag = f"pdw_t{t}_point"
     if kind == "sat":
-        row = check_sat_point(t, N, outdir, tag, cap=cap)
+        row = check_sat_point(t, N, outdir, tag, cap=cap,
+                               use_portfolio=use_portfolio,
+                               warm_start_from=warm_start_from,
+                               portfolio_workers=portfolio_workers)
         row.pop("colors", None)
         print(f"  point pdw(2;3,{t}) N={N} expect SAT: {row['status']} in "
               f"{row['time']:.3f}s witness_ok={row['witness_ok']} "
@@ -364,11 +583,27 @@ def main():
                           "KIND in {sat,unsat}; unsat is proof-logged and "
                           "checked. Overrides --ts/--only; for hammering a "
                           "single frontier point in its own long job.")
+    ap.add_argument("--no-portfolio", action="store_true",
+                     help="disable the sat_portfolio.py diversified-arm "
+                          "search for SAT cells (p-1, q-1, --point ... sat) "
+                          "and fall back to the single monolithic cadical "
+                          "solve. Default: portfolio ON. Never affects "
+                          "UNSAT cells (p+1, q+1, --point ... unsat) -- "
+                          "those are unchanged either way.")
+    ap.add_argument("--portfolio-workers", type=int, default=None,
+                     help="max concurrent solver processes per portfolio "
+                          "round (default: min(8, cpu_count-2))")
+    ap.add_argument("--warm-start-from", default=None,
+                     help="explicit witness JSON to seed the portfolio's "
+                          "warm-start arm from (only used with --point "
+                          "... sat; otherwise the portfolio auto-searches "
+                          "outdir for the nearest same-t witness)")
     args = ap.parse_args()
 
     cap = args.cap_seconds
     outdir = args.outdir or os.path.join(REPO_ROOT, "pdw_validate_out")
     os.makedirs(outdir, exist_ok=True)
+    use_portfolio = not args.no_portfolio
 
     if args.point:
         pt_t, pt_n, kind = int(args.point[0]), int(args.point[1]), \
@@ -376,7 +611,10 @@ def main():
         if kind not in ("sat", "unsat"):
             ap.error("--point KIND must be 'sat' or 'unsat'")
         t0 = time.time()
-        res = run_single_point(pt_t, pt_n, kind, outdir, cap=cap)
+        res = run_single_point(pt_t, pt_n, kind, outdir, cap=cap,
+                                use_portfolio=use_portfolio,
+                                warm_start_from=args.warm_start_from,
+                                portfolio_workers=args.portfolio_workers)
         total = time.time() - t0
         print(f"\ntotal wall time: {total:.1f}s ({total/60:.1f} min)")
         if args.json_out:
@@ -390,7 +628,9 @@ def main():
     for t in args.ts:
         results.append(validate_t(t, outdir,
                                   comparison=(t == args.comparison_t),
-                                  cap=cap, only=args.only))
+                                  cap=cap, only=args.only,
+                                  use_portfolio=use_portfolio,
+                                  portfolio_workers=args.portfolio_workers))
     total = time.time() - t0
 
     print("\n\n================ PALINDROMIC VALIDATION REPORT ================\n")
