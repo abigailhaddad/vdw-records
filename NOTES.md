@@ -6,7 +6,15 @@ conjecture was disproven 2026-07-19 by a counterexample found by Claude
 (announced by Levent Alpöge, Lean-verified by Paul Lezeau); user asked what
 other open problems we'd like to try.
 
-## CURRENT STATE (2026-07-22) — read this first
+## CURRENT STATE (2026-07-23) — read this first
+
+**SESSION ONGOING at last handoff (2026-07-23):** cleared mid-work, not
+concluded. Live at the moment of handoff: (a) the PLAN_sat_portfolio.md
+builder agent — if its "portfolio:" commits are absent from git log, it was
+interrupted; check `git status` for partial uncommitted work (discard or
+finish it), then relaunch a builder from the spec; (b) GH run 30002262707
+(N=644 265-cube re-dispatch) — check `gh run list`, then Next-actions 1a.
+Nothing else was mid-flight; everything decided is committed and pushed.
 
 **What we're doing now:** proving exact palindromic van der Waerden values
 pdw(2;3,t) with a machine-checkable cube-and-conquer SAT pipeline. The live
