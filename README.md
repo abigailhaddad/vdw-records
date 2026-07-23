@@ -64,8 +64,7 @@ GitHub Actions:
 - A diversified SAT portfolio for the witness-finding side
   (`sat_portfolio.py`): cells that cost >3600s monolithically land in
   ~60s under multi-arm racing.
-- Current campaign state, always: **`NOTES.md`** — the full lab
-  notebook (decisions, dead ends, measurements, sources). Highlights:
+- Current campaign highlights:
   pdw(2;3,26) decision-complete work in flight; a measured no-go on
   W(6,2) (`RESULTS_diagonal_ladder.md`): every off-the-shelf solver
   walls on single cubes at N=1132, floor ≥2048 core-hours — consistent
@@ -103,8 +102,9 @@ skeptical reader).
 
 - `lean/` — **the W(5,2)=178 theorem**: sources, witness, toy instance
   (W(3,2)=9), `BUILD.md` recipe.
-- `NOTES.md` — the lab notebook; the source of truth for what's done,
-  in flight, and abandoned. Start here for the full story.
+- Lab notebook (`NOTES.md`) is kept locally, not in the repo; the
+  committed writeups (`RESULTS_*.md`, `RESEARCH_*.md`, `docs/archive/`)
+  and run verdicts in `gh_actions_results/` are the public record.
 - `code/` — encoders, CnC pipeline, portfolio, regression tests
   (`test_cnc.py`, `test_portfolio.py`, `test_known_values.py`,
   `test_known_values` re-derives published cells on every SAT-code push).
