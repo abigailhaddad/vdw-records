@@ -95,26 +95,62 @@ Schur/Ramsey encodings (schurNumber pattern, S3 theorem) are the template,
 Fable to review/spec; (ii) N=177 lower-bound witness via native_decide
 (their schur4_lower pattern); (iii) compose into vdwNumber 2 5 = 178.
 
-**Next actions:**
-1. Fire the tuned t=26 DECISION above. If UNSAT, CERTIFY it with a single
-   `vdw_cnc.py prove` job (`cnc_prove.yml`) — the pilot puts total cube-work
-   at ~1.9 core-hours, so the monolithic sequential proof likely fits under
-   the 6h wall, NO stitcher needed. Then move to t=28/29.
-2. PLAN task 9 — stitched PARALLEL certificate (open question #1). Research
-   DONE this session: no drop-in merger exists in Heule's tooling, so it
-   must be built from the recipe (details in the Phase-3 builder-pass note).
-   Deferred on purpose: it's a soundness-critical DRAT transformer (build it
-   as its own session with drat-trim iteration) AND it's not on the critical
-   path until a frontier point's monolithic sweep exceeds 6h (t=28+?).
-3. RESOLVED 2026-07-22 (research agent read AKS Section 5; details replace
-   open question #2 below): the (p,q) reading rule is AKS Theorem 5.1 —
-   exactly FOUR facts certify pdw = (p,q): SAT at p-1, UNSAT at p+1, SAT at
-   q-1, UNSAT at q+1. Consequence for t=26: N=635 (p+1, in flight) is only
-   HALF the UNSAT work — re-certifying pdw(2;3,26)=(634,643) also needs
-   UNSAT at N=644 (q+1) plus witnesses at 633/642. NB Table 6 says t<=27 is
-   already exact (AKS computed it), so t=26/27 are REPRODUCTIONS with
-   modern certs; the genuinely-new frontier is t=28+ (Table 7 pairs are
-   explicitly lower bounds from local search, not exact).
+**Next actions (handoff written 2026-07-23 by Fable — resume from here):**
+1. LANDING FIRST (loose ends from the 07-22/23 overnight):
+   a. N=644 re-dispatch = run 30002262707 (265 cubes, 8 shards, cap 120s).
+      When done: download artifacts, cube-level merge with the base run's
+      shards (base artifacts already in session scratchpad t26_644/; if that
+      scratchpad is gone, re-download run 29962548794), same drill as the
+      N=635 merge (see the official-merge commit ae0d9a4 for the exact
+      procedure + verdict format). If UNSAT 4060/4060 -> commit official
+      verdict; t=26 = (634,643) is then DECISION-COMPLETE on all four
+      Theorem-5.1 cells. Update CURRENT STATE.
+   b. Portfolio builder (PLAN_sat_portfolio.md) was RUNNING at handoff.
+      Its commits (prefix "portfolio:") land on main UNPUSHED; its final
+      report is at /private/tmp/claude-501/-Users-abigailhaddad-Documents-
+      repos-proof/9811e39d-85d1-4905-996c-f0bbe991bad8/tasks/
+      af00a7182c1d0f66c.output (may be gone if tmp cleared — then read the
+      commits + telemetry JSONs directly). REVIEW before pushing: soundness
+      bar = witness checker unchanged + UNSAT paths untouched; check the
+      acceptance numbers (N=633 from cold <10 min).
+2. SMALL BUILDER TASK (unblocked, spec here): implement the Theorem-5.1
+   reading rule in `vdw_cnc.py solve` — from the sweep map emit p =
+   first_UNSAT - 1, q = last_SAT + 1; validate q-p odd + strict parity
+   alternation between them (Cor 5.1.2) + all-SAT below + all-UNSAT above
+   within the window; output the four certification cells (p-1,p+1,q-1,q+1)
+   and mark the pair CLAIMABLE only when all four have verified artifacts
+   (witness_ok for SATs, full-coverage UNSAT verdicts). Tests: t=15 map
+   (197-207 = SSSSUSUSUUU -> (200,205), cells 199/201/204/206). Full rule +
+   quotes in the resolved open question #2 below.
+3. DESIGN SESSION (Fable, the big build): DISTRIBUTED CERTIFICATE pipeline
+   — replaces old task 9's hand-rolled DRAT stitcher. Architecture sketch:
+   shard per-cube LRAT generation across GH jobs (cadical --lrat --no-binary
+   --no-factor per leaf via lratcatch-export), verify per-shard with
+   lrat-check ON the runner, build the Lean chunk modules on-runner (elan
+   toolchain ~2.5GB, cacheable like tools/CnC) and upload only the small
+   .oleans; a final job (or local) builds Cover+Main. Multi-GB LRAT bytes
+   thus never congregate. First customer: t=26 N=635 (monolithic prove
+   WALLED at 5h, see setback note above). Probe FIRST (cheap, local): LRAT
+   bytes/cube on ~50 sampled t=26 cubes -> total volume + chunk-size
+   projection before speccing the workflow. Mind the two LRAT-Catcher
+   gotchas from the W(5,2) rehearsal (maxRecDepth on Base.lean; chunkSize
+   ~50 not 1) and per-leaf memory under native_decide.
+4. W(5,2) FULL THEOREM (Fable review then builder): read LRAT-Catcher's
+   Schur/Ramsey verified encodings (scratchpad clone lrat-catcher/, or
+   re-clone github.com/leansolving/lrat-catcher) as the template; spec (i)
+   the vdW encoding lemma (base.Unsat <-> no good 2-coloring of [1,178]),
+   (ii) N=177 witness via native_decide (schur4_lower pattern), (iii)
+   vdwNumber 2 5 = 178 composition. This is the claimable first — as far
+   as we found, NO vdW number has ever been formally verified.
+5. AFTER t=26 closes: t=27 reproduction is cheap insurance (same drill,
+   cells from Table 6 (664,699): 663/665/698/700); the genuinely-NEW
+   frontier is t=28+ where Table 7 pairs are only local-search lower
+   bounds — use portfolio-SAT for witnesses + CnC decisions for UNSAT
+   cells, reading (p,q) via the new solve rule (item 2).
+6. (Standing, from the AKS research:) t<=27 are REPRODUCTIONS (AKS already
+   exact); frame writeups accordingly. Also still open: email Heule/Kouril
+   to confirm no W(6,2) cert exists (cheap insurance, recommended in the
+   diagonal verdict); report the two LRAT-Catcher bugs to Szeider.
 4. STRATEGIC PIVOT for Fable to weigh in on: `RESEARCH_diagonal_W_k_2.md`
    (repo root). A mathematician's reality check on a 2026-07-22 call — the
    off-diagonal w(2;3,t) family we've been computing is a sideshow; the numbers
