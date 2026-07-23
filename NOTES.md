@@ -50,6 +50,20 @@ decision run 29962548794: 3795/4060 cubes UNSAT, 0 SAT, 7/16 shards walled
 at 350min, 265 unresolved cubes re-dispatched across 8 shards (run
 30002262707, cap 120s). NB N=644 has a REAL tail: one resolved cube took
 4079s; p90 100s vs median 0.37s.
+**q+1=644 UPDATE (2026-07-23, Fable recovery session):** re-dispatch run
+30002262707 ALSO walled (4/8 shards killed at the 350-min wall). Cube-level
+merge across both runs' shard JSONLs (`aggregate --merge-jsonl`, base +
+re-dispatch dirs) = 3990/4060 refuted, **0 SAT confirmed** (no alarm), 70
+still unresolved (indices 2015-2495 step-16 block, 2780, 3036-3199
+step-block, 3675, 3866, 3931, 4027-4059 tail). Notable: three cubes hit
+genuine UNRESOLVED verdicts (max-resplit-depth 3 exhausted, not just
+walled) in the re-dispatch: 2780 (12127s), 3675 (5562s), 3866 (2243s,
+also UNRESOLVED at 1595s in the base run — resistant twice). New run
+30029142054 dispatched: `--cube-indices` (70 cubes), nshards=20,
+cap_seconds=10000, max_resplit_depth=3, march_opts "-d 12" (must match
+original split), timeout_minutes=350. Wall risk noted: cubes 2780/3675
+already burned 12127s/5562s without resolving at cap 120s, so cap_seconds
+10000 with resplitting may still not be enough for those two.
 CERTIFICATION SETBACK: the monolithic `prove` of N=635 (run 29962546998)
 TIMED OUT at its 5h cap — the pilot's ~2 core-hour projection was a lower
 bound and DRAT-logging overhead + tail blew through it. So t=26 CANNOT be
