@@ -121,15 +121,14 @@ Fable to review/spec; (ii) N=177 lower-bound witness via native_decide
       commits + telemetry JSONs directly). REVIEW before pushing: soundness
       bar = witness checker unchanged + UNSAT paths untouched; check the
       acceptance numbers (N=633 from cold <10 min).
-2. SMALL BUILDER TASK (unblocked, spec here): implement the Theorem-5.1
-   reading rule in `vdw_cnc.py solve` — from the sweep map emit p =
-   first_UNSAT - 1, q = last_SAT + 1; validate q-p odd + strict parity
-   alternation between them (Cor 5.1.2) + all-SAT below + all-UNSAT above
-   within the window; output the four certification cells (p-1,p+1,q-1,q+1)
-   and mark the pair CLAIMABLE only when all four have verified artifacts
-   (witness_ok for SATs, full-coverage UNSAT verdicts). Tests: t=15 map
-   (197-207 = SSSSUSUSUUU -> (200,205), cells 199/201/204/206). Full rule +
-   quotes in the resolved open question #2 below.
+2. DONE 2026-07-23 (sonnet builder, Fable-reviewed, commit efb2527):
+   Theorem-5.1 reading rule implemented as `read_pdw_pq()` in
+   `vdw_cnc.py`; `solve` now emits result["pq"] with (p,q), the four cert
+   cells, and CLAIMABLE/CANDIDATE. Violations are loud + non-fatal (map
+   always returned). 6 hermetic tests (test_cnc 42/42); live t=15 sweep
+   reads (200,205) CLAIMABLE. Full-coverage note: in solve's per-point
+   sweep, status==UNSAT is full-coverage by construction (single-slice
+   conquer, no unresolved cubes), unlike multi-shard aggregate().
 3. DESIGN SESSION (Fable, the big build): DISTRIBUTED CERTIFICATE pipeline
    — replaces old task 9's hand-rolled DRAT stitcher. Architecture sketch:
    shard per-cube LRAT generation across GH jobs (cadical --lrat --no-binary
