@@ -8,13 +8,40 @@ other open problems we'd like to try.
 
 ## CURRENT STATE (2026-07-23) — read this first
 
-**SESSION ONGOING at last handoff (2026-07-23):** cleared mid-work, not
-concluded. Live at the moment of handoff: (a) the docs/archive/PLAN_sat_portfolio.md
-builder agent — if its "portfolio:" commits are absent from git log, it was
-interrupted; check `git status` for partial uncommitted work (discard or
-finish it), then relaunch a builder from the spec; (b) GH run 30002262707
-(N=644 265-cube re-dispatch) — check `gh run list`, then Next-actions 1a.
-Nothing else was mid-flight; everything decided is committed and pushed.
+**SESSION HANDOFF (2026-07-23 evening):** everything decided is committed
+and pushed; NO local agents were running at handoff, but FOUR GH runs were
+live for t=26 N=644's last 30 cubes (local watches die with the session —
+re-check with `gh run view <id>`):
+- 30029142054 (main, the 70 stragglers): was 11/20 shards done, 40/70
+  cubes closed, all UNSAT; monster cubes 2780/3675/3866 grinding in
+  shards 7/14/15 (cap 10000s, walls ~23:19 UTC).
+- SPECULATIVE RACES (new capability, this session — a parent cube's
+  subtree re-split and sharded CONCURRENTLY with the main run still
+  grinding it; evidence composes idempotently): 30035220747 (cube 2780,
+  was 0/6), 30035222423 (cube 3675, was 4/6), 30035224058 (cube 3866,
+  **DONE: 2549/2549 children UNSAT — first race victory**, results in
+  gh_actions_results/cnc-run-30035224058/).
+RESUME DRILL: when all runs finish, download artifacts of ALL of
+29962548794 + 30002262707 + 30029142054 + the three race runs, then
+`aggregate --merge-jsonl` across everything (composes direct + child
+evidence). Expect UNSAT 4060/4060 -> commit official verdict (ae0d9a4
+format) -> t=26 = (634,643) DECISION-COMPLETE on all four Theorem-5.1
+cells -> update CURRENT STATE + this block. If a monster survived
+everything: re-dispatch its race deeper (see 3e0062e + the workflow's
+parent_cube input).
+Landed this session (all pushed): W(5,2)=178 LEAN THEOREM (b1c8c39,
+lean/ + w52_lean_walkthrough.ipynb 899f2a8); Theorem-5.1 reading rule
+(efb2527); SAT portfolio (a354f4b); distributed re-split (3e0062e) +
+concurrency scoping for racing; README rewrite w/ leading disclaimer;
+repo cleanup (docs/archive/). Email draft to Bill:
+~/Documents/email-drafts/EMAIL_bill_w52.md (NEVER commit emails).
+Sibling campaign: ~/Documents/repos/hadwiger-nelson (PRIVATE) — its
+NOTES.md is current (rung 0 done, rungs 0.5 + 1-trimming killed w/
+proof).
+TOMORROW QUEUE: distributed LRAT/Lean cert design (t=26 N=635 first
+customer); t=27/t=28 dispatches (mind the N=644-style tail; use races);
+HN construction-search + R^3 design sessions; lyfar-repo audit (disk OK
+now, ~7GB); Abigail decides on sending the Bill email.
 
 **What we're doing now:** proving exact palindromic van der Waerden values
 pdw(2;3,t) with a machine-checkable cube-and-conquer SAT pipeline. The live
