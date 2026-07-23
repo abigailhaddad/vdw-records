@@ -9,7 +9,7 @@ other open problems we'd like to try.
 ## CURRENT STATE (2026-07-23) — read this first
 
 **SESSION ONGOING at last handoff (2026-07-23):** cleared mid-work, not
-concluded. Live at the moment of handoff: (a) the PLAN_sat_portfolio.md
+concluded. Live at the moment of handoff: (a) the docs/archive/PLAN_sat_portfolio.md
 builder agent — if its "portfolio:" commits are absent from git log, it was
 interrupted; check `git status` for partial uncommitted work (discard or
 finish it), then relaunch a builder from the spec; (b) GH run 30002262707
@@ -21,7 +21,7 @@ pdw(2;3,t) with a machine-checkable cube-and-conquer SAT pipeline. The live
 frontier is t=26 and up. Earlier phases — Ramsey phase 1, the vdW zip
 campaign, the reach/records lower bounds — are concluded and archived at the
 bottom of this file. Full builder spec for the current pipeline work:
-`PLAN_pipeline_improvements.md` (repo root).
+`docs/archive/PLAN_pipeline_improvements.md`.
 
 **Pipeline state:** the sharded CnC decision pipeline (`cnc_pipeline.yml` +
 `code/vdw_cnc.py`) is green on GitHub (t=20 N=381 -> UNSAT, run
@@ -45,7 +45,7 @@ gh_actions_results/cnc-run-29926501414-merged-29953461926/). Four-fact cells
 for pdw(2;3,26)=(634,643) per the resolved reading rule: p+1=635 UNSAT DONE;
 q-1=642 SAT witness VERIFIED palindromic (3452s local); p-1=633 SAT witness
 VERIFIED (73s on GH after a 1h local timeout — heavy-tailed SAT lottery;
-this motivated PLAN_sat_portfolio.md, builder running 2026-07-23); q+1=644
+this motivated docs/archive/PLAN_sat_portfolio.md, builder running 2026-07-23); q+1=644
 decision run 29962548794: 3795/4060 cubes UNSAT, 0 SAT, 7/16 shards walled
 at 350min, 265 unresolved cubes re-dispatched across 8 shards (run
 30002262707, cap 120s). NB N=644 has a REAL tail: one resolved cube took
@@ -65,7 +65,7 @@ min; t=26 at 2-5+ core-hours of cube work projects several-GB-scale).
 
 **DIAGONAL VERDICT (2026-07-22, Fable): the W(6,2) wall is INTRINSIC —
 no-go confirmed; ladder shipped as `RESULTS_diagonal_ladder.md`.** The SB
-probe (PLAN_sb_probe.md, builder-implemented, 5 commits) found: (a) SB
+probe (docs/archive/PLAN_sb_probe.md, builder-implemented, 5 commits) found: (a) SB
 clauses visible to march_cu are a 3.5x PESSIMIZATION (march branches on lex
 aux vars — 100% of cubes polluted); (b) SB at solve time only (split plain,
 augment per-cube — sound, cubes cover position space) is free but worthless
@@ -113,7 +113,7 @@ Fable to review/spec; (ii) N=177 lower-bound witness via native_decide
       procedure + verdict format). If UNSAT 4060/4060 -> commit official
       verdict; t=26 = (634,643) is then DECISION-COMPLETE on all four
       Theorem-5.1 cells. Update CURRENT STATE.
-   b. Portfolio builder (PLAN_sat_portfolio.md) was RUNNING at handoff.
+   b. Portfolio builder (docs/archive/PLAN_sat_portfolio.md) was RUNNING at handoff.
       Its commits (prefix "portfolio:") land on main UNPUSHED; its final
       report is at /private/tmp/claude-501/-Users-abigailhaddad-Documents-
       repos-proof/9811e39d-85d1-4905-996c-f0bbe991bad8/tasks/
@@ -142,7 +142,7 @@ Fable to review/spec; (ii) N=177 lower-bound witness via native_decide
    projection before speccing the workflow. Mind the two LRAT-Catcher
    gotchas from the W(5,2) rehearsal (maxRecDepth on Base.lean; chunkSize
    ~50 not 1) and per-leaf memory under native_decide.
-4. DONE 2026-07-23 (sonnet builder to PLAN_w52_lean_theorem.md spec,
+4. DONE 2026-07-23 (sonnet builder to docs/archive/PLAN_w52_lean_theorem.md spec,
    Fable-reviewed + independently rebuilt/axiom-checked, commit b1c8c39):
    **W(5,2)=178 IS A LEAN THEOREM.** vdw_5_2 : vdwNumber2 5 178, a
    statement purely about 2-colorings. Bridge = clause-set inclusion
@@ -191,7 +191,7 @@ Fable to review/spec; (ii) N=177 lower-bound witness via native_decide
    (lengths=[k,k], encoder already sound: full non-palindromic, no symmetry
    breaking), then the ladder; evaluate LRAT-Catcher as the task-9
    replacement instead of hand-building a DRAT stitcher. Builder spec for
-   the whole diagonal campaign: `PLAN_diagonal_W_k_2.md` (repo root).
+   the whole diagonal campaign: `docs/archive/PLAN_diagonal_W_k_2.md`.
 
 **DIAGONAL W(k,2) — Task 1 LANDED (2026-07-22, reviewed).** `vdw_cnc.py`
 generalized from hardwired palindromic pdw(2;3,t) to arbitrary
@@ -214,7 +214,7 @@ N=35 UNSAT 14/14; full mode emits no "palindrome" at runtime.
   decide during look-ahead). Now recovers + validates for both encodings.
 - OFF-BY-ONE confirmed k=3,4,5: SAT strictly below W, UNSAT exactly AT W
   (9/35/178). So Task 3's k=6 UNSAT instance is N=1132, SAT is N=1131 (this
-  corrects a slip in the plan draft, now fixed in PLAN_diagonal_W_k_2.md).
+  corrects a slip in the plan draft, now fixed in docs/archive/PLAN_diagonal_W_k_2.md).
 - TASK 2 CERTS DONE (2026-07-22, local, drat-trim VERIFIED -- the first
   diagonal certificates in the repo). Calibration ladder rungs:
     k  N     cubes   proof      B/cube   solve   drat-trim
@@ -249,7 +249,7 @@ N=35 UNSAT 14/14; full mode emits no "palindrome" at runtime.
   "quantify the NEVER" deliverable, and it reads HARD.
   RECOMMENDATION: no-go on a blind multi-week campaign; ship the ladder as
   the result (RESULTS_diagonal_ladder.md, TODO).
-  OPEN QUESTION FOR FABLE -> `BRIEF_diagonal_solver_question.md` (repo root):
+  OPEN QUESTION FOR FABLE -> `docs/archive/BRIEF_diagonal_solver_question.md`:
   can SOUND symmetry breaking (color-swap + reflection; our encoder has NONE
   by design) or a structural reduction shrink the search? Highest-info next
   probe = add SB to the diagonal encoder + re-run the k=6 bake-off. Soundness
@@ -557,14 +557,14 @@ frontier; (3) once a frontier point is UNSAT, decide whether the single-job
 `prove` sweep fits in 6h or the parallel proof is needed.
 
 2026-07-22 process review (Fable): full builder spec for pipeline fixes +
-efficiency pass in PLAN_pipeline_improvements.md (repo root). Headline:
+efficiency pass in docs/archive/PLAN_pipeline_improvements.md. Headline:
 aggregate() has a vacuous-UNSAT bug — the two cancelled-run verdict.json
 files in gh_actions_results claim UNSAT with n_shards=0; fix (plan task 1)
 BEFORE the next dispatch. Killed t=26 run's measured cube-time tail is in
 the plan preamble; it motivates cap 1800->60 + re-split (task 4) and
 batched iglucose (task 5).
 
-2026-07-22 builder pass (Opus): PLAN_pipeline_improvements.md tasks 1-7
+2026-07-22 builder pass (Opus): docs/archive/PLAN_pipeline_improvements.md tasks 1-7
 landed (commits 98b6ca8..67be420). Highlights:
 - Task 1: aggregate() no longer reads an empty/partial shard set as UNSAT.
   UNSAT now requires all expected shards present + all UNSAT + full cube
