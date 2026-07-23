@@ -20,8 +20,8 @@ import vdw_cnc  # noqa: E402
 from vdw_cnc import (aggregate, slice_members, collect_shard_results,  # noqa: E402
                      reconstruct_shard_from_jsonl, merge_jsonl_verdicts,
                      resolve_instance, check_sb_allowed, do_split,
-                     conquer_slice, read_cnf, read_cube_lits, MARCH, IGLUCOSE,
-                     read_pdw_pq)
+                     do_split_parent, conquer_slice, read_cnf, read_cube_lits,
+                     MARCH, IGLUCOSE, read_pdw_pq)
 
 
 def _shard(shard, status, n_unsat=0, unresolved=None):
@@ -657,6 +657,245 @@ def test_read_pdw_pq_non_unsat_point_above_last_sat_blocks_claim():
     assert not pq["valid"], pq
     assert pq["p"] is None and pq["q"] is None, pq
     assert any("above the last SAT" in v for v in pq["violations"]), pq
+
+
+# --- DISTRIBUTED RE-SPLIT (NOTES.md t=26 STATE, 2026-07-23 progress) -------
+# Parallelize ONE stubborn cube's subtree across many conquer jobs instead of
+# grinding it sequentially inside a single job's --max-resplit-depth path
+# (motivation: t=26 cubes 2780/3675/3866 burned up to ~21000s each). Two
+# pieces: do_split_parent() (build the residual = base + parent cube's
+# literals, march_cu-split THAT, persist children as ordinary flat cubes
+# over the ORIGINAL base CNF -- see its docstring for the soundness
+# argument) and merge_jsonl_verdicts' new rule: a parent's global index
+# counts as refuted iff its FULL child set is covered and every child is
+# UNSAT -- a partial child set can never close the parent (same
+# refuse-partial-coverage guard the top-level campaign already has). These
+# hermetic tests build the JSONL fixtures by hand (no solver); the one live
+# test below exercises the real do_split_parent + conquer_slice +
+# merge_jsonl_verdicts pipeline end to end at t=15 scale.
+
+def _write_child_jsonl(d, shard, parent, n_children, verdicts, filename=None):
+    """A DISTRIBUTED RE-SPLIT child-conquer shard's JSONL: single shard
+    covering ALL of parent's children (nshards=1, for test simplicity) --
+    mirrors conquer_slice's own meta-line shape when `parent_cube` is set
+    (LOCAL child indices as gidx, "parent_cube" in the meta line -- see
+    conquer_slice's docstring)."""
+    path = os.path.join(d, filename or f"shard-{shard}.jsonl")
+    members = list(range(n_children))
+    with open(path, "w") as f:
+        f.write(json.dumps({"meta": True, "shard": shard, "nshards": 1,
+                            "ncubes": n_children, "parent_cube": parent,
+                            "mode": "round-robin", "members": members}) + "\n")
+        for g in members:
+            if g in verdicts:
+                f.write(json.dumps({"gidx": g, "verdict": verdicts[g],
+                                    "seconds": 0.01}) + "\n")
+    return path
+
+
+def test_merge_parent_closed_by_full_children():
+    # Top-level campaign (8 cubes) leaves cube 3 (the "parent") unresolved --
+    # everything else refuted directly. A SEPARATE distributed re-split of
+    # cube 3 into 2 children, both UNSAT (full coverage) -- the parent must
+    # close, and the OVERALL merge must read UNSAT (8/8 refuted), exactly as
+    # if cube 3 had been refuted directly.
+    with tempfile.TemporaryDirectory() as d:
+        base = os.path.join(d, "base")
+        childdir = os.path.join(d, "parent3")
+        os.makedirs(base)
+        os.makedirs(childdir)
+        _write_jsonl(base, 0, 8, 2, {0: "UNSAT", 2: "UNSAT",
+                                     4: "UNSAT", 6: "UNSAT"})
+        _write_jsonl(base, 1, 8, 2, {1: "UNSAT", 5: "UNSAT", 7: "UNSAT"})
+        # cube 3 (shard 1's slice) deliberately left unresolved at top level.
+        _write_child_jsonl(childdir, 0, parent=3, n_children=2,
+                           verdicts={0: "UNSAT", 1: "UNSAT"})
+        m = merge_jsonl_verdicts(d)
+    assert m["verdict"] == "UNSAT", m
+    assert m["cubes_without_unsat"] == [], m
+    assert m["parents"][3]["closed_via_children"] is True, m
+    assert m["parents"][3]["n_children_refuted"] == 2, m
+
+
+def test_merge_parent_not_closed_by_partial_children():
+    # Same setup, but the re-split of cube 3 only got ONE of its two
+    # children refuted -- a partial child set must NEVER close the parent
+    # (same refuse-partial-coverage guard the top-level campaign already
+    # has for a subset of top-level cubes).
+    with tempfile.TemporaryDirectory() as d:
+        base = os.path.join(d, "base")
+        childdir = os.path.join(d, "parent3")
+        os.makedirs(base)
+        os.makedirs(childdir)
+        _write_jsonl(base, 0, 8, 2, {0: "UNSAT", 2: "UNSAT",
+                                     4: "UNSAT", 6: "UNSAT"})
+        _write_jsonl(base, 1, 8, 2, {1: "UNSAT", 5: "UNSAT", 7: "UNSAT"})
+        _write_child_jsonl(childdir, 0, parent=3, n_children=2,
+                           verdicts={0: "UNSAT"})  # child 1 never resolved
+        m = merge_jsonl_verdicts(d)
+    assert m["verdict"] == "UNDETERMINED", m
+    assert m["cubes_without_unsat"] == [3], m
+    assert m["parents"][3]["closed_via_children"] is False, m
+    assert m["parents"][3]["children_without_unsat"] == [1], m
+
+
+def test_merge_parent_child_sat_surfaces():
+    # A SAT child decides the PARENT sat -- which must bubble all the way up
+    # to the overall merged verdict, exactly like a top-level SAT cube does.
+    with tempfile.TemporaryDirectory() as d:
+        base = os.path.join(d, "base")
+        childdir = os.path.join(d, "parent3")
+        os.makedirs(base)
+        os.makedirs(childdir)
+        _write_jsonl(base, 0, 8, 2, {0: "UNSAT", 2: "UNSAT",
+                                     4: "UNSAT", 6: "UNSAT"})
+        _write_jsonl(base, 1, 8, 2, {1: "UNSAT", 5: "UNSAT", 7: "UNSAT"})
+        _write_child_jsonl(childdir, 0, parent=3, n_children=2,
+                           verdicts={0: "UNSAT", 1: "SAT"})
+        m = merge_jsonl_verdicts(d)
+    assert m["verdict"] == "SAT", m
+    assert m["sat_cubes"] == [3], m
+    assert m["parents"][3]["sat_children"] == [1], m
+
+
+def test_merge_mixed_direct_and_child_evidence_compose():
+    # The parent (cube 3) was refuted DIRECTLY in one run (an ordinary
+    # top-level conquer attempt, before it was identified as stubborn), and
+    # SEPARATELY a distributed re-split of the same cube only got through
+    # ONE of its two children (which ALONE would not close it). The two
+    # pieces of evidence must compose: the direct evidence already closes
+    # cube 3, regardless of the children run's incompleteness.
+    with tempfile.TemporaryDirectory() as d:
+        base = os.path.join(d, "base")
+        childdir = os.path.join(d, "parent3")
+        os.makedirs(base)
+        os.makedirs(childdir)
+        _write_jsonl(base, 0, 8, 1, {g: "UNSAT" for g in range(8)})
+        _write_child_jsonl(childdir, 0, parent=3, n_children=2,
+                           verdicts={0: "UNSAT"})  # partial, alone insufficient
+        m = merge_jsonl_verdicts(d)
+    assert m["verdict"] == "UNSAT", m
+    assert m["cubes_without_unsat"] == [], m
+    assert m["n_cubes_refuted"] == 8, m
+    assert m["parents"][3]["closed_via_children"] is False, m  # via children alone: no
+
+
+def test_merge_parent_ncubes_disagreement_refused():
+    # Two child-conquer JSONLs for the SAME parent disagreeing on how many
+    # children it was split into is exactly the kind of thing the existing
+    # ncubes-disagreement guard exists to catch -- refused the same way.
+    with tempfile.TemporaryDirectory() as d:
+        childdir = os.path.join(d, "parent3")
+        os.makedirs(childdir)
+        _write_child_jsonl(childdir, 0, parent=3, n_children=2,
+                           verdicts={0: "UNSAT"},
+                           filename="shard-0.jsonl")
+        _write_child_jsonl(childdir, 1, parent=3, n_children=3,
+                           verdicts={1: "UNSAT"},
+                           filename="shard-1.jsonl")
+        try:
+            merge_jsonl_verdicts(d)
+            assert False, "expected ValueError on disagreeing child counts"
+        except ValueError:
+            pass
+
+
+def test_do_split_parent_solved_outright_mirrors_do_split():
+    # march_cu can decide the RESIDUAL outright during look-ahead (rc 10/20,
+    # 0 children) -- exactly do_split's own meta["solved"] hazard, one level
+    # down. Cross-check against a KNOWN small cell that do_split itself
+    # already decides this way (W(3,2)=9's N=8, referenced directly in
+    # do_split_parent's docstring and in vdw_cnc.py's `local`-mode comment):
+    # do_split_parent with an EMPTY parent (no extra constraint) must
+    # reproduce the exact same decision, since an empty parent's residual IS
+    # the base formula.
+    if not (os.path.exists(MARCH) and os.path.exists(IGLUCOSE)):
+        print("    (skipped: march_cu/iglucose not built in this environment)")
+        return
+    with tempfile.TemporaryDirectory() as d:
+        plain_meta = do_split([3, 3], "full", 8,
+                              os.path.join(d, "plain.cnf"),
+                              os.path.join(d, "plain.cubes"), "-d 12")
+        parent_meta = do_split_parent([3, 3], "full", 8, 0, [],
+                                      os.path.join(d, "p.cnf"),
+                                      os.path.join(d, "p.cubes"), "-d 12")
+    assert plain_meta["solved"] is not None, plain_meta  # sanity: known cell
+    assert parent_meta["solved"] == plain_meta["solved"], \
+        (parent_meta, plain_meta)
+    assert parent_meta["ncubes"] == 0, parent_meta
+
+
+def test_live_t15_parent_split_matches_direct_verdict():
+    # End-to-end: split t=15 N=201 (a real UNSAT point -- see
+    # test_read_pdw_pq_t15_theorem_example's N=197..207 map, where 201 is
+    # "U"), decide it directly (one slice, every cube), then pick a cube,
+    # parent-split it, conquer its children round-robin across "shards"
+    # (exactly like top-level cubes, per the distributed re-split design),
+    # and verify the cube-level merge over (everything-but-the-parent +
+    # the parent's children) equals the direct verdict.
+    if not (os.path.exists(MARCH) and os.path.exists(IGLUCOSE)):
+        print("    (skipped: march_cu/iglucose not built in this environment)")
+        return
+    with tempfile.TemporaryDirectory() as d:
+        cnf = os.path.join(d, "base.cnf")
+        cubes_path = os.path.join(d, "base.cubes")
+        meta = do_split([3, 15], "palindromic", 201, cnf, cubes_path, "-d 8")
+        assert meta["solved"] is None, meta  # real cubes, not decided outright
+        nvars, clause_lines = read_cnf(cnf)
+        cube_lits = read_cube_lits(cubes_path)
+        ncubes = len(cube_lits)
+        instmeta = {"lengths": [3, 15], "encoding": "palindromic", "N": 201,
+                   "symmetry_break": False}
+
+        direct_dir = os.path.join(d, "direct")
+        os.makedirs(direct_dir)
+        direct = conquer_slice(instmeta, nvars, clause_lines, cube_lits, 0, 1,
+                               30, direct_dir, False, "-d 6", 0)
+        assert direct["status"] == "UNSAT", direct
+
+        # Find a cube whose parent-split yields a real (>=2-way) split --
+        # most single top-level cubes at this depth bottom out to 1 child,
+        # so try a handful and use the first that doesn't.
+        parent = pmeta = children_cnf = children_cubes = None
+        for cand in range(min(15, ncubes)):
+            c_cnf = os.path.join(d, f"parent{cand}.cnf")
+            c_cubes = os.path.join(d, f"parent{cand}.cubes")
+            m = do_split_parent([3, 15], "palindromic", 201, cand,
+                                cube_lits[cand], c_cnf, c_cubes, "-d 12")
+            if m["solved"] is None and m["ncubes"] >= 2:
+                parent, pmeta, children_cnf, children_cubes = (
+                    cand, m, c_cnf, c_cubes)
+                break
+        assert parent is not None, \
+            "no candidate parent cube produced >=2 children at this scale"
+
+        pnvars, pclause_lines = read_cnf(children_cnf)
+        pchild_cubes = read_cube_lits(children_cubes)
+
+        results = os.path.join(d, "merge_results")
+        base_sub = os.path.join(results, "base")
+        child_sub = os.path.join(results, f"parent{parent}")
+        os.makedirs(base_sub)
+        os.makedirs(child_sub)
+
+        # base run: every top-level cube EXCEPT the parent (deliberately
+        # left out -- it will be closed via its children instead).
+        other = [i for i in range(ncubes) if i != parent]
+        conquer_slice(instmeta, nvars, clause_lines, cube_lits, 0, 1, 30,
+                      base_sub, False, "-d 6", 0, cube_indices=other)
+
+        # children run: round-robin across up to 2 "shards" -- slice_members
+        # unchanged, exactly like a plain top-level conquer.
+        nshards = min(2, pmeta["ncubes"])
+        for s in range(nshards):
+            conquer_slice(instmeta, pnvars, pclause_lines, pchild_cubes, s,
+                          nshards, 30, child_sub, False, "-d 6", 0,
+                          parent_cube=parent)
+
+        merged = merge_jsonl_verdicts(results)
+    assert merged["verdict"] == direct["status"] == "UNSAT", (merged, direct)
+    assert merged["cubes_without_unsat"] == [], merged
+    assert merged["parents"][parent]["closed_via_children"] is True, merged
 
 
 def main():

@@ -44,6 +44,9 @@ on:
       cube_indices:
         description: "re-dispatch: comma-separated GLOBAL cube indices to solve (leave empty for a full round-robin run). Split contiguously across nshards jobs."
         default: ""
+      parent_cube:
+        description: "DISTRIBUTED RE-SPLIT (NOTES.md t=26 STATE): global cube index to re-split into its OWN children and conquer THOSE across nshards jobs, instead of grinding the cube sequentially inside one job's max_resplit_depth path (motivation: t=26 cubes 2780/3675/3866 each burned up to ~21000s in one job while 17+ other runners sat idle). Leave EMPTY for unchanged, byte-compatible top-level dispatch. When set, this run's verdict.json decides ONLY this parent cube's children (see its `scope` field) -- close the parent in the overall instance decision with `vdw_cnc.py aggregate --merge-jsonl` over this run + the top-level campaign's committed results."
+        default: ""
       march_opts:
         description: "march_cu split options (deeper -d or -l limit = more, smaller cubes)"
         default: "-d 16"
@@ -175,6 +178,13 @@ jobs:
       # instance_slug() exactly so this job's hand-built filenames agree
       # with what vdw_cnc.py itself writes (palindromic: t{t}_N{N}, byte-
       # identical to the pre-diagonal-campaign naming; full: w{lengths..}_N{N}).
+      # CNF_SLUG/PARENT_FLAG (DISTRIBUTED RE-SPLIT, NOTES.md t=26 STATE):
+      # when parent_cube is set, the cnf/cubes that actually get conquered
+      # are the PARENT's children (cnc_<SLUG>.parent<P>.{cnf,cubes}, from
+      # do_split_parent), not the plain top-level split -- CNF_SLUG is what
+      # every downstream step (pilot, conquer) should point --cnf/--cubes
+      # at. Empty parent_cube -> CNF_SLUG == SLUG and PARENT_FLAG empty,
+      # i.e. byte-identical to the pre-existing behavior.
       - name: resolve instance args
         run: |
           if [ -n "${{ inputs.lengths }}" ]; then
@@ -184,9 +194,26 @@ jobs:
             inst_args="--t ${{ inputs.t }}"
             slug="t${{ inputs.t }}_N${{ inputs.N }}"
           fi
+          cnf_slug="$slug"
+          parentflag=""
+          if [ -n "${{ inputs.parent_cube }}" ]; then
+            cnf_slug="${slug}.parent${{ inputs.parent_cube }}"
+            parentflag="--parent-cube ${{ inputs.parent_cube }}"
+          fi
           echo "INST_ARGS=$inst_args" >> "$GITHUB_ENV"
           echo "SLUG=$slug" >> "$GITHUB_ENV"
-          echo "resolved: INST_ARGS='$inst_args' SLUG='$slug'"
+          echo "CNF_SLUG=$cnf_slug" >> "$GITHUB_ENV"
+          echo "PARENT_FLAG=$parentflag" >> "$GITHUB_ENV"
+          echo "resolved: INST_ARGS='$inst_args' SLUG='$slug' CNF_SLUG='$cnf_slug' PARENT_FLAG='$parentflag'"
+      # Always regenerate the plain top-level split first -- march_cu is
+      # deterministic given the same CNF + march_opts, so this reproduces
+      # the ORIGINAL top-level cube file byte-for-byte (same practice the
+      # existing --cube-indices re-dispatch already relies on: march_opts
+      # here MUST match the original top-level split's). In DISTRIBUTED
+      # RE-SPLIT mode (parent_cube set), that regenerated file is also
+      # do_split_parent's default source for the parent cube's literals
+      # (--parent-cubes-file defaults to exactly this sibling file) -- so
+      # the second `split` call below needs no extra wiring to find it.
       - name: split into cubes
         env:
           MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
@@ -197,11 +224,20 @@ jobs:
             --march-opts "${{ inputs.march_opts }}" \
             --outdir cnc_out --json-out cnc_out/split.json \
             | tee cnc_out/split.log
+          if [ -n "$PARENT_FLAG" ]; then
+            python3 code/vdw_cnc.py split $INST_ARGS --N ${{ inputs.N }} \
+              $PARENT_FLAG --march-opts "${{ inputs.march_opts }}" \
+              --outdir cnc_out --json-out cnc_out/split_parent.json \
+              | tee -a cnc_out/split.log
+          fi
       # Pilot BEFORE the fan-out: sample cubes, project the total core-hours,
       # and FAIL this job (so conquer, which needs split, is skipped) if the
       # projection blows the budget -- unless force=true. This is the guard the
       # killed t=26 -d16 run (~15 job-hours wasted) needed. Runs in the same
-      # job so a block prevents the artifact upload too.
+      # job so a block prevents the artifact upload too. Points at CNF_SLUG
+      # (the parent's children in DISTRIBUTED RE-SPLIT mode) -- pilot itself
+      # needs no changes, since a parent-split cube file is just an ordinary
+      # flat cube list from its perspective (see do_split_parent).
       - name: pilot -- project cost, gate the fan-out
         env:
           MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
@@ -210,8 +246,8 @@ jobs:
           forceflag=""
           [ "${{ inputs.force }}" = "true" ] && forceflag="--force"
           python3 code/vdw_cnc.py pilot $INST_ARGS --N ${{ inputs.N }} \
-            --cnf cnc_out/cnc_${SLUG}.cnf \
-            --cubes cnc_out/cnc_${SLUG}.cubes \
+            --cnf cnc_out/cnc_${CNF_SLUG}.cnf \
+            --cubes cnc_out/cnc_${CNF_SLUG}.cubes \
             --budget-core-hours ${{ inputs.budget_core_hours }} $forceflag \
             --outdir cnc_out --json-out cnc_out/pilot.json \
             | tee -a "$GITHUB_STEP_SUMMARY"
@@ -222,6 +258,7 @@ jobs:
             cnc_out/*.cnf
             cnc_out/*.cubes
             cnc_out/split.json
+            cnc_out/split_parent.json
             cnc_out/split.log
             cnc_out/pilot.json
 
@@ -247,7 +284,8 @@ jobs:
           tar -xzf cnc-tools.tar.gz
           chmod +x cncbin/*
       # Same resolution as the split job (separate runner, so recomputed here
-      # -- see the comment there).
+      # -- see the comment there). CNF_SLUG/PARENT_FLAG: see the split job's
+      # comment -- empty parent_cube means byte-identical to before.
       - name: resolve instance args
         run: |
           if [ -n "${{ inputs.lengths }}" ]; then
@@ -257,9 +295,17 @@ jobs:
             inst_args="--t ${{ inputs.t }}"
             slug="t${{ inputs.t }}_N${{ inputs.N }}"
           fi
+          cnf_slug="$slug"
+          parentflag=""
+          if [ -n "${{ inputs.parent_cube }}" ]; then
+            cnf_slug="${slug}.parent${{ inputs.parent_cube }}"
+            parentflag="--parent-cube ${{ inputs.parent_cube }}"
+          fi
           echo "INST_ARGS=$inst_args" >> "$GITHUB_ENV"
           echo "SLUG=$slug" >> "$GITHUB_ENV"
-          echo "resolved: INST_ARGS='$inst_args' SLUG='$slug'"
+          echo "CNF_SLUG=$cnf_slug" >> "$GITHUB_ENV"
+          echo "PARENT_FLAG=$parentflag" >> "$GITHUB_ENV"
+          echo "resolved: INST_ARGS='$inst_args' SLUG='$slug' CNF_SLUG='$cnf_slug' PARENT_FLAG='$parentflag'"
       - name: conquer this shard's cube slice
         env:
           MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
@@ -270,10 +316,10 @@ jobs:
           ciflag=""
           [ -n "${{ matrix.cube_indices }}" ] && ciflag="--cube-indices ${{ matrix.cube_indices }}"
           python3 code/vdw_cnc.py conquer $INST_ARGS --N ${{ inputs.N }} \
-            --cnf cnc_out/cnc_${SLUG}.cnf \
-            --cubes cnc_out/cnc_${SLUG}.cubes \
+            --cnf cnc_out/cnc_${CNF_SLUG}.cnf \
+            --cubes cnc_out/cnc_${CNF_SLUG}.cubes \
             --shard ${{ matrix.shard }} --nshards ${{ needs.setup.outputs.nshards }} \
-            --cap-seconds ${{ inputs.cap_seconds }} $certflag $ciflag \
+            --cap-seconds ${{ inputs.cap_seconds }} $certflag $ciflag $PARENT_FLAG \
             --max-resplit-depth ${{ inputs.max_resplit_depth }} \
             --resplit-march-opts "${{ inputs.resplit_march_opts }}" \
             --batch-size ${{ inputs.batch_size }} \
@@ -335,6 +381,15 @@ jobs:
           else
             dir="gh_actions_results/cnc-run-${{ github.run_id }}"
             label="pdw(2;3,${{ inputs.t }}) N=${{ inputs.N }}"
+          fi
+          # DISTRIBUTED RE-SPLIT (NOTES.md t=26 STATE): the dir naming stays
+          # unchanged (run_id is already a unique key, same as any other
+          # re-dispatch run) -- only the commit-message label calls out the
+          # scope explicitly, so `git log` alone makes clear this commit is
+          # NOT a full-instance verdict (the JSON's own "scope" field is the
+          # authoritative version -- see aggregate()/verdict.json).
+          if [ -n "${{ inputs.parent_cube }}" ]; then
+            label="${label} [DISTRIBUTED RE-SPLIT: parent cube ${{ inputs.parent_cube }} only]"
           fi
           mkdir -p "$dir"
           cp -r results/* "$dir/" 2>/dev/null || true

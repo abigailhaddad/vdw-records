@@ -343,6 +343,124 @@ def do_split(lengths, encoding, N, cnf_path, cubes_path, march_opts,
             "march_opts": march_opts, "split_seconds": split_time}
 
 
+def do_split_parent(lengths, encoding, N, parent_gidx, parent_lits, cnf_path,
+                    cubes_path, march_opts, symmetry_break=False):
+    """DISTRIBUTED RE-SPLIT (NOTES.md t=26 STATE, 2026-07-23 progress
+    paragraph): parallelize ONE stubborn cube's subtree across many GH-
+    Actions conquer jobs instead of grinding it sequentially inside a single
+    job's adaptive re-split (conquer_cube's --max-resplit-depth path). Build
+    the RESIDUAL formula = base clauses + `parent_lits` (the parent cube's
+    literals, read off the ORIGINAL top-level split's cube file) as unit
+    clauses, march_cu-split THAT, and persist each child as an ordinary
+    flat, self-contained cube whose literal list is
+    `parent_lits + <march_cu's residual-relative sub-literals>` -- i.e. a
+    full case-split cube over the SAME base CNF this function also writes to
+    `cnf_path`. Because each child cube is already "complete" this way,
+    `conquer_slice` (and every re-split/batch/witness path inside it) shards
+    and solves them with the EXACT SAME machinery as a plain top-level
+    split -- nothing downstream needs to know a cube came from a parent
+    split. This is the intended workhorse for closing the t=26 stragglers
+    (cubes 2780/3675/3866, each having burned up to ~21000s in one job) and
+    for any t=28+ / W(6,2)-scale attempt where static sharding alone leaves
+    idle runners while one cube grinds.
+
+    SOUNDNESS (identical argument to conquer_cube's in-job re-split, just
+    moved out-of-process across jobs instead of staying in one): march_cu's
+    cube set over the residual (base AND parent_lits) is a COMPLETE case
+    split of it, so parent_lits AND child_i is a complete case split of
+    "parent_lits holds" as child_i ranges over every emitted cube; refuting
+    every child therefore refutes parent_lits AND base -- i.e. the PARENT
+    CUBE ITSELF is UNSAT under base. This is exactly the rule
+    `merge_jsonl_verdicts` is taught below: a parent's global index counts
+    as refuted iff its full child set is covered and every child is UNSAT --
+    a subset of children can never close the parent (same coverage guard as
+    the top-level campaign, see aggregate()/merge_jsonl_verdicts). Any child
+    SAT recovers + verifies a full model through the exact same
+    check_witness() path as every other SAT cube in this pipeline -- no
+    special-casing needed there, since the child's literal list already IS
+    parent_lits + child-specific literals over the ORIGINAL base variable
+    space.
+
+    march_cu can also DECIDE THE RESIDUAL OUTRIGHT during look-ahead (rc
+    10/20, 0 children) -- exactly do_split's own meta["solved"] hazard, just
+    one level down: it means the PARENT CUBE ITSELF is decided (SAT or
+    UNSAT), and a caller that fed an empty child set to conquer anyway would
+    manufacture a vacuous UNSAT of the parent. Callers MUST check
+    meta["solved"] first, exactly as every do_split call site already does.
+
+    "split" SB mode (SB clauses baked into what march_cu sees) is refused
+    here: `parent_lits` was read off a PLAIN top-level cube file (do_split
+    writes a plain CNF for both symmetry_break=False and "conquer" -- see
+    its docstring), so the residual built here must stay plain too; an aux-
+    var-aware residual is unneeded scope (no current campaign combines SB
+    with the distributed re-split) and is refused loudly rather than
+    silently mishandled."""
+    check_sb_allowed(lengths, encoding, symmetry_break)
+    if symmetry_break == "split":
+        raise SystemExit(
+            "--parent-cube + --symmetry-break --sb-in-split is refused: "
+            "the parent cube's literals were read off a PLAIN top-level "
+            "cube file (do_split never bakes SB into 'conquer' or no-SB "
+            "splits), so distributed re-split only supports "
+            "symmetry_break False or 'conquer', matching what the original "
+            "split actually produced.")
+    if encoding == "palindromic":
+        clauses, nvars = encode_palindromic(lengths, N)
+    else:
+        clauses, nvars = encode(lengths, N, symmetry_break=False)
+    label = instance_label(lengths, encoding, N)
+    write_dimacs(clauses, nvars, cnf_path,
+                comment=f"{label} {encoding} (cube-and-conquer) -- base CNF "
+                        f"for distributed re-split of parent cube "
+                        f"{parent_gidx}")
+    clause_lines = [" ".join(str(l) for l in cl) + " 0\n" for cl in clauses]
+
+    res_cnf = cubes_path + ".residual.cnf.tmp"
+    res_cubes = cubes_path + ".residual.cubes.tmp"
+    with open(res_cnf, "w") as f:
+        f.write(f"p cnf {nvars} {len(clause_lines) + len(parent_lits)}\n")
+        f.writelines(clause_lines)
+        for l in parent_lits:
+            f.write(f"{l} 0\n")
+    cmd = [MARCH, res_cnf, "-o", res_cubes] + march_opts.split()
+    print(f"  split (parent cube {parent_gidx}, {len(parent_lits)} lits): "
+          f"{' '.join(cmd)}", flush=True)
+    t0 = time.time()
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        split_time = time.time() - t0
+        solved = {10: "SAT", 20: "UNSAT"}.get(proc.returncode)
+        if proc.returncode != 0 and solved is None:
+            sys.stderr.write(proc.stdout + proc.stderr)
+            raise RuntimeError(f"march_cu failed (rc={proc.returncode})")
+        subs = read_cube_lits(res_cubes) if os.path.exists(res_cubes) else []
+    finally:
+        for p in (res_cnf, res_cubes):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+    ncubes = 0 if solved else len(subs)
+    if not solved:
+        with open(cubes_path, "w") as f:
+            for sub in subs:
+                lits = list(parent_lits) + list(sub)
+                f.write("a " + " ".join(str(l) for l in lits) + " 0\n")
+    print(f"  split: parent cube {parent_gidx} ({len(parent_lits)} lits) -> "
+          f"{ncubes} children in {split_time:.1f}s"
+          + (f" (march_cu decided {solved} during look-ahead -- the PARENT "
+             f"CUBE ITSELF is decided, 0 children)" if solved else ""),
+          flush=True)
+    return {"lengths": lengths, "encoding": encoding,
+            "t": (lengths[1] if encoding == "palindromic" else None),
+            "N": N, "nvars": nvars, "nclauses": len(clauses),
+            "cnf": cnf_path, "cubes": cubes_path, "ncubes": ncubes,
+            "solved": solved, "symmetry_break": symmetry_break,
+            "march_opts": march_opts, "split_seconds": split_time,
+            "parent_cube": parent_gidx, "parent_nlits": len(parent_lits)}
+
+
 def read_cnf(cnf_path):
     """Return (nvars, clause_lines). clause_lines drop comments and the
     p-line so they can be spliced under a 'p inccnf' header or a fresh
@@ -550,17 +668,35 @@ def conquer_cube(nvars, clause_lines, solve_clause_lines, cube_lits, cap,
 
 def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
                   outdir, certified, resplit_opts, max_resplit_depth,
-                  cube_indices=None, batch_size=1):
+                  cube_indices=None, batch_size=1, parent_cube=None):
     """Solve this shard's cubes: normally its round-robin slice (cube i goes
     to shard i%nshards), but if cube_indices is given, exactly those global
     cube indices instead (the re-dispatch path -- re-run only the cubes a
     prior run left unresolved). First SAT wins (formula SAT); otherwise every
     cube must refute for the slice to be decisive. Hard cubes are re-split up
     to max_resplit_depth before being given up as UNRESOLVED (recorded by
-    global cube index so exactly those can be re-dispatched)."""
+    global cube index so exactly those can be re-dispatched).
+
+    parent_cube (DISTRIBUTED RE-SPLIT, NOTES.md t=26 STATE): when this shard
+    is conquering a PARENT cube's children (`cubes` came from
+    do_split_parent, so each cube is already a full, self-contained literal
+    list -- see that function's docstring), pass the parent's GLOBAL cube
+    index here. Everything about HOW cubes are sharded/solved/re-split is
+    completely unaffected -- `cubes` here is just a flat list like any
+    top-level split's, so `slice_members`/batching/adaptive re-split all
+    work unchanged. The only effect is labeling: the JSONL checkpoint's meta
+    line and this function's returned dict both carry "parent_cube" so a
+    downstream reader (merge_jsonl_verdicts, or a human) knows this file's
+    gidx values are LOCAL positions within the parent's child set, not
+    top-level global indices -- and the workdir gets a distinguishing
+    "_parent<P>" tag so a parent-split conquer run can never collide on
+    scratch icnf files with a plain top-level run of the same instance/N
+    sharing the same --outdir."""
     lengths, encoding, N = meta["lengths"], meta["encoding"], meta["N"]
     symmetry_break = meta.get("symmetry_break", False)
     slug = instance_slug(lengths, encoding, N, symmetry_break)
+    if parent_cube is not None:
+        slug = f"{slug}_parent{parent_cube}"
     workdir = os.path.join(outdir, f"cnc_{slug}_shard{shard}")
     os.makedirs(workdir, exist_ok=True)
     # SB-4: `clause_lines`/`nvars` stay PLAIN throughout (that's what
@@ -594,7 +730,8 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
                          "N": N, "symmetry_break": symmetry_break,
                          "shard": shard,
                          "nshards": nshards, "ncubes": len(cubes),
-                         "mode": mode, "members": members}) + "\n")
+                         "mode": mode, "members": members,
+                         "parent_cube": parent_cube}) + "\n")
     jf.flush()
 
     records = []
@@ -683,6 +820,7 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
             "n_solve_aux_vars": n_solve_aux_vars,
             "shard": shard, "nshards": nshards, "mode": mode,
             "ncubes": len(cubes), "members": members,
+            "parent_cube": parent_cube,
             "cap_seconds": cap, "max_resplit_depth": max_resplit_depth,
             "batch_size": eff_batch, "n_batched_unsat": n_batched,
             "n_cubes_in_slice": len(mine), "n_unsat": n_unsat,
@@ -1255,6 +1393,7 @@ def reconstruct_shard_from_jsonl(meta, verdicts):
             "shard": shard,
             "nshards": meta["nshards"], "recovered_from": "jsonl",
             "ncubes": meta["ncubes"], "members": members,
+            "parent_cube": meta.get("parent_cube"),
             "n_cubes_in_slice": len(members)}
     sat = [g for g, v in verdicts.items() if v == "SAT"]
     if sat:
@@ -1342,20 +1481,46 @@ def merge_jsonl_verdicts(results_dir):
     "full+sb" (never plain "full") so nothing downstream
     (crosscheck_records.py, NOTES claims) can mistake it for a result about
     the ORIGINAL formula; the "symmetry_break" field in the return value
-    keeps the split/conquer distinction (never coerced to a plain bool)."""
+    keeps the split/conquer distinction (never coerced to a plain bool).
+
+    DISTRIBUTED RE-SPLIT (NOTES.md t=26 STATE): a JSONL whose meta line
+    carries "parent_cube" (see conquer_slice) came from conquering one
+    PARENT cube's children, not the top-level instance -- its "gidx" values
+    are LOCAL positions in that parent's own child set (0..n_children-1),
+    a totally different number space from the top-level global cube index,
+    and its "ncubes" means "how many children this parent was split into",
+    NOT the top-level instance's cube count. Such a file is therefore kept
+    OUT of the top-level ncubes-agreement check and out of the top-level
+    unsat/sat sets directly; instead its per-child verdicts are tallied
+    per-parent (across every file for that same parent -- a base child-run
+    plus any child-level re-dispatch compose the same way top-level runs
+    do). THE NEW RULE: a parent's global index counts as refuted iff its
+    full child set is covered AND every child is UNSAT -- a PARTIAL child
+    set (even all-UNSAT so far) can never close the parent, mirroring the
+    top-level campaign's own refuse-partial-coverage guard exactly (see
+    aggregate()'s uncovered_cubes / test_coverage_check_blocks_false_unsat_
+    on_subset). Any SAT child decides the parent SAT. Once a parent is
+    resolved (either way) its GLOBAL index is folded into the ordinary
+    top-level unsat/sat sets below -- so it composes automatically with
+    DIRECT evidence about that same global index from an ordinary top-level
+    run (e.g. the parent cube being logged UNSAT outright by an earlier,
+    non-distributed conquer attempt): whichever source resolves a given
+    global index first, the other can never un-resolve it -- a plain set
+    union is exactly the OR this composition needs."""
     ncubes = None
     lengths = None
     encoding = None
     symmetry_break = None
     unsat, sat = set(), set()
+    # parent (global int) -> {"n_children": int or None, "unsat": set(local
+    # int), "sat": set(local int)} -- see the DISTRIBUTED RE-SPLIT docstring
+    # section above.
+    parents = {}
     for p in sorted(glob.glob(os.path.join(results_dir, "**", "shard-*.jsonl"),
                               recursive=True)):
         meta, verdicts = read_shard_jsonl(p)
+        parent = meta.get("parent_cube") if meta is not None else None
         if meta is not None:
-            if ncubes is not None and meta["ncubes"] != ncubes:
-                raise ValueError(f"JSONL files disagree on ncubes: "
-                                 f"{ncubes} vs {meta['ncubes']} in {p}")
-            ncubes = meta["ncubes"]
             m_lengths = meta.get("lengths")
             if m_lengths is not None:
                 if lengths is not None and lengths != m_lengths:
@@ -1375,8 +1540,49 @@ def merge_jsonl_verdicts(results_dir):
                                      f"symmetry_break: {symmetry_break} vs "
                                      f"{m_sb} in {p}")
                 symmetry_break = m_sb
-        for g, v in verdicts.items():
-            (sat if v == "SAT" else unsat if v == "UNSAT" else set()).add(g)
+        if parent is None:
+            if meta is not None:
+                if ncubes is not None and meta["ncubes"] != ncubes:
+                    raise ValueError(f"JSONL files disagree on ncubes: "
+                                     f"{ncubes} vs {meta['ncubes']} in {p}")
+                ncubes = meta["ncubes"]
+            for g, v in verdicts.items():
+                (sat if v == "SAT" else unsat if v == "UNSAT" else set()).add(g)
+        else:
+            pinfo = parents.setdefault(
+                parent, {"n_children": None, "unsat": set(), "sat": set()})
+            if meta is not None and meta.get("ncubes") is not None:
+                if (pinfo["n_children"] is not None
+                        and pinfo["n_children"] != meta["ncubes"]):
+                    raise ValueError(
+                        f"JSONL files disagree on child count for parent "
+                        f"cube {parent}: {pinfo['n_children']} vs "
+                        f"{meta['ncubes']} in {p}")
+                pinfo["n_children"] = meta["ncubes"]
+            for g, v in verdicts.items():
+                if v == "SAT":
+                    pinfo["sat"].add(g)
+                elif v == "UNSAT":
+                    pinfo["unsat"].add(g)
+
+    parent_detail = {}
+    for parent, info in sorted(parents.items()):
+        n = info["n_children"]
+        full_range = set(range(n)) if n is not None else set()
+        closed_via_children = (n is not None and full_range <= info["unsat"])
+        if info["sat"]:
+            sat.add(parent)
+        elif closed_via_children:
+            unsat.add(parent)
+        parent_detail[parent] = {
+            "n_children": n,
+            "n_children_refuted": len(info["unsat"] & full_range),
+            "children_without_unsat": (sorted(full_range - info["unsat"])
+                                       if n is not None else None),
+            "sat_children": sorted(info["sat"]),
+            "closed_via_children": closed_via_children,
+            "resolved": bool(info["sat"]) or closed_via_children}
+
     if sat:
         status = "SAT"
     elif ncubes is None:
@@ -1392,7 +1598,8 @@ def merge_jsonl_verdicts(results_dir):
                                else False), "ncubes": ncubes,
             "n_cubes_refuted": len(unsat & set(range(ncubes))) if ncubes
             else len(unsat),
-            "cubes_without_unsat": missing, "sat_cubes": sorted(sat)}
+            "cubes_without_unsat": missing, "sat_cubes": sorted(sat),
+            "parents": parent_detail}
 
 
 def aggregate(shard_results, expected_nshards):
@@ -1433,7 +1640,18 @@ def aggregate(shard_results, expected_nshards):
     SB run (either variant), this function's returned "encoding" is
     "full+sb" (never plain "full"), so an SB decision can never be misread
     downstream as a claim about the ORIGINAL formula. The returned
-    "symmetry_break" keeps the raw tri-state value (never coerced to bool)."""
+    "symmetry_break" keeps the raw tri-state value (never coerced to bool).
+
+    DISTRIBUTED RE-SPLIT scope (NOTES.md t=26 STATE): when every shard
+    carries the SAME "parent_cube" (conquer_slice sets it whenever `cubes`
+    came from do_split_parent), this run is deciding ONLY that parent
+    cube's children, NOT the whole instance -- so the returned "scope"
+    field says so explicitly. A run mixing parent-split shards with
+    plain top-level shards (or shards from two DIFFERENT parents) is
+    refused, same pattern as the lengths/encoding/symmetry_break guards
+    above -- see the CLI's `aggregate` step in cnc_pipeline.yml, whose
+    verdict.json this scope field is FOR: nobody downstream should ever
+    misread "UNSAT" here as a full-instance decision."""
     li = [r["lengths"] for r in shard_results if r.get("lengths") is not None]
     if len({tuple(x) for x in li}) > 1:
         raise ValueError(f"shard results disagree on lengths: {li}")
@@ -1444,9 +1662,21 @@ def aggregate(shard_results, expected_nshards):
           if r.get("symmetry_break") is not None]
     if len(set(si)) > 1:
         raise ValueError(f"shard results disagree on symmetry_break: {si}")
+    pi = [r["parent_cube"] for r in shard_results
+          if r.get("parent_cube") is not None]
+    if len(set(pi)) > 1:
+        raise ValueError(f"shard results disagree on parent_cube: {pi}")
     encoding0 = ei[0] if ei else None
     sb0 = si[0] if si else False
     encoding_out = ("full+sb" if (encoding0 == "full" and sb0) else encoding0)
+    parent_cube0 = pi[0] if pi else None
+    scope = ({"type": "parent_cube", "parent_cube": parent_cube0,
+             "note": (f"this verdict decides ONLY parent cube {parent_cube0}"
+                      f"'s children -- it is NOT a full-instance verdict; "
+                      f"merge_jsonl_verdicts (over this run + the top-level "
+                      f"campaign) is what closes parent cube {parent_cube0} "
+                      f"in the overall instance decision")}
+            if parent_cube0 is not None else {"type": "full_instance"})
 
     sat = [r for r in shard_results if r["status"] == "SAT"]
     unresolved = [r for r in shard_results if r["status"] == "UNRESOLVED"]
@@ -1483,6 +1713,7 @@ def aggregate(shard_results, expected_nshards):
             "missing_shards": missing_shards,
             "encoding": encoding_out, "symmetry_break": sb0,
             "ncubes": ncubes,
+            "parent_cube": parent_cube0, "scope": scope,
             "uncovered_cubes": uncovered,
             "total_cubes_solved": sum(r["n_unsat"] for r in shard_results)
             + len(sat),
@@ -1581,6 +1812,29 @@ def main():
                           "solve instead of this shard's round-robin slice "
                           "(the re-dispatch path -- re-run only the cubes a "
                           "prior run left unresolved)")
+    ap.add_argument("--parent-cube", type=int, default=None,
+                     help="DISTRIBUTED RE-SPLIT (NOTES.md t=26 STATE): "
+                          "parallelize one stubborn cube's subtree across "
+                          "many jobs instead of grinding it sequentially in "
+                          "one job's --max-resplit-depth path. "
+                          "split: this GLOBAL cube index (read from "
+                          "--parent-cubes-file, the ORIGINAL top-level split's "
+                          "cube file) has its literals turned into unit "
+                          "clauses, march_cu-splits the residual, and the "
+                          "children are written to --cubes/--cnf as ordinary "
+                          "self-contained cubes. conquer: labels this shard's "
+                          "JSONL checkpoint/output as deciding this parent "
+                          "cube's children only (see aggregate's `scope` "
+                          "field) -- the cubes themselves are still read "
+                          "from --cnf/--cubes exactly like any other conquer "
+                          "run. Leave empty for unchanged (plain top-level) "
+                          "behavior.")
+    ap.add_argument("--parent-cubes-file", default=None,
+                     help="split --parent-cube: path to the ORIGINAL "
+                          "top-level cube file to read the parent's literals "
+                          "from (default: <outdir>/cnc_<slug>.cubes, the "
+                          "sibling file a plain `split` of this same "
+                          "instance/N already writes)")
     ap.add_argument("--results-dir", default=None,
                      help="aggregate: directory of per-shard conquer JSONs")
     ap.add_argument("--merge-jsonl", action="store_true",
@@ -1672,6 +1926,16 @@ def main():
                   flush=True)
         if m["sat_cubes"]:
             print(f"  SAT at cubes: {m['sat_cubes']}", flush=True)
+        for parent, info in sorted(m.get("parents", {}).items()):
+            status = ("SAT" if info["sat_children"]
+                      else "closed (all children UNSAT)"
+                      if info["closed_via_children"] else "OPEN")
+            print(f"  parent cube {parent}: {status} "
+                  f"({info['n_children_refuted']}/{info['n_children']} "
+                  f"children refuted)"
+                  + (f", not yet refuted: {info['children_without_unsat']}"
+                     if not info["resolved"] and info["n_children"]
+                     else ""), flush=True)
         if args.json_out:
             json.dump(m, open(args.json_out, "w"), indent=2)
         return
@@ -1694,6 +1958,13 @@ def main():
         print(f"=== {label}: {agg['verdict']} "
               f"({agg['n_shards']}/{agg['expected_nshards']} shards reported, "
               f"{agg['total_cubes_solved']} cubes decided) ===", flush=True)
+        if agg["parent_cube"] is not None:
+            print(f"  SCOPE: this verdict decides ONLY parent cube "
+                  f"{agg['parent_cube']}'s children -- it is NOT a "
+                  f"full-instance verdict for {label}. Close parent cube "
+                  f"{agg['parent_cube']} in the overall instance decision "
+                  f"via `aggregate --merge-jsonl` over this run + the "
+                  f"top-level campaign.", flush=True)
         if agg["missing_shards"]:
             print(f"  missing shards (never reported): "
                   f"{agg['missing_shards']}", flush=True)
@@ -1758,10 +2029,38 @@ def main():
     if args.mode == "split":
         lengths, encoding = resolve_instance(args)
         slug = instance_slug(lengths, encoding, args.N, sb_mode)
-        cnf = args.cnf or os.path.join(args.outdir, f"cnc_{slug}.cnf")
-        cubes = args.cubes or os.path.join(args.outdir, f"cnc_{slug}.cubes")
-        meta = do_split(lengths, encoding, args.N, cnf, cubes, args.march_opts,
-                        symmetry_break=sb_mode)
+        if args.parent_cube is not None:
+            # DISTRIBUTED RE-SPLIT (NOTES.md t=26 STATE): split ONE parent
+            # cube's residual instead of the base instance. The parent's
+            # literals come from the ORIGINAL top-level split's cube file
+            # (default: the plain sibling this same instance/N's `split`
+            # already writes), never from --cubes here -- --cubes/--cnf are
+            # this call's OUTPUT paths (the children), same role they always
+            # play for `split`.
+            src = args.parent_cubes_file or os.path.join(
+                args.outdir, f"cnc_{slug}.cubes")
+            if not os.path.exists(src):
+                ap.error(f"--parent-cube needs the ORIGINAL top-level cube "
+                         f"file to read cube {args.parent_cube}'s literals "
+                         f"from -- {src} not found (pass --parent-cubes-file "
+                         f"if it lives elsewhere)")
+            parent_cubes = read_cube_lits(src)
+            if not (0 <= args.parent_cube < len(parent_cubes)):
+                ap.error(f"--parent-cube {args.parent_cube} out of range "
+                         f"(0..{len(parent_cubes) - 1} in {src})")
+            parent_lits = parent_cubes[args.parent_cube]
+            cnf = args.cnf or os.path.join(
+                args.outdir, f"cnc_{slug}.parent{args.parent_cube}.cnf")
+            cubes = args.cubes or os.path.join(
+                args.outdir, f"cnc_{slug}.parent{args.parent_cube}.cubes")
+            meta = do_split_parent(lengths, encoding, args.N,
+                                   args.parent_cube, parent_lits, cnf, cubes,
+                                   args.march_opts, symmetry_break=sb_mode)
+        else:
+            cnf = args.cnf or os.path.join(args.outdir, f"cnc_{slug}.cnf")
+            cubes = args.cubes or os.path.join(args.outdir, f"cnc_{slug}.cubes")
+            meta = do_split(lengths, encoding, args.N, cnf, cubes,
+                            args.march_opts, symmetry_break=sb_mode)
         if args.json_out:
             json.dump(meta, open(args.json_out, "w"), indent=2)
         return
@@ -1795,8 +2094,11 @@ def main():
                             args.nshards, args.cap_seconds, args.outdir,
                             args.certified, args.resplit_march_opts,
                             args.max_resplit_depth, cube_indices=cube_indices,
-                            batch_size=args.batch_size)
-        print(f"\n  shard {args.shard} verdict: {res['status']} "
+                            batch_size=args.batch_size,
+                            parent_cube=args.parent_cube)
+        scope = (f" [parent cube {args.parent_cube}'s children only]"
+                if args.parent_cube is not None else "")
+        print(f"\n  shard {args.shard} verdict: {res['status']}{scope} "
               f"({res['n_unsat']} UNSAT, {len(res['unresolved_cubes'])} "
               f"unresolved) in {res['slice_seconds']:.1f}s", flush=True)
         if args.json_out:
