@@ -1,0 +1,462 @@
+name: vdw-cnc-cert
+
+# Tier A "verified-decision certificate" (PLAN_distributed_cert.md): for an
+# instance code/vdw_cnc.py's cnc_pipeline has ALREADY decided UNSAT, produce
+# a per-cube LRAT refutation, VERIFY it with lrat-check, discard the (large)
+# proof, and keep only small metadata (checker verdict + sha256 + sizes) --
+# plus a small "cover" certificate (refutation of negcubes.cnf, the
+# cover-completeness CNF) that IS kept, proving the cube set exhausted the
+# whole search space. This is the trust model of the big SAT results
+# (Pythagorean triples etc.): proofs too big to keep, verify-and-discard with
+# a checker. See PLAN_distributed_cert.md for the full design/soundness
+# writeup -- this workflow mirrors cnc_pipeline.yml's shape (same build_tools
+# caching pattern, same shard matrix, same artifact/commit conventions) but
+# is a COMPLETELY SEPARATE mode: it never touches conquer/aggregate, and its
+# concurrency group is prefixed "cnc-cert-" specifically so it can never
+# collide/serialize with a live cnc_pipeline decision run of the same
+# instance (both can run at once -- cert only needs an instance already
+# known UNSAT, it doesn't decide anything itself).
+#
+# tools/CnC (march_cu, for regenerating the split only -- cert never calls
+# iglucose) and github.com/arminbiere/{cadical,lrat-trim} plus
+# github.com/marijnheule/drat-trim (lrat-check) are NOT tracked in this repo
+# (like cnc_pipeline.yml's march_cu/iglucose), so build_tools clones/builds
+# all four fresh on the runner.
+
+permissions:
+  contents: write
+
+concurrency:
+  # "cnc-cert-" prefix (never bare "cnc-") is deliberate: cnc_pipeline.yml's
+  # decision-pipeline group is "cnc-<instance>-<N>-<parent>" -- this run must
+  # NEVER share a group with (and therefore never queue behind) a live
+  # decision run of the same instance. Cert only reads an already-split,
+  # already-decided instance; it has no reason to serialize with conquer.
+  group: cnc-cert-${{ inputs.lengths || inputs.t }}-${{ inputs.N }}
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      t:
+        description: "t in pdw(2;3,t) -- back-compat instance spec, used ONLY when lengths is left empty (see resolve_instance in code/vdw_cnc.py)"
+        default: "26"
+      lengths:
+        description: "FULL-mode instance: comma-separated AP lengths, e.g. 6,6 for the diagonal W(6,2). Leave EMPTY for the default pdw(2;3,t) behavior."
+        default: ""
+      encoding:
+        description: "palindromic or full. Only consulted when lengths is set"
+        default: "full"
+        type: choice
+        options: ["full", "palindromic"]
+      N:
+        description: "length N to certify UNSAT (must already be a DECIDED UNSAT instance from cnc_pipeline -- cert does not decide, only certifies)"
+        default: "635"
+      nshards:
+        description: "number of parallel cert jobs to split the cubes across"
+        default: "16"
+      cube_indices:
+        description: "re-dispatch: comma-separated GLOBAL cube indices to certify (leave empty for a full round-robin run). Split contiguously across nshards jobs -- same contract as cnc_pipeline.yml's cube_indices input."
+        default: ""
+      march_opts:
+        description: "march_cu split options -- MUST MATCH the original decision-pipeline split's march_opts exactly (march_cu is deterministic given the same CNF + options, so this reproduces the SAME cube file the decision was made against)"
+        default: "-d 16"
+      expected_ncubes:
+        description: "byte-check: abort setup if the regenerated split's cube count differs from this (the officially decided run's recorded cube count). Leave empty to skip the check."
+        default: ""
+      cap_seconds:
+        description: "per-CUBE cadical timeout in seconds. No re-split exists in cert mode (unlike conquer) -- a capped-out cube just gets DISK_SKIP/TIMEOUT recorded and re-dispatches later with a bigger cap; deliberately generous default since the volume/time projection in PLAN_distributed_cert.md shows cadical is usually faster than the iglucose decision run."
+        default: "3600"
+      min_free_gb:
+        description: "disk guard: skip (not crash) a cube if free disk falls below this many GB"
+        default: "2"
+      timeout_minutes:
+        description: "per-shard job timeout (<=360 on standard public runners)"
+        default: "350"
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+      nshards: ${{ steps.gen.outputs.nshards }}
+    steps:
+      - id: gen
+        env:
+          NSHARDS: ${{ inputs.nshards }}
+          CUBE_INDICES: ${{ inputs.cube_indices }}
+        # Identical matrix-generation logic to cnc_pipeline.yml's setup job
+        # (full run: one shard per matrix entry; cube_indices set: split that
+        # list contiguously across at most nshards jobs).
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          n = int(os.environ["NSHARDS"])
+          ci = os.environ.get("CUBE_INDICES", "").replace(",", " ").split()
+          if ci:
+              idx = [int(x) for x in ci]
+              n = max(1, min(n, len(idx)))
+              k, m = divmod(len(idx), n)
+              chunks = [idx[i * k + min(i, m):(i + 1) * k + min(i + 1, m)]
+                        for i in range(n)]
+              matrix = [{"shard": i,
+                         "cube_indices": ",".join(str(g) for g in chunks[i])}
+                        for i in range(n)]
+          else:
+              matrix = [{"shard": i} for i in range(n)]
+          print("matrix=" + json.dumps(matrix))
+          print("nshards=" + str(n))
+          PY
+          echo "setup: $(tail -2 "$GITHUB_OUTPUT")"
+
+  build_tools:
+    runs-on: ubuntu-latest
+    outputs:
+      cadical_ref: ${{ steps.cadical_rev.outputs.ref }}
+    steps:
+      - id: march_rev
+        run: |
+          sha=$(git ls-remote https://github.com/marijnheule/CnC.git HEAD | cut -f1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "upstream CnC HEAD: $sha"
+      # cadical: PIN a release >= 3.0.1 (never upstream HEAD -- a cert tool's
+      # exact behavior must be reproducible run over run). Resolve which tag
+      # that is ON THE RUNNER (which has real network access, unlike a
+      # sandboxed dev box): list every "rel-*" tag, version-sort them
+      # together with the literal string "3.0.1", and take whichever tag
+      # lands immediately after that marker -- the smallest real release
+      # >= 3.0.1. Falls back to HEAD (loudly logged, never silent) if no
+      # "rel-*" tag parses at or above that floor; either way the ACTUAL
+      # `cadical --version` output is what gets recorded in the verdict
+      # JSON, so a wrong/missing tag guess here can never silently under-pin.
+      - id: cadical_rev
+        run: |
+          git clone --quiet https://github.com/arminbiere/cadical.git /tmp/cadical_src
+          cd /tmp/cadical_src
+          tag=$( (echo "3.0.1"; git tag -l 'rel-*' | sed 's/^rel-//') \
+                 | sort -V | awk '/^3\.0\.1$/{f=1;next} f{print; exit}')
+          if [ -z "$tag" ]; then
+            echo "WARNING: no rel-* tag >= 3.0.1 found upstream -- pinning to HEAD (cadical --version in the verdict JSON is the authoritative record of what actually built)"
+            ref="HEAD"
+          else
+            ref="rel-$tag"
+          fi
+          sha=$(git rev-parse "$ref")
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "pinned cadical: ref=$ref sha=$sha"
+      # lrat-trim: PIN the exact commit observed during the PLAN_distributed_
+      # cert.md builder session (2026-07-23), not upstream HEAD -- see the
+      # plan's tool-provenance note. Update this hash deliberately (new PR)
+      # if upstream lrat-trim needs to move; never let it silently drift.
+      - id: lrat_trim_rev
+        run: |
+          sha=b30f400f4ee5c32b77ee566a7c006081b521534f
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "pinned lrat-trim: $sha"
+      # drat-trim/lrat-check has no version scheme of its own worth pinning
+      # by tag -- cnc_prove.yml already clones its HEAD fresh each run for
+      # the same reason (drat-trim itself, not lrat-check); match that.
+      - id: drat_trim_rev
+        run: |
+          sha=$(git ls-remote https://github.com/marijnheule/drat-trim.git HEAD | cut -f1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "upstream drat-trim HEAD: $sha"
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: pkg/certbin
+          key: cnc-cert-tools-${{ runner.os }}-march${{ steps.march_rev.outputs.sha }}-cad${{ steps.cadical_rev.outputs.sha }}-lrattrim${{ steps.lrat_trim_rev.outputs.sha }}-dt${{ steps.drat_trim_rev.outputs.sha }}
+      - name: apt prerequisites
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential git
+      - name: clone + build march_cu (split regeneration only -- cert never solves with iglucose)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/marijnheule/CnC.git /tmp/CnC
+          ( cd /tmp/CnC/march_cu && make CC="gcc -fcommon" )
+          mkdir -p pkg/certbin
+          cp /tmp/CnC/march_cu/march_cu pkg/certbin/
+      - name: build PINNED cadical (${{ steps.cadical_rev.outputs.ref }})
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          cd /tmp/cadical_src
+          git checkout --quiet ${{ steps.cadical_rev.outputs.sha }}
+          ./configure && make -j"$(nproc)"
+          # cadical's build system drops the binary in build/cadical; a few
+          # historical versions built in the source root instead -- try both.
+          if [ -f build/cadical ]; then
+            cp build/cadical "$GITHUB_WORKSPACE/pkg/certbin/"
+          else
+            cp cadical "$GITHUB_WORKSPACE/pkg/certbin/"
+          fi
+      - name: build PINNED lrat-trim (${{ steps.lrat_trim_rev.outputs.sha }})
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --quiet https://github.com/arminbiere/lrat-trim.git /tmp/lrat-trim-src
+          cd /tmp/lrat-trim-src
+          git checkout --quiet ${{ steps.lrat_trim_rev.outputs.sha }}
+          ./configure && make
+          cp lrat-trim "$GITHUB_WORKSPACE/pkg/certbin/"
+      - name: build lrat-check (marijnheule/drat-trim, `make lrat-check`)
+        if: steps.cache.outputs.cache-hit != 'true'
+        # No -fcommon/CC tweak needed here (unlike march_cu) -- lrat-check.c
+        # builds clean with plain gcc -std=c99 on ubuntu's default GCC, per
+        # the vendored Makefile's own `lrat-check` target.
+        run: |
+          git clone --depth 1 https://github.com/marijnheule/drat-trim.git /tmp/drat-trim-src
+          ( cd /tmp/drat-trim-src && make lrat-check )
+          cp /tmp/drat-trim-src/lrat-check "$GITHUB_WORKSPACE/pkg/certbin/"
+      - name: package binaries (from cache or fresh build)
+        run: |
+          chmod +x pkg/certbin/*
+          tar -C pkg -czf cnc-cert-tools.tar.gz certbin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnc-cert-tools
+          path: cnc-cert-tools.tar.gz
+
+  split:
+    needs: build_tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-cert-tools
+      - name: unpack tools
+        run: |
+          tar -xzf cnc-cert-tools.tar.gz
+          chmod +x certbin/*
+      # Same instance-arg resolution as cnc_pipeline.yml (see its comment) --
+      # kept byte-identical so the two workflows can never disagree about
+      # what a given (t-or-lengths, N) resolves to on disk.
+      - name: resolve instance args
+        run: |
+          if [ -n "${{ inputs.lengths }}" ]; then
+            inst_args="--lengths ${{ inputs.lengths }} --encoding ${{ inputs.encoding }}"
+            slug="w$(echo '${{ inputs.lengths }}' | tr ',' '_' | tr -d ' ')_N${{ inputs.N }}"
+          else
+            inst_args="--t ${{ inputs.t }}"
+            slug="t${{ inputs.t }}_N${{ inputs.N }}"
+          fi
+          echo "INST_ARGS=$inst_args" >> "$GITHUB_ENV"
+          echo "SLUG=$slug" >> "$GITHUB_ENV"
+          echo "resolved: INST_ARGS='$inst_args' SLUG='$slug'"
+      # march_cu is deterministic given the same CNF + march_opts, so this
+      # reproduces the ORIGINAL top-level cube file byte-for-byte, exactly
+      # like cnc_pipeline.yml's split job relies on for --cube-indices
+      # re-dispatch -- march_opts here MUST match the original decision
+      # split's, or the cube indices this run certifies won't correspond to
+      # the ones the decision pipeline actually verified UNSAT.
+      - name: split into cubes
+        env:
+          MARCH_CU: ${{ github.workspace }}/certbin/march_cu
+        run: |
+          mkdir -p cnc_out
+          python3 code/vdw_cnc.py split $INST_ARGS --N ${{ inputs.N }} \
+            --march-opts "${{ inputs.march_opts }}" \
+            --outdir cnc_out --json-out cnc_out/split.json \
+            | tee cnc_out/split.log
+      # Byte-check (PLAN_distributed_cert.md step 1): abort rather than
+      # silently certify the wrong split if the regenerated cube count
+      # doesn't match the officially decided run's recorded count.
+      - name: byte-check cube count against the recorded official split
+        if: inputs.expected_ncubes != ''
+        run: |
+          ncubes=$(python3 -c "import json; print(json.load(open('cnc_out/split.json'))['ncubes'])")
+          if [ "$ncubes" != "${{ inputs.expected_ncubes }}" ]; then
+            echo "MISMATCH: regenerated split has $ncubes cubes, expected ${{ inputs.expected_ncubes }} (the officially decided run's recorded count) -- march_opts may not match the original split, or the instance differs. ABORTING." >&2
+            exit 1
+          fi
+          echo "byte-check OK: $ncubes cubes matches expected ${{ inputs.expected_ncubes }}"
+      # negcubes.cnf (PLAN_distributed_cert.md step 1/2): the cover-
+      # completeness CNF, generated in pure Python (no Lean toolchain
+      # needed) -- one clause per cube (its negated literals), base NOT
+      # included. Verified byte-for-byte against `lake exe lratcatch-export`
+      # locally by the builder (see code/test_cnc.py's
+      # test_leaf_and_negcubes_match_lratcatch_export).
+      - name: generate negcubes.cnf
+        run: |
+          python3 code/vdw_cnc.py negcubes \
+            --cubes cnc_out/cnc_${SLUG}.cubes \
+            --negcubes cnc_out/negcubes.cnf \
+            --outdir cnc_out --json-out cnc_out/negcubes.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnc-cert-instance
+          path: |
+            cnc_out/*.cnf
+            cnc_out/*.cubes
+            cnc_out/negcubes.cnf
+            cnc_out/split.json
+            cnc_out/split.log
+            cnc_out/negcubes.json
+
+  cert:
+    needs: [setup, split, build_tools]
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-cert-tools
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-cert-instance
+          path: cnc_out
+      - name: unpack tools
+        run: |
+          tar -xzf cnc-cert-tools.tar.gz
+          chmod +x certbin/*
+      - name: resolve instance args
+        run: |
+          if [ -n "${{ inputs.lengths }}" ]; then
+            inst_args="--lengths ${{ inputs.lengths }} --encoding ${{ inputs.encoding }}"
+            slug="w$(echo '${{ inputs.lengths }}' | tr ',' '_' | tr -d ' ')_N${{ inputs.N }}"
+          else
+            inst_args="--t ${{ inputs.t }}"
+            slug="t${{ inputs.t }}_N${{ inputs.N }}"
+          fi
+          echo "INST_ARGS=$inst_args" >> "$GITHUB_ENV"
+          echo "SLUG=$slug" >> "$GITHUB_ENV"
+          echo "resolved: INST_ARGS='$inst_args' SLUG='$slug'"
+      # Per-shard cert loop (PLAN_distributed_cert.md step 2): leaf CNF ->
+      # cadical --lrat --no-binary --no-factor -> lrat-trim -> lrat-check
+      # the TRIMMED proof -> JSONL record -> delete leaf/LRAT files, one
+      # cube at a time. Same checkpoint/recovery + --cube-indices
+      # re-dispatch contract as cnc_pipeline.yml's conquer job.
+      - name: certify this shard's cube slice
+        env:
+          CADICAL: ${{ github.workspace }}/certbin/cadical
+          LRAT_TRIM: ${{ github.workspace }}/certbin/lrat-trim
+          LRAT_CHECK: ${{ github.workspace }}/certbin/lrat-check
+        run: |
+          ciflag=""
+          [ -n "${{ matrix.cube_indices }}" ] && ciflag="--cube-indices ${{ matrix.cube_indices }}"
+          python3 code/vdw_cnc.py cert $INST_ARGS --N ${{ inputs.N }} \
+            --cnf cnc_out/cnc_${SLUG}.cnf \
+            --cubes cnc_out/cnc_${SLUG}.cubes \
+            --shard ${{ matrix.shard }} --nshards ${{ needs.setup.outputs.nshards }} \
+            --cap-seconds ${{ inputs.cap_seconds }} --min-free-gb ${{ inputs.min_free_gb }} \
+            $ciflag \
+            --outdir cnc_out --json-out cnc_out/cert-shard-${{ matrix.shard }}.json \
+            | tee cnc_out/cert-shard-${{ matrix.shard }}.log
+      # always(): a shard that hits the job wall still uploads its partial
+      # JSONL (each cube's record is flushed as it lands), same recovery
+      # story as cnc_pipeline.yml's conquer job.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cnc-cert-results-shard-${{ matrix.shard }}
+          path: |
+            cnc_out/cert-shard-${{ matrix.shard }}.json
+            cnc_out/cert-shard-${{ matrix.shard }}.jsonl
+            cnc_out/cert-shard-${{ matrix.shard }}.log
+
+  cover:
+    needs: [split, build_tools]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-cert-tools
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-cert-instance
+          path: cnc_out
+      - name: unpack tools
+        run: |
+          tar -xzf cnc-cert-tools.tar.gz
+          chmod +x certbin/*
+      # Cover step (PLAN_distributed_cert.md step 3): refute negcubes.cnf
+      # (proving the cube set exhausts the whole search space) with cadical
+      # --lrat --no-binary --no-factor, then lrat-check the result DIRECTLY
+      # -- no trim (unlike per-cube certs): cover.lrat is small and is the
+      # piece that gets COMMITTED, kept exactly as cadical wrote it.
+      - name: refute negcubes.cnf and lrat-check the cover
+        env:
+          CADICAL: ${{ github.workspace }}/certbin/cadical
+          LRAT_CHECK: ${{ github.workspace }}/certbin/lrat-check
+        run: |
+          python3 code/vdw_cnc.py cert-cover \
+            --negcubes cnc_out/negcubes.cnf \
+            --cover-out cnc_out/cover.lrat \
+            --cap-seconds ${{ inputs.cap_seconds }} \
+            --outdir cnc_out --json-out cnc_out/cover.json \
+            | tee cnc_out/cover.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cnc-cert-cover
+          path: |
+            cnc_out/cover.lrat
+            cnc_out/cover.json
+            cnc_out/cover.log
+
+  collect:
+    needs: [cert, cover, setup]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cnc-cert-results-shard-*
+          path: results
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-cert-cover
+          path: results
+      # cert-aggregate (PLAN_distributed_cert.md step 4): CERT_VERIFIED iff
+      # every cube 0..ncubes-1 has checker VERIFIED (cube-level union across
+      # every cert-shard-*.jsonl, mirroring the vacuous-UNSAT fix) AND the
+      # cover is VERIFIED -- any missing/unverified cube or a missing/
+      # unverified cover makes the verdict UNDETERMINED, never a silently-
+      # partial CERT_VERIFIED.
+      - name: aggregate the cert verdict
+        run: |
+          python3 code/vdw_cnc.py cert-aggregate --results-dir results \
+            --cover-json results/cover.json \
+            --outdir results --json-out results/verdict.json \
+            | tee "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat results/verdict.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnc-cert-verdict
+          path: results/
+      - name: commit the certificate bundle (verdict + per-cube metadata JSONL + cover.lrat)
+        run: |
+          git config user.name "vdw-cnc-cert[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          if [ -n "${{ inputs.lengths }}" ]; then
+            label="w(${{ inputs.lengths }}) N=${{ inputs.N }} [${{ inputs.encoding }}]"
+          else
+            label="pdw(2;3,${{ inputs.t }}) N=${{ inputs.N }}"
+          fi
+          dir="gh_actions_results/cert-run-${{ github.run_id }}"
+          mkdir -p "$dir"
+          cp -r results/* "$dir/" 2>/dev/null || true
+          git add "$dir"
+          if git diff --cached --quiet; then
+            echo "nothing to commit"; exit 0
+          fi
+          git commit -m "GH Actions: vdw-cnc-cert $label (run ${{ github.run_id }})"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main && break
+            echo "push attempt $i failed, retrying..."; sleep 5
+          done
