@@ -48,8 +48,10 @@ emit its DRAT proof so that material exists to stitch later.
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -75,6 +77,30 @@ IGLUCOSE = os.environ.get(
     os.path.join(REPO_ROOT, "tools", "CnC", "iglucose", "core", "iglucose"))
 DRAT_TRIM = os.environ.get(
     "DRAT_TRIM", os.path.join(REPO_ROOT, "tools", "drat-trim", "drat-trim"))
+
+# Tier A "verified-decision certificate" tools (PLAN_distributed_cert.md).
+# cadical is Homebrew-installed on Abigail's mac (on PATH); the GH workflow
+# builds a PINNED release into a repo-relative path and points CADICAL there
+# (same pattern as MARCH_CU/IGLUCOSE above), so the PATH default only ever
+# matters locally. lrat-trim (Biere, github.com/arminbiere/lrat-trim) is NOT
+# vendored in this repo (like tools/CnC, it's built fresh by CI) -- default
+# path mirrors that convention; lrat-check IS vendored (tools/drat-trim,
+# already built by `make lrat-check`).
+CADICAL = os.environ.get("CADICAL", "cadical")
+LRAT_TRIM = os.environ.get(
+    "LRAT_TRIM", os.path.join(REPO_ROOT, "tools", "lrat-trim", "lrat-trim"))
+LRAT_CHECK = os.environ.get(
+    "LRAT_CHECK", os.path.join(REPO_ROOT, "tools", "drat-trim", "lrat-check"))
+
+# Exact flags recorded in every cert verdict (PLAN's "exact flags" invariant).
+CADICAL_LRAT_ARGS = ["--lrat", "--no-binary", "--no-factor"]
+LRAT_TRIM_ARGS = ["-a"]  # ascii/--no-binary output -- lrat-check only reads ASCII LRAT.
+
+# Below this much free space, a cube is SKIPPED (not crashed) and recorded as
+# such -- see cert_slice(). Default matches the plan's "< 2 GB free" runner
+# guard; overridable (--min-free-gb) since Abigail's mac usually has LESS
+# than 2 GB free even at rest, which would otherwise skip every cube locally.
+DISK_GUARD_DEFAULT_GB = 2.0
 
 
 # A batch is one iglucose call over many cubes; if the batch times out we
@@ -1721,13 +1747,419 @@ def aggregate(shard_results, expected_nshards):
             "unresolved_cubes": remaining}
 
 
+def sha256_file(path):
+    """sha256 of a file's bytes, streamed (native LRAT proofs can be multi-GB
+    at t=26 scale -- never read one whole into memory)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def write_leaf_cnf(nvars, clause_lines, cube_lits, path):
+    """Tier A leaf CNF (PLAN_distributed_cert.md): the cube's literals as
+    unit clauses FIRST, then the base clauses -- byte-for-byte the same
+    convention as LRATCatcher's `Cube.leafCNF` / the `lratcatch-export` tool
+    (verified locally, see test_leaf_cnf_matches_lratcatch_export in
+    test_cnc.py): "unit clauses first, then the base (the order the
+    exported DIMACS file uses, so LRAT clause IDs match)". nvars is the
+    BASE cnf's var count -- every cube literal is already within that range
+    (march_cu split the SAME base CNF) -- so only the clause count in the
+    header changes, never nvars."""
+    with open(path, "w") as f:
+        f.write(f"p cnf {nvars} {len(clause_lines) + len(cube_lits)}\n")
+        for l in cube_lits:
+            f.write(f"{l} 0\n")
+        f.writelines(clause_lines)
+
+
+def negcubes_lines(cubes):
+    """The cover-completeness CNF (LRATCatcher.negCubesCNF): one clause per
+    cube, the cube's OWN literals negated in place (order preserved) --
+    unsatisfiable iff every assignment satisfies at least one cube, i.e. the
+    cube set is a COMPLETE case split of the base formula's variable space
+    (this is exactly march_cu's own guarantee -- see the module docstring's
+    "Soundness" paragraph -- so the cover refutation is really just making
+    that guarantee independently machine-checkable). The base CNF is
+    deliberately NOT included anywhere in this CNF -- it only talks about
+    cube literals. Header var count is the MAX VARIABLE ACTUALLY REFERENCED
+    BY ANY CUBE (not the base's nvars -- the base isn't part of this CNF).
+    Verified byte-for-byte against the real `lake exe lratcatch-export`
+    tool's negcubes.cnf on a real t=15 split -- the one-time acceptance
+    check PLAN_distributed_cert.md requires (see test_cnc.py)."""
+    nvars = max((abs(l) for c in cubes for l in c), default=0)
+    lines = [f"p cnf {nvars} {len(cubes)}\n"]
+    for c in cubes:
+        lines.append(" ".join(str(-l) for l in c) + " 0\n")
+    return lines
+
+
+def write_negcubes_cnf(cubes, path):
+    lines = negcubes_lines(cubes)
+    with open(path, "w") as f:
+        f.writelines(lines)
+    nvars = max((abs(l) for c in cubes for l in c), default=0)
+    return {"ncubes": len(cubes), "nvars": nvars, "path": path}
+
+
+def _lrat_check_verdict(stdout):
+    """lrat-check prints the exact line 'c VERIFIED' on success or
+    'c NOT VERIFIED' on failure (tools/drat-trim/lrat-check.c) -- NEVER
+    substring-match "VERIFIED": "NOT VERIFIED" contains that substring too,
+    so a naive `"VERIFIED" in stdout` check would silently count a checker
+    FAILURE as a pass. Match the exact printed line instead. Returns
+    "CHECK_ERR" if neither line appears (a crash/parse error before the
+    checker got that far) -- and, per the plan's own invariant, this text
+    parse is the ONLY thing trusted here; lrat-check's exit code is not
+    consulted at all (though in this vendored lrat-check.c it happens to
+    agree: 0 on VERIFIED, 1 on NOT VERIFIED)."""
+    lines = [ln.strip() for ln in stdout.splitlines()]
+    if "c VERIFIED" in lines:
+        return "VERIFIED"
+    if "c NOT VERIFIED" in lines:
+        return "NOT_VERIFIED"
+    return "CHECK_ERR"
+
+
+def cert_one_cube(nvars, clause_lines, cube_lits, gidx, workdir, cap_seconds,
+                  min_free_gb, cadical, lrat_trim, lrat_check):
+    """Certify ONE cube (PLAN_distributed_cert.md Tier A step 2): leaf CNF
+    (cube unit clauses prepended to the base) -> `cadical --lrat --no-binary
+    --no-factor` (cap_seconds) -> `lrat-trim` -> `lrat-check` the TRIMMED
+    proof against the exact leaf CNF -> delete the leaf/LRAT files. Returns
+    the JSONL record dict. NEVER trusts cadical's or lrat-trim's exit code
+    for the checker verdict -- only lrat-check's TEXT output (via
+    _lrat_check_verdict) counts a cube as certified. This is the load-
+    bearing soundness invariant of the whole mode (lrat-trim in particular
+    is KNOWN to exit non-zero here even when its output verifies -- see the
+    module-level LRAT_TRIM_ARGS comment / PLAN_distributed_cert.md).
+
+    Disk guard: if free space on --outdir's filesystem is below min_free_gb,
+    skip the cube entirely (no cadical run at all) and record
+    checker="DISK_SKIP" -- this fails the CUBE, not the shard, exactly as
+    the plan requires: a later re-dispatch (more headroom, or a smaller cap
+    so the native LRAT stays smaller) can retry just this cube via
+    --cube-indices, same recovery path as a TIMEOUT."""
+    leaf = os.path.join(workdir, f"leaf{gidx}.cnf")
+    lrat = os.path.join(workdir, f"leaf{gidx}.lrat")
+    trimmed = os.path.join(workdir, f"leaf{gidx}.trimmed.lrat")
+    rec = {"gidx": gidx}
+    free_gb = shutil.disk_usage(workdir).free / (1024 ** 3)
+    if free_gb < min_free_gb:
+        rec.update({"cadical_s": 0.0, "rc": None, "native_bytes": None,
+                    "trimmed_bytes": None, "sha256_trimmed": None,
+                    "checker": "DISK_SKIP", "free_gb": round(free_gb, 3)})
+        return rec
+    write_leaf_cnf(nvars, clause_lines, cube_lits, leaf)
+    t0 = time.time()
+    timed_out = False
+    rc = None
+    try:
+        proc = subprocess.run([cadical] + CADICAL_LRAT_ARGS + [leaf, lrat],
+                              capture_output=True, text=True,
+                              timeout=cap_seconds)
+        rc = proc.returncode
+    except subprocess.TimeoutExpired:
+        timed_out = True
+    cadical_s = time.time() - t0
+    native_bytes = os.path.getsize(lrat) if os.path.exists(lrat) else None
+    trimmed_bytes = None
+    sha_trim = None
+    if timed_out:
+        checker = "TIMEOUT"
+    elif rc == 10:
+        # A cube coming back SAT is a real anomaly (the decision pipeline's
+        # split/conquer already claims every cube UNSAT) -- recorded, never
+        # silently treated as a pass.
+        checker = "SAT"
+    elif rc != 20 or native_bytes is None:
+        checker = f"CADICAL_ERR(rc={rc})"
+    else:
+        # exit code IGNORED from here on -- lrat-trim is known to exit
+        # non-zero even when its output verifies; only the trimmed file's
+        # existence + lrat-check's TEXT output (next) are trusted.
+        subprocess.run([lrat_trim] + LRAT_TRIM_ARGS + [leaf, lrat, trimmed],
+                       capture_output=True, text=True)
+        if not os.path.exists(trimmed):
+            checker = "TRIM_FAILED"
+        else:
+            trimmed_bytes = os.path.getsize(trimmed)
+            sha_trim = sha256_file(trimmed)
+            cp = subprocess.run([lrat_check, leaf, trimmed],
+                                capture_output=True, text=True)
+            checker = _lrat_check_verdict(cp.stdout)
+    rec.update({"cadical_s": round(cadical_s, 3), "rc": rc,
+               "native_bytes": native_bytes, "trimmed_bytes": trimmed_bytes,
+               "sha256_trimmed": sha_trim, "checker": checker})
+    # DELETE the leaf/LRAT files before the next cube -- peak disk is one
+    # cube's worth (a monster leaf's native LRAT can be multi-GB at t=26
+    # scale, see PLAN_distributed_cert.md's probe numbers), never the whole
+    # shard's, no matter how many cubes this shard has already certified.
+    for p in (leaf, lrat, trimmed):
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+    return rec
+
+
+def cert_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap_seconds,
+               outdir, cube_indices=None, min_free_gb=DISK_GUARD_DEFAULT_GB,
+               cadical=CADICAL, lrat_trim=LRAT_TRIM, lrat_check=LRAT_CHECK):
+    """Tier A cert shard (PLAN_distributed_cert.md): certify this shard's
+    cubes one at a time via cert_one_cube, checkpointing a JSONL exactly
+    like conquer_slice's shard-N.jsonl (meta line first, one record per
+    cube, flushed immediately after) -- same checkpoint/recovery +
+    --cube-indices re-dispatch CONTRACT as conquer: a killed shard's partial
+    cert-shard-N.jsonl is still readable by merge_cert_jsonl, and only the
+    cubes still missing a VERIFIED checker need re-dispatching (a NEW cert
+    run over --cube-indices, reusing this exact function/CLI path -- no
+    separate re-dispatch machinery needed, mirroring conquer's own reuse).
+
+    Deliberately a SEPARATE JSONL filename (cert-shard- vs shard-) and a
+    SEPARATE merge function (merge_cert_jsonl vs merge_jsonl_verdicts) --
+    this is purely ADDITIVE alongside the decision pipeline's own
+    checkpoint format, never a replacement for it, and the two must never
+    be confused (a cert record's "checker" field and a decision record's
+    "verdict" field mean different things -- see the HARD CONSTRAINT in
+    PLAN_distributed_cert.md that `cert` never touch conquer/aggregate)."""
+    lengths, encoding, N = meta["lengths"], meta["encoding"], meta["N"]
+    slug = instance_slug(lengths, encoding, N)
+    workdir = os.path.join(outdir, f"cert_{slug}_shard{shard}")
+    os.makedirs(workdir, exist_ok=True)
+    if cube_indices is not None:
+        members, mode = list(cube_indices), "explicit"
+    else:
+        members, mode = slice_members(len(cubes), nshards, shard), "round-robin"
+    print(f"  cert shard {shard}/{nshards} ({mode}): {len(members)} of "
+          f"{len(cubes)} cubes, per-cube cadical cap {cap_seconds}s, "
+          f"disk guard {min_free_gb} GB", flush=True)
+
+    jsonl_path = os.path.join(outdir, f"cert-shard-{shard}.jsonl")
+    jf = open(jsonl_path, "w")
+    jf.write(json.dumps({"meta": True, "lengths": lengths, "encoding": encoding,
+                         "t": (lengths[1] if encoding == "palindromic" else None),
+                         "N": N, "shard": shard, "nshards": nshards,
+                         "ncubes": len(cubes), "mode": mode, "members": members,
+                         "cap_seconds": cap_seconds, "min_free_gb": min_free_gb,
+                         "cadical_args": CADICAL_LRAT_ARGS,
+                         "lrat_trim_args": LRAT_TRIM_ARGS}) + "\n")
+    jf.flush()
+
+    n_verified = 0
+    records = []
+    for gidx in members:
+        rec = cert_one_cube(nvars, clause_lines, cubes[gidx], gidx, workdir,
+                            cap_seconds, min_free_gb, cadical, lrat_trim,
+                            lrat_check)
+        jf.write(json.dumps(rec) + "\n")
+        jf.flush()
+        records.append(rec)
+        if rec["checker"] == "VERIFIED":
+            n_verified += 1
+        print(f"    cube {gidx}: {rec['checker']} in {rec['cadical_s']:.2f}s "
+              f"cadical (native {rec['native_bytes']}B, "
+              f"trimmed {rec['trimmed_bytes']}B)", flush=True)
+    jf.close()
+    not_verified = [r["gidx"] for r in records if r["checker"] != "VERIFIED"]
+    return {"lengths": lengths, "encoding": encoding,
+           "t": (lengths[1] if encoding == "palindromic" else None), "N": N,
+           "shard": shard, "nshards": nshards, "mode": mode,
+           "ncubes": len(cubes), "members": members,
+           "n_cubes_in_slice": len(members), "n_verified": n_verified,
+           "not_verified_cubes": not_verified, "per_cube": records}
+
+
+def read_cert_jsonl(path):
+    """Parse a cert shard's JSONL checkpoint. Returns (meta, records) where
+    records maps gidx -> the full per-cube record dict (unlike
+    read_shard_jsonl's verdicts map, callers here need native/trimmed sizes
+    and sha256s too, not just a pass/fail string). A torn final line (job
+    killed mid-flush) is skipped, exactly like read_shard_jsonl."""
+    meta = None
+    records = {}
+    for ln in open(path):
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            obj = json.loads(ln)
+        except json.JSONDecodeError:
+            continue
+        if obj.get("meta"):
+            meta = obj
+        elif "gidx" in obj:
+            records[obj["gidx"]] = obj
+    return meta, records
+
+
+def merge_cert_jsonl(results_dir):
+    """Cube-level merge across every cert-shard-*.jsonl under results_dir (a
+    base cert run plus any --cube-indices re-dispatch runs) -- the cert
+    counterpart of merge_jsonl_verdicts, reusing/extending the SAME
+    semantics: a cube counts as certified iff ANY run logged
+    checker=="VERIFIED" for it (a re-dispatch with a bigger cap succeeding
+    where an earlier TIMEOUT/DISK_SKIP didn't is exactly the intended
+    recovery path -- same plain-set-union composition rule
+    merge_jsonl_verdicts uses); ncubes/lengths/encoding must agree across
+    every file -- the SAME mixed-encoding refusal as merge_jsonl_verdicts,
+    so a full-mode and a palindromic-mode cert run (or two runs of two
+    different N) can never be silently combined into one bundle."""
+    ncubes = None
+    lengths = None
+    encoding = None
+    verified = {}  # gidx -> the winning VERIFIED record (sha256s etc.)
+    seen = set()
+    for p in sorted(glob.glob(os.path.join(results_dir, "**",
+                                           "cert-shard-*.jsonl"),
+                              recursive=True)):
+        meta, records = read_cert_jsonl(p)
+        if meta is not None:
+            m_l = meta.get("lengths")
+            if m_l is not None:
+                if lengths is not None and lengths != m_l:
+                    raise ValueError(f"cert JSONL files disagree on lengths: "
+                                     f"{lengths} vs {m_l} in {p}")
+                lengths = m_l
+            m_e = meta.get("encoding")
+            if m_e is not None:
+                if encoding is not None and encoding != m_e:
+                    raise ValueError(f"cert JSONL files disagree on "
+                                     f"encoding: {encoding} vs {m_e} in {p}")
+                encoding = m_e
+            if meta.get("ncubes") is not None:
+                if ncubes is not None and meta["ncubes"] != ncubes:
+                    raise ValueError(f"cert JSONL files disagree on ncubes: "
+                                     f"{ncubes} vs {meta['ncubes']} in {p}")
+                ncubes = meta["ncubes"]
+        for g, rec in records.items():
+            seen.add(g)
+            if rec.get("checker") == "VERIFIED" and g not in verified:
+                verified[g] = rec
+    missing = (sorted(set(range(ncubes)) - set(verified))
+              if ncubes is not None else [])
+    return {"ncubes": ncubes, "lengths": lengths, "encoding": encoding,
+           "n_cubes_seen": len(seen), "n_cubes_verified": len(verified),
+           "verified_cubes": sorted(verified), "missing_cubes": missing,
+           "verified_detail": verified}
+
+
+def do_cert_cover(negcubes_path, cover_path, cap_seconds,
+                  cadical=CADICAL, lrat_check=LRAT_CHECK):
+    """Tier A cover step (PLAN_distributed_cert.md step 3): refute
+    negcubes.cnf (proving the cube set exhausts the whole search space) with
+    `cadical --lrat --no-binary --no-factor`, then `lrat-check` the result
+    DIRECTLY -- deliberately NO lrat-trim step here (unlike per-cube certs):
+    cover.lrat is small and is the piece that gets COMMITTED to the repo, so
+    it is kept exactly as cadical wrote it, never discarded/replaced. Same
+    never-trust-exit-codes rule as cert_one_cube: only lrat-check's TEXT
+    output (_lrat_check_verdict) decides the checker verdict."""
+    t0 = time.time()
+    timed_out = False
+    rc = None
+    try:
+        proc = subprocess.run([cadical] + CADICAL_LRAT_ARGS
+                              + [negcubes_path, cover_path],
+                              capture_output=True, text=True,
+                              timeout=cap_seconds)
+        rc = proc.returncode
+    except subprocess.TimeoutExpired:
+        timed_out = True
+    cadical_s = time.time() - t0
+    cover_bytes = (os.path.getsize(cover_path)
+                  if os.path.exists(cover_path) else None)
+    sha_cover = sha256_file(cover_path) if cover_bytes else None
+    if timed_out:
+        checker = "TIMEOUT"
+    elif rc == 10:
+        # cover SAT means the cube set does NOT exhaust the search space --
+        # the split itself is incomplete, a serious anomaly (should be
+        # impossible for a march_cu split, but never silently ignored).
+        checker = "SAT"
+    elif rc != 20 or cover_bytes is None:
+        checker = f"CADICAL_ERR(rc={rc})"
+    else:
+        cp = subprocess.run([lrat_check, negcubes_path, cover_path],
+                            capture_output=True, text=True)
+        checker = _lrat_check_verdict(cp.stdout)
+    return {"cadical_s": round(cadical_s, 3), "rc": rc,
+           "cover_bytes": cover_bytes, "sha256_cover": sha_cover,
+           "checker": checker, "cover_path": cover_path}
+
+
+def _tool_version(cmd):
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        out = (proc.stdout.strip() + " " + proc.stderr.strip()).strip()
+        return out or None
+    except Exception as e:
+        return f"<error: {e}>"
+
+
+def collect_tool_provenance(cadical=CADICAL, lrat_trim=LRAT_TRIM,
+                            lrat_check=LRAT_CHECK):
+    """Tool identity for the cert verdict JSON (PLAN's 'tool versions +
+    exact flags + sha256s' requirement): a version string where the tool
+    prints one, AND a sha256 of the binary itself (lrat-check has no
+    --version flag, so its binary hash is the only provenance available for
+    it; recording it for cadical/lrat-trim too costs nothing and pins
+    exactly which build ran, not just which release string it claims)."""
+    def resolve(path):
+        if os.path.isabs(path):
+            return path if os.path.exists(path) else None
+        return shutil.which(path)
+
+    cad_path = resolve(cadical)
+    trim_path = resolve(lrat_trim)
+    check_path = resolve(lrat_check)
+    return {
+        "cadical": {"path": cad_path,
+                   "version": (_tool_version([cadical, "--version"])
+                              if cad_path else None),
+                   "sha256": sha256_file(cad_path) if cad_path else None},
+        "lrat_trim": {"path": trim_path,
+                     "version": (_tool_version([lrat_trim, "--version"])
+                                if trim_path else None),
+                     "sha256": sha256_file(trim_path) if trim_path else None},
+        "lrat_check": {"path": check_path,
+                      "sha256": sha256_file(check_path) if check_path else None},
+        "cadical_flags": " ".join(CADICAL_LRAT_ARGS),
+        "lrat_trim_flags": " ".join(LRAT_TRIM_ARGS),
+    }
+
+
+def cert_aggregate(results_dir, cover_result, tool_provenance):
+    """Tier A verdict (PLAN_distributed_cert.md step 4): CERT_VERIFIED iff
+    EVERY cube 0..ncubes-1 has checker VERIFIED (cube-level union across
+    every cert-shard-*.jsonl under results_dir, via merge_cert_jsonl) AND
+    the cover is VERIFIED -- mirrors the vacuous-UNSAT fix in aggregate()
+    exactly: any missing/unverified cube, OR a missing/unverified cover,
+    makes the verdict UNDETERMINED, never a silently-partial CERT_VERIFIED."""
+    m = merge_cert_jsonl(results_dir)
+    all_cubes_verified = (m["ncubes"] is not None and not m["missing_cubes"]
+                          and m["n_cubes_verified"] == m["ncubes"])
+    cover_verified = (bool(cover_result)
+                     and cover_result.get("checker") == "VERIFIED")
+    verdict = ("CERT_VERIFIED" if (all_cubes_verified and cover_verified)
+              else "UNDETERMINED")
+    return {"verdict": verdict, "lengths": m["lengths"], "encoding": m["encoding"],
+           "ncubes": m["ncubes"], "n_cubes_verified": m["n_cubes_verified"],
+           "missing_cubes": m["missing_cubes"],
+           "all_cubes_verified": all_cubes_verified,
+           "cover": cover_result, "cover_verified": cover_verified,
+           "tool_provenance": tool_provenance}
+
+
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode",
                      choices=["split", "conquer", "local", "aggregate",
-                              "prove", "solve", "pilot"])
+                              "prove", "solve", "pilot",
+                              "negcubes", "cert", "cert-cover",
+                              "cert-aggregate"])
     ap.add_argument("--t", type=int,
                      help="pdw(2;3,t): back-compat instance spec. --t alone "
                           "(no --lengths) means lengths=[3,t], encoding="
@@ -1876,6 +2308,23 @@ def main():
     ap.add_argument("--force", action="store_true",
                      help="pilot: run the projection but do NOT fail on an "
                           "over-budget result")
+    ap.add_argument("--min-free-gb", type=float, default=DISK_GUARD_DEFAULT_GB,
+                     help="cert: skip (not crash) a cube if free disk at "
+                          "--outdir's filesystem is below this many GB "
+                          "(default %(default)s, matching the plan's runner "
+                          "guard -- lower this for local testing on a "
+                          "disk-tight machine)")
+    ap.add_argument("--negcubes", default=None,
+                     help="negcubes: output path for the cover-completeness "
+                          "CNF (default: <outdir>/negcubes.cnf). cert-cover: "
+                          "input path to refute (same default).")
+    ap.add_argument("--cover-out", default=None,
+                     help="cert-cover: output path for cover.lrat (default: "
+                          "<outdir>/cover.lrat) -- KEPT, never deleted")
+    ap.add_argument("--cover-json", default=None,
+                     help="cert-aggregate: path to the JSON cert-cover wrote "
+                          "(--json-out of a prior cert-cover run). Missing -> "
+                          "cover counted as unverified -> UNDETERMINED.")
     args = ap.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
 
@@ -2004,6 +2453,88 @@ def main():
                 f"({'lower bound, real cost higher' if res['projection_is_lower_bound'] else 'estimate'}). "
                 f"Split deeper, raise --budget-core-hours, or pass force=true.\n")
             sys.exit(2)
+        return
+
+    if args.mode == "negcubes":
+        if not args.cubes:
+            ap.error("negcubes needs --cubes (from a prior split)")
+        cubes = read_cube_lits(args.cubes)
+        out = args.negcubes or os.path.join(args.outdir, "negcubes.cnf")
+        meta = write_negcubes_cnf(cubes, out)
+        print(f"  negcubes: {meta['ncubes']} cubes, {meta['nvars']} vars -> "
+              f"{out}", flush=True)
+        if args.json_out:
+            json.dump(meta, open(args.json_out, "w"), indent=2)
+        return
+
+    if args.mode == "cert":
+        # Tier A per-shard certificate loop (PLAN_distributed_cert.md).
+        # sb_mode refused exactly like `prove`: the SB clauses are never
+        # RAT-justified in any certificate this pipeline produces, so a
+        # cert of the SB-augmented formula would NOT be a machine-checked
+        # claim about the ORIGINAL formula.
+        if sb_mode:
+            raise SystemExit(
+                "cert refuses --symmetry-break: this pipeline never "
+                "RAT-justifies the SB clauses in any certificate -- see "
+                "`prove`'s identical refusal and PLAN_sb_probe.md's scope "
+                "guard.")
+        if not args.cnf or not args.cubes:
+            ap.error("cert needs --cnf and --cubes (from a prior split)")
+        lengths, encoding = resolve_instance(args)
+        meta = {"lengths": lengths, "encoding": encoding, "N": args.N,
+                "t": (lengths[1] if encoding == "palindromic" else None)}
+        nvars, clause_lines = read_cnf(args.cnf)
+        cubes = read_cube_lits(args.cubes)
+        cube_indices = None
+        if args.cube_indices:
+            cube_indices = [int(x) for x in args.cube_indices.split(",")
+                            if x.strip() != ""]
+        res = cert_slice(meta, nvars, clause_lines, cubes, args.shard,
+                         args.nshards, args.cap_seconds, args.outdir,
+                         cube_indices=cube_indices,
+                         min_free_gb=args.min_free_gb)
+        print(f"\n  cert shard {args.shard}: {res['n_verified']}/"
+              f"{res['n_cubes_in_slice']} cubes VERIFIED"
+              + (f", not verified: {res['not_verified_cubes']}"
+                 if res["not_verified_cubes"] else ""), flush=True)
+        if args.json_out:
+            json.dump(res, open(args.json_out, "w"), indent=2)
+        return
+
+    if args.mode == "cert-cover":
+        negcubes_path = args.negcubes or os.path.join(args.outdir,
+                                                       "negcubes.cnf")
+        if not os.path.exists(negcubes_path):
+            ap.error(f"cert-cover: negcubes CNF not found at "
+                     f"{negcubes_path} (run `negcubes` first, or pass "
+                     f"--negcubes)")
+        cover_path = args.cover_out or os.path.join(args.outdir, "cover.lrat")
+        res = do_cert_cover(negcubes_path, cover_path, args.cap_seconds)
+        print(f"\n  cert-cover: {res['checker']} in {res['cadical_s']:.2f}s "
+              f"({res['cover_bytes']} bytes) -> {cover_path}", flush=True)
+        if args.json_out:
+            json.dump(res, open(args.json_out, "w"), indent=2)
+        return
+
+    if args.mode == "cert-aggregate":
+        if not args.results_dir:
+            ap.error("cert-aggregate needs --results-dir (directory of "
+                     "cert-shard-*.jsonl files)")
+        cover_result = None
+        if args.cover_json and os.path.exists(args.cover_json):
+            cover_result = json.load(open(args.cover_json))
+        tool_provenance = collect_tool_provenance()
+        agg = cert_aggregate(args.results_dir, cover_result, tool_provenance)
+        print(f"=== cert-aggregate: {agg['verdict']} "
+              f"({agg['n_cubes_verified']}/{agg['ncubes']} cubes VERIFIED, "
+              f"cover {'VERIFIED' if agg['cover_verified'] else 'NOT VERIFIED/missing'}) ===",
+              flush=True)
+        if agg["missing_cubes"]:
+            print(f"  cubes not yet VERIFIED: {agg['missing_cubes']}",
+                  flush=True)
+        if args.json_out:
+            json.dump(agg, open(args.json_out, "w"), indent=2)
         return
 
     if args.mode == "prove":

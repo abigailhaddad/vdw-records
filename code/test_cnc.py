@@ -21,7 +21,12 @@ from vdw_cnc import (aggregate, slice_members, collect_shard_results,  # noqa: E
                      reconstruct_shard_from_jsonl, merge_jsonl_verdicts,
                      resolve_instance, check_sb_allowed, do_split,
                      do_split_parent, conquer_slice, read_cnf, read_cube_lits,
-                     MARCH, IGLUCOSE, read_pdw_pq)
+                     MARCH, IGLUCOSE, read_pdw_pq,
+                     write_leaf_cnf, negcubes_lines, write_negcubes_cnf,
+                     _lrat_check_verdict, cert_one_cube, cert_slice,
+                     read_cert_jsonl, merge_cert_jsonl, do_cert_cover,
+                     cert_aggregate, collect_tool_provenance, sha256_file,
+                     CADICAL, LRAT_TRIM, LRAT_CHECK)
 
 
 def _shard(shard, status, n_unsat=0, unresolved=None):
@@ -896,6 +901,278 @@ def test_live_t15_parent_split_matches_direct_verdict():
     assert merged["verdict"] == direct["status"] == "UNSAT", (merged, direct)
     assert merged["cubes_without_unsat"] == [], merged
     assert merged["parents"][parent]["closed_via_children"] is True, merged
+
+
+# =============================================================================
+# Tier A cert mode (PLAN_distributed_cert.md): verified-decision certificate.
+# `cert` is purely ADDITIVE -- none of these tests touch conquer/aggregate/
+# the decision pipeline, and none of the tests above touch cert.
+# =============================================================================
+
+def _write_cert_jsonl(d, shard, ncubes, nshards, checkers, lengths=(3, 15),
+                      encoding="palindromic", N=206):
+    """Write a cert shard's JSONL checkpoint like cert_slice does; `checkers`
+    maps gidx -> checker string for the cubes certified before a (simulated)
+    kill. Mirrors _write_jsonl_instance's shape but for cert records (field
+    "checker", not "verdict") -- the two formats must never be confused."""
+    path = os.path.join(d, f"cert-shard-{shard}.jsonl")
+    with open(path, "w") as f:
+        f.write(json.dumps({"meta": True, "lengths": list(lengths),
+                            "encoding": encoding, "N": N, "shard": shard,
+                            "nshards": nshards, "ncubes": ncubes}) + "\n")
+        for g in slice_members(ncubes, nshards, shard):
+            if g in checkers:
+                f.write(json.dumps({"gidx": g, "cadical_s": 0.01, "rc": 20,
+                                    "native_bytes": 100, "trimmed_bytes": 50,
+                                    "sha256_trimmed": "deadbeef",
+                                    "checker": checkers[g]}) + "\n")
+    return path
+
+
+def test_lrat_check_verdict_exact_line_not_substring():
+    # The load-bearing correctness catch: "c NOT VERIFIED" CONTAINS the
+    # substring "VERIFIED", so a naive `"VERIFIED" in stdout` check would
+    # silently count a checker FAILURE as a pass. _lrat_check_verdict must
+    # match the exact printed line, not a substring.
+    assert _lrat_check_verdict("c parsed a formula\nc VERIFIED\nc done\n") \
+        == "VERIFIED"
+    assert _lrat_check_verdict(
+        "c WARNING: incomplete\nc NOT VERIFIED\nc done\n") == "NOT_VERIFIED"
+    assert _lrat_check_verdict("c some unrelated crash output\n") \
+        == "CHECK_ERR"
+    assert _lrat_check_verdict("") == "CHECK_ERR"
+
+
+def test_negcubes_lines_semantics():
+    # Synthetic cubes (no solver involved): each output clause must be
+    # exactly the cube's OWN literals negated, in the SAME order (matches
+    # LRATCatcher.Cube.negClause -- verified against the real tool in
+    # test_leaf_and_negcubes_match_lratcatch_export below); header var count
+    # is the MAX VARIABLE REFERENCED BY ANY CUBE (not e.g. a base nvars);
+    # clause count is the cube count; base is not referenced anywhere.
+    cubes = [[-5, 3, 7], [1, -2], [4]]
+    lines = negcubes_lines(cubes)
+    assert lines[0] == "p cnf 7 3\n", lines[0]  # max |lit| = 7, 3 clauses
+    assert lines[1] == "5 -3 -7 0\n", lines[1]
+    assert lines[2] == "-1 2 0\n", lines[2]
+    assert lines[3] == "-4 0\n", lines[3]
+    assert len(lines) == 4, lines
+
+
+def test_negcubes_lines_empty_cubes_is_degenerate_not_a_crash():
+    lines = negcubes_lines([])
+    assert lines == ["p cnf 0 0\n"], lines
+
+
+def test_write_leaf_cnf_prepends_cube_then_base():
+    # Cube unit clauses FIRST, then the base clauses (LRATCatcher's
+    # Cube.leafCNF / lratcatch-export convention: "unit clauses first, then
+    # the base ... so LRAT clause IDs match"). nvars is the BASE's var
+    # count, unchanged; only the clause count in the header grows.
+    base_lines = ["1 2 3 0\n", "-1 -2 0\n"]
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "leaf.cnf")
+        write_leaf_cnf(3, base_lines, [-2, 3], path)
+        content = open(path).read().splitlines(keepends=True)
+    assert content[0] == "p cnf 3 4\n", content[0]  # 2 base + 2 cube clauses
+    assert content[1] == "-2 0\n", content[1]
+    assert content[2] == "3 0\n", content[2]
+    assert content[3:] == base_lines, content
+
+
+def test_merge_cert_jsonl_missing_cube_blocks_verified():
+    with tempfile.TemporaryDirectory() as d:
+        _write_cert_jsonl(d, 0, 4, 2, {0: "VERIFIED", 2: "TIMEOUT"})
+        _write_cert_jsonl(d, 1, 4, 2, {1: "VERIFIED", 3: "VERIFIED"})
+        m = merge_cert_jsonl(d)
+    assert m["missing_cubes"] == [2], m
+    assert m["n_cubes_verified"] == 3, m
+    agg = cert_aggregate(d, cover_result=None, tool_provenance={})
+    assert agg["verdict"] == "UNDETERMINED", agg
+    assert agg["all_cubes_verified"] is False, agg
+
+
+def test_merge_cert_jsonl_closes_across_redispatch():
+    # Base run left cube 2 as TIMEOUT; a re-dispatch run (separate subdir,
+    # own JSONL) certifies exactly cube 2 with a bigger cap. The cube-level
+    # union over both must show every cube VERIFIED -- same recovery
+    # contract as merge_jsonl_verdicts' cross-run union.
+    with tempfile.TemporaryDirectory() as d:
+        base = os.path.join(d, "base")
+        redispatch = os.path.join(d, "redispatch")
+        os.makedirs(base)
+        os.makedirs(redispatch)
+        _write_cert_jsonl(base, 0, 4, 2, {0: "VERIFIED", 2: "TIMEOUT"})
+        _write_cert_jsonl(base, 1, 4, 2, {1: "VERIFIED", 3: "VERIFIED"})
+        _write_cert_jsonl(redispatch, 0, 4, 1, {2: "VERIFIED"})
+        m = merge_cert_jsonl(d)
+    assert m["missing_cubes"] == [], m
+    assert m["n_cubes_verified"] == 4, m
+
+
+def test_merge_cert_jsonl_refuses_mixed_encoding():
+    with tempfile.TemporaryDirectory() as d:
+        _write_cert_jsonl(d, 0, 4, 2, {0: "VERIFIED", 2: "VERIFIED"},
+                          lengths=(6, 6), encoding="full")
+        _write_cert_jsonl(d, 1, 4, 2, {1: "VERIFIED", 3: "VERIFIED"},
+                          lengths=(3, 26), encoding="palindromic")
+        try:
+            merge_cert_jsonl(d)
+            assert False, "expected ValueError on mixed encoding"
+        except ValueError:
+            pass
+
+
+def test_merge_cert_jsonl_refuses_mixed_ncubes():
+    with tempfile.TemporaryDirectory() as d:
+        _write_cert_jsonl(d, 0, 4, 2, {0: "VERIFIED", 2: "VERIFIED"})
+        path1 = os.path.join(d, "cert-shard-1.jsonl")
+        with open(path1, "w") as f:
+            f.write(json.dumps({"meta": True, "lengths": [3, 15],
+                                "encoding": "palindromic", "N": 206,
+                                "shard": 1, "nshards": 2, "ncubes": 999}) + "\n")
+        try:
+            merge_cert_jsonl(d)
+            assert False, "expected ValueError on mixed ncubes"
+        except ValueError:
+            pass
+
+
+def test_cert_aggregate_requires_cover_even_if_every_cube_verified():
+    with tempfile.TemporaryDirectory() as d:
+        _write_cert_jsonl(d, 0, 2, 1, {0: "VERIFIED", 1: "VERIFIED"})
+        undet = cert_aggregate(d, cover_result=None, tool_provenance={})
+        assert undet["verdict"] == "UNDETERMINED", undet
+        assert undet["all_cubes_verified"] is True, undet
+        verified = cert_aggregate(
+            d, cover_result={"checker": "VERIFIED"}, tool_provenance={})
+        assert verified["verdict"] == "CERT_VERIFIED", verified
+        not_ok_cover = cert_aggregate(
+            d, cover_result={"checker": "NOT_VERIFIED"}, tool_provenance={})
+        assert not_ok_cover["verdict"] == "UNDETERMINED", not_ok_cover
+
+
+def test_cert_one_cube_real_chain_verifies():
+    # Live integration test (real cadical/lrat-trim/lrat-check, real march_cu
+    # split -- same "live" pattern as test_live_t15_parent_split_matches_
+    # direct_verdict above): a genuine t=15 leaf must certify VERIFIED, with
+    # the leaf/lrat/trimmed files deleted afterward and NO leftover disk use.
+    with tempfile.TemporaryDirectory() as d:
+        cnf = os.path.join(d, "base.cnf")
+        cubes_path = os.path.join(d, "base.cubes")
+        do_split([3, 15], "palindromic", 206, cnf, cubes_path, "-d 8")
+        nvars, clause_lines = read_cnf(cnf)
+        cube_lits = read_cube_lits(cubes_path)
+        workdir = os.path.join(d, "work")
+        os.makedirs(workdir)
+        rec = cert_one_cube(nvars, clause_lines, cube_lits[0], 0, workdir,
+                            20.0, 0.05, CADICAL, LRAT_TRIM, LRAT_CHECK)
+        leftover = os.listdir(workdir)
+    assert rec["checker"] == "VERIFIED", rec
+    assert rec["rc"] == 20, rec
+    assert rec["native_bytes"] and rec["trimmed_bytes"], rec
+    assert rec["trimmed_bytes"] <= rec["native_bytes"], rec
+    assert len(rec["sha256_trimmed"]) == 64, rec
+    assert leftover == [], "leaf/lrat files must be deleted"
+
+
+def test_cert_one_cube_disk_guard_skips_without_running_cadical():
+    # An absurdly high min_free_gb must skip the cube (checker=DISK_SKIP)
+    # WITHOUT ever invoking cadical -- no leaf.cnf should even be written.
+    with tempfile.TemporaryDirectory() as d:
+        workdir = os.path.join(d, "work")
+        os.makedirs(workdir)
+        rec = cert_one_cube(3, ["1 2 3 0\n"], [-1], 0, workdir, 5.0,
+                            1e9, CADICAL, LRAT_TRIM, LRAT_CHECK)
+    assert rec["checker"] == "DISK_SKIP", rec
+    assert rec["native_bytes"] is None, rec
+
+
+def test_live_t15_cert_end_to_end_certifies():
+    # The local acceptance gate (PLAN_distributed_cert.md): split -> negcubes
+    # -> cert shards (nshards=2) -> cover -> cert-aggregate, entirely on a
+    # real t=15 N=206 (UNSAT) instance, must reach CERT_VERIFIED.
+    with tempfile.TemporaryDirectory() as d:
+        cnf = os.path.join(d, "base.cnf")
+        cubes_path = os.path.join(d, "base.cubes")
+        do_split([3, 15], "palindromic", 206, cnf, cubes_path, "-d 8")
+        nvars, clause_lines = read_cnf(cnf)
+        cube_lits = read_cube_lits(cubes_path)
+        ncubes = len(cube_lits)
+        assert ncubes > 0, "expected real cubes at this scale, not a solved instance"
+
+        negcubes_path = os.path.join(d, "negcubes.cnf")
+        nc_meta = write_negcubes_cnf(cube_lits, negcubes_path)
+        assert nc_meta["ncubes"] == ncubes, nc_meta
+
+        results = os.path.join(d, "results")
+        os.makedirs(results)
+        meta = {"lengths": [3, 15], "encoding": "palindromic", "N": 206,
+               "t": 15}
+        for shard in (0, 1):
+            cert_slice(meta, nvars, clause_lines, cube_lits, shard, 2, 20.0,
+                      results, min_free_gb=0.05)
+
+        cover_path = os.path.join(d, "cover.lrat")
+        cover = do_cert_cover(negcubes_path, cover_path, 60.0)
+        assert cover["checker"] == "VERIFIED", cover
+        assert os.path.exists(cover_path), "cover.lrat must be KEPT"
+
+        tool_provenance = collect_tool_provenance()
+        verdict = cert_aggregate(results, cover, tool_provenance)
+    assert verdict["verdict"] == "CERT_VERIFIED", verdict
+    assert verdict["ncubes"] == ncubes, verdict
+    assert verdict["n_cubes_verified"] == ncubes, verdict
+    assert verdict["missing_cubes"] == [], verdict
+
+
+def test_leaf_and_negcubes_match_lratcatch_export():
+    # ONE-TIME acceptance check required by PLAN_distributed_cert.md: our
+    # negcubes/leaf-CNF generators must match the real Lean-side tool
+    # (`lake exe lratcatch-export`) byte-for-byte, on a real split. This was
+    # verified manually during the cert builder session against a compiled
+    # lratcatch-export binary (LRAT-Catcher repo, .lake/build/bin/
+    # lratcatch-export) on this exact t=15 N=206 split: negcubes.cnf and
+    # leaf1.cnf (1-indexed) were byte-identical to write_negcubes_cnf's and
+    # write_leaf_cnf's output (0-indexed cube 0). That binary lives outside
+    # this repo/sandbox (a separate session's Lean build), so this test
+    # SKIPS (not fails) when LRATCATCH_EXPORT isn't set -- it documents and
+    # re-runs the acceptance check whenever that binary IS available (e.g.
+    # a reviewer with a LRAT-Catcher checkout), rather than silently
+    # depending on a one-off manual run forever.
+    export_bin = os.environ.get("LRATCATCH_EXPORT")
+    if not export_bin or not os.path.exists(export_bin):
+        print("    (skipped: set $LRATCATCH_EXPORT to a built "
+              "lratcatch-export binary to re-run this acceptance check)")
+        return
+    with tempfile.TemporaryDirectory() as d:
+        cnf = os.path.join(d, "base.cnf")
+        cubes_path = os.path.join(d, "base.cubes")
+        do_split([3, 15], "palindromic", 206, cnf, cubes_path, "-d 8")
+        nvars, clause_lines = read_cnf(cnf)
+        cube_lits = read_cube_lits(cubes_path)
+
+        our_negcubes = os.path.join(d, "our_negcubes.cnf")
+        write_negcubes_cnf(cube_lits, our_negcubes)
+        our_leaf0 = os.path.join(d, "our_leaf0.cnf")
+        write_leaf_cnf(nvars, clause_lines, cube_lits[0], our_leaf0)
+
+        export_out = os.path.join(d, "export_out")
+        os.makedirs(export_out)
+        import subprocess
+        proc = subprocess.run([export_bin, cnf, cubes_path, export_out],
+                              capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+
+        assert open(our_negcubes).read() == \
+            open(os.path.join(export_out, "negcubes.cnf")).read(), \
+            "negcubes.cnf mismatch vs lake exe lratcatch-export"
+        assert (open(our_leaf0).read()
+               == open(os.path.join(export_out, "leaf1.cnf")).read()), (
+            "leaf CNF mismatch vs lake exe lratcatch-export (leaf1.cnf is "
+            "1-indexed cube 0)")
+    print("    lratcatch-export acceptance check: negcubes.cnf and leaf CNF "
+          "byte-identical")
 
 
 def main():
