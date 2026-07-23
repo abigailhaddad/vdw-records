@@ -1,0 +1,67 @@
+diff --git a/Gen.lean b/Gen.lean
+index 0f788fb..3649ffc 100644
+--- a/Gen.lean
++++ b/Gen.lean
+@@ -1,5 +1,6 @@
+ import LRATCatcher.Showcases.Schur
+ import LRATCatcher.Showcases.Ramsey
++import LRATCatcher.Showcases.VdW
+ 
+ /-!
+   # `lratcatch-gen` — generate solver input files for showcase encodings
+@@ -7,13 +8,17 @@ import LRATCatcher.Showcases.Ramsey
+   Usage:
+   * `lratcatch-gen schur k n out.cnf`
+   * `lratcatch-gen ramsey n s t out.cnf`
++  * `lratcatch-gen vdw len n out.cnf`
+ 
+   Writes the DIMACS encoding of "`{1,…,n}` has a Schur-free k-coloring"
+-  (resp. "`K_n` has a 2-coloring with no red `K_s` and no blue `K_t`"),
+-  produced from the *same* encoding function (`LRATCatcher.Schur.encodeK`,
+-  `LRATCatcher.Ramsey.encode`) the `schur_lrat` / `ramsey_lrat` commands certify
+-  against, so the solved CNF and the certified CNF coincide by construction.
+-  Printed with `Std.Sat.CNF.dimacs` (+1 variable shift, inverse of
++  (resp. "`K_n` has a 2-coloring with no red `K_s` and no blue `K_t`",
++  resp. "`{1,…,n}` has a 2-coloring with no monochromatic AP of length
++  `len`"), produced from the *same* encoding function
++  (`LRATCatcher.Schur.encodeK`, `LRATCatcher.Ramsey.encode`,
++  `LRATCatcher.VdW.encode2`) the `schur_lrat` / `ramsey_lrat` commands (resp.
++  the `Generated/W52b` bridge lemma) certify against, so the solved CNF and
++  the certified CNF coincide by construction. Printed with
++  `Std.Sat.CNF.dimacs` (+1 variable shift, inverse of
+   `LRATCatcher.parseDimacs`).
+ -/
+ 
+@@ -28,7 +33,8 @@ def writeOutput (path content : String) : IO Unit := do
+     IO.Process.exit 1
+ 
+ def usage : String :=
+-  "usage: lratcatch-gen schur k n out.cnf | lratcatch-gen ramsey n s t out.cnf"
++  "usage: lratcatch-gen schur k n out.cnf | lratcatch-gen ramsey n s t out.cnf | \
++lratcatch-gen vdw len n out.cnf"
+ 
+ def main (args : List String) : IO UInt32 := do
+   match args with
+@@ -61,6 +67,22 @@ def main (args : List String) : IO UInt32 := do
+     | _, _, _ =>
+       IO.eprintln "lratcatch-gen: n, s, t must be numbers"
+       return 1
++  | ["vdw", lenStr, nStr, outFile] =>
++    match lenStr.toNat?, nStr.toNat? with
++    | some len, some n =>
++      if len == 0 then
++        IO.eprintln "lratcatch-gen: len must be positive"
++        return 1
++      let cnf := LRATCatcher.VdW.encode2 len n
++      unless LRATCatcher.dimacsRoundTrip cnf do
++        IO.eprintln "lratcatch-gen: round-trip self-check failed"
++        return 1
++      writeOutput outFile cnf.dimacs
++      IO.println s!"lratcatch-gen: wrote encode2 {len} {n} to {outFile}"
++      return 0
++    | _, _ =>
++      IO.eprintln "lratcatch-gen: len and n must be numbers"
++      return 1
+   | _ =>
+     IO.eprintln usage
+     return 1
