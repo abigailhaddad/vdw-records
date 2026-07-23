@@ -14,3 +14,10 @@ pdw_attack_out/
 known_values_out/
 cnc_out/
 crosscheck_results.log
+
+# bulk SAT/proof artifacts (regenerable; JSON verdicts/witnesses are kept and
+# tracked explicitly) — covers stray files outside the *_out/ dirs above.
+# Root-anchored so lean/ (tracked .cnf/.lrat fixtures) is untouched.
+/*.drat
+/*.cnf
+/*.lrat
