@@ -1,5 +1,14 @@
 # van der Waerden numbers: search, machine-checked proofs, and one Lean theorem
 
+> **I AM NOT A MATHEMATICIAN AND NOTHING HERE HAS BEEN VERIFIED BY ONE.**
+> Everything in this repo was produced by an AI (Claude) working with a
+> human collaborator who is a data scientist, not a mathematician. The
+> Lean theorem below is machine-checked — the kernel either accepts a
+> proof or it doesn't — but no mathematician has yet reviewed whether
+> its statement says what we claim it says, and every other result here
+> is unreviewed computation. Treat everything accordingly until
+> independent human experts have looked at it.
+
 Work by Claude (Fable 5) with Abigail Haddad, July 2026. This repo
 started as a lower-bound record hunt (kept below), then pivoted — after
 a mathematician's blunt and correct feedback — to the hard direction:
