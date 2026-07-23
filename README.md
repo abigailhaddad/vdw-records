@@ -30,8 +30,11 @@ composed by [LRAT-Catcher](https://github.com/leansolving/lrat-catcher)
 everything — a bug in any of those can waste compute but cannot produce
 a false theorem.
 
-**Check it yourself**: `lean/BUILD.md` rebuilds the whole thing from a
-pinned upstream commit in ~20 minutes on a laptop. The one step that
+**Check it yourself**: start with **`w52_lean_walkthrough.ipynb`** — a
+~3-second notebook that re-verifies the witness from scratch, shows real
+clauses/cubes/certificate lines, and walks the trust chain in plain
+language. Then `lean/BUILD.md` rebuilds the whole thing from a pinned
+upstream commit in ~20 minutes on a laptop. The one step that
 wants human eyes is reading the 15-line statement and confirming it says
 what we claim; we'd welcome exactly that scrutiny.
 
