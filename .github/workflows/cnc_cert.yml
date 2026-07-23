@@ -469,6 +469,18 @@ jobs:
         with:
           name: cnc-cert-cover
           path: results
+      # The tools tarball is downloaded here too, ONLY so cert-aggregate's
+      # collect_tool_provenance can record the actual path/sha256/version of
+      # every binary the run used (without it, provenance fields resolve to
+      # None in the committed verdict -- the gap the cake_lpr builder pass
+      # flagged). The collect job never RUNS these tools.
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-cert-tools
+      - name: unpack tools (for provenance recording only)
+        run: |
+          tar -xzf cnc-cert-tools.tar.gz
+          chmod +x certbin/*
       # cert-aggregate (PLAN_distributed_cert.md step 4): CERT_VERIFIED iff
       # every cube 0..ncubes-1 has checker VERIFIED (cube-level union across
       # every cert-shard-*.jsonl, mirroring the vacuous-UNSAT fix) AND the
@@ -476,7 +488,14 @@ jobs:
       # unverified cover makes the verdict UNDETERMINED, never a silently-
       # partial CERT_VERIFIED.
       - name: aggregate the cert verdict
+        env:
+          CADICAL: ${{ github.workspace }}/certbin/cadical
+          LRAT_TRIM: ${{ github.workspace }}/certbin/lrat-trim
+          LRAT_CHECK: ${{ github.workspace }}/certbin/lrat-check
         run: |
+          # use_cake_lpr 'false' -> $CAKE_LPR simply never gets exported, so
+          # provenance matches what the cert/cover jobs actually ran.
+          [ "${{ inputs.use_cake_lpr }}" = "true" ] && export CAKE_LPR="${{ github.workspace }}/certbin/cake_lpr"
           python3 code/vdw_cnc.py cert-aggregate --results-dir results \
             --cover-json results/cover.json \
             --outdir results --json-out results/verdict.json \
