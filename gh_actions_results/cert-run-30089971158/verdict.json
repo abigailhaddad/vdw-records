@@ -1,0 +1,48 @@
+{
+  "verdict": "CERT_VERIFIED",
+  "lengths": [
+    3,
+    20
+  ],
+  "encoding": "palindromic",
+  "ncubes": 2285,
+  "n_cubes_verified": 2285,
+  "missing_cubes": [],
+  "all_cubes_verified": true,
+  "cover": {
+    "cadical_s": 0.019,
+    "rc": 20,
+    "cover_bytes": 369518,
+    "sha256_cover": "0366d8bc19de63aeb304cda8998441536229fc8295bc4441a4b3ed35762f845c",
+    "checker": "VERIFIED",
+    "cover_path": "cnc_out/cover.lrat",
+    "checkers": {
+      "lrat_check": "VERIFIED",
+      "cake_lpr": "VERIFIED"
+    }
+  },
+  "cover_verified": true,
+  "tool_provenance": {
+    "cadical": {
+      "path": "/home/runner/work/vdw-records/vdw-records/certbin/cadical",
+      "version": "3.0.1",
+      "sha256": "26a5c5a917eda5416f5d21181ff02605d6b9acc554fa52ee84d14c7dc33bcfcd"
+    },
+    "lrat_trim": {
+      "path": "/home/runner/work/vdw-records/vdw-records/certbin/lrat-trim",
+      "version": "0.2.0",
+      "sha256": "179d041f645a98d51d3ca6dbbe4950806ad8eceb54c9a762f54e7acee154f8df"
+    },
+    "lrat_check": {
+      "path": "/home/runner/work/vdw-records/vdw-records/certbin/lrat-check",
+      "sha256": "e9e71c96b68dc9ed22db35d7581e613e6b161ffbc82c20cba5699f8320a065b8"
+    },
+    "cadical_flags": "--lrat --no-binary --no-factor",
+    "lrat_trim_flags": "-a",
+    "cake_lpr": {
+      "path": "/home/runner/work/vdw-records/vdw-records/certbin/cake_lpr",
+      "sha256": "82d2dfef1b6ca9ea1b119580262e3df2570c1fb4f896f06d68ca377bc07a5f5b",
+      "note": "CakeML formally verified LPR/LRAT proof checker (Tan/Heule/Myreen, github.com/tanyongkiam/cake_lpr) -- a SECOND, must-also-pass Tier-A checker; its checking code is itself machine-checked correct against the CakeML semantics, unlike lrat-check (trusted by inspection/convention). See cert_one_cube's docstring for the combined-verdict rule."
+    }
+  }
+}
