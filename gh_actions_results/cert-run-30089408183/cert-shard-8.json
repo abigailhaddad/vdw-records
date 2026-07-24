@@ -1,0 +1,3786 @@
+{
+  "lengths": [
+    3,
+    26
+  ],
+  "encoding": "palindromic",
+  "t": 26,
+  "N": 635,
+  "shard": 8,
+  "nshards": 16,
+  "mode": "round-robin",
+  "ncubes": 4022,
+  "members": [
+    8,
+    24,
+    40,
+    56,
+    72,
+    88,
+    104,
+    120,
+    136,
+    152,
+    168,
+    184,
+    200,
+    216,
+    232,
+    248,
+    264,
+    280,
+    296,
+    312,
+    328,
+    344,
+    360,
+    376,
+    392,
+    408,
+    424,
+    440,
+    456,
+    472,
+    488,
+    504,
+    520,
+    536,
+    552,
+    568,
+    584,
+    600,
+    616,
+    632,
+    648,
+    664,
+    680,
+    696,
+    712,
+    728,
+    744,
+    760,
+    776,
+    792,
+    808,
+    824,
+    840,
+    856,
+    872,
+    888,
+    904,
+    920,
+    936,
+    952,
+    968,
+    984,
+    1000,
+    1016,
+    1032,
+    1048,
+    1064,
+    1080,
+    1096,
+    1112,
+    1128,
+    1144,
+    1160,
+    1176,
+    1192,
+    1208,
+    1224,
+    1240,
+    1256,
+    1272,
+    1288,
+    1304,
+    1320,
+    1336,
+    1352,
+    1368,
+    1384,
+    1400,
+    1416,
+    1432,
+    1448,
+    1464,
+    1480,
+    1496,
+    1512,
+    1528,
+    1544,
+    1560,
+    1576,
+    1592,
+    1608,
+    1624,
+    1640,
+    1656,
+    1672,
+    1688,
+    1704,
+    1720,
+    1736,
+    1752,
+    1768,
+    1784,
+    1800,
+    1816,
+    1832,
+    1848,
+    1864,
+    1880,
+    1896,
+    1912,
+    1928,
+    1944,
+    1960,
+    1976,
+    1992,
+    2008,
+    2024,
+    2040,
+    2056,
+    2072,
+    2088,
+    2104,
+    2120,
+    2136,
+    2152,
+    2168,
+    2184,
+    2200,
+    2216,
+    2232,
+    2248,
+    2264,
+    2280,
+    2296,
+    2312,
+    2328,
+    2344,
+    2360,
+    2376,
+    2392,
+    2408,
+    2424,
+    2440,
+    2456,
+    2472,
+    2488,
+    2504,
+    2520,
+    2536,
+    2552,
+    2568,
+    2584,
+    2600,
+    2616,
+    2632,
+    2648,
+    2664,
+    2680,
+    2696,
+    2712,
+    2728,
+    2744,
+    2760,
+    2776,
+    2792,
+    2808,
+    2824,
+    2840,
+    2856,
+    2872,
+    2888,
+    2904,
+    2920,
+    2936,
+    2952,
+    2968,
+    2984,
+    3000,
+    3016,
+    3032,
+    3048,
+    3064,
+    3080,
+    3096,
+    3112,
+    3128,
+    3144,
+    3160,
+    3176,
+    3192,
+    3208,
+    3224,
+    3240,
+    3256,
+    3272,
+    3288,
+    3304,
+    3320,
+    3336,
+    3352,
+    3368,
+    3384,
+    3400,
+    3416,
+    3432,
+    3448,
+    3464,
+    3480,
+    3496,
+    3512,
+    3528,
+    3544,
+    3560,
+    3576,
+    3592,
+    3608,
+    3624,
+    3640,
+    3656,
+    3672,
+    3688,
+    3704,
+    3720,
+    3736,
+    3752,
+    3768,
+    3784,
+    3800,
+    3816,
+    3832,
+    3848,
+    3864,
+    3880,
+    3896,
+    3912,
+    3928,
+    3944,
+    3960,
+    3976,
+    3992,
+    4008
+  ],
+  "n_cubes_in_slice": 251,
+  "n_verified": 0,
+  "not_verified_cubes": [
+    8,
+    24,
+    40,
+    56,
+    72,
+    88,
+    104,
+    120,
+    136,
+    152,
+    168,
+    184,
+    200,
+    216,
+    232,
+    248,
+    264,
+    280,
+    296,
+    312,
+    328,
+    344,
+    360,
+    376,
+    392,
+    408,
+    424,
+    440,
+    456,
+    472,
+    488,
+    504,
+    520,
+    536,
+    552,
+    568,
+    584,
+    600,
+    616,
+    632,
+    648,
+    664,
+    680,
+    696,
+    712,
+    728,
+    744,
+    760,
+    776,
+    792,
+    808,
+    824,
+    840,
+    856,
+    872,
+    888,
+    904,
+    920,
+    936,
+    952,
+    968,
+    984,
+    1000,
+    1016,
+    1032,
+    1048,
+    1064,
+    1080,
+    1096,
+    1112,
+    1128,
+    1144,
+    1160,
+    1176,
+    1192,
+    1208,
+    1224,
+    1240,
+    1256,
+    1272,
+    1288,
+    1304,
+    1320,
+    1336,
+    1352,
+    1368,
+    1384,
+    1400,
+    1416,
+    1432,
+    1448,
+    1464,
+    1480,
+    1496,
+    1512,
+    1528,
+    1544,
+    1560,
+    1576,
+    1592,
+    1608,
+    1624,
+    1640,
+    1656,
+    1672,
+    1688,
+    1704,
+    1720,
+    1736,
+    1752,
+    1768,
+    1784,
+    1800,
+    1816,
+    1832,
+    1848,
+    1864,
+    1880,
+    1896,
+    1912,
+    1928,
+    1944,
+    1960,
+    1976,
+    1992,
+    2008,
+    2024,
+    2040,
+    2056,
+    2072,
+    2088,
+    2104,
+    2120,
+    2136,
+    2152,
+    2168,
+    2184,
+    2200,
+    2216,
+    2232,
+    2248,
+    2264,
+    2280,
+    2296,
+    2312,
+    2328,
+    2344,
+    2360,
+    2376,
+    2392,
+    2408,
+    2424,
+    2440,
+    2456,
+    2472,
+    2488,
+    2504,
+    2520,
+    2536,
+    2552,
+    2568,
+    2584,
+    2600,
+    2616,
+    2632,
+    2648,
+    2664,
+    2680,
+    2696,
+    2712,
+    2728,
+    2744,
+    2760,
+    2776,
+    2792,
+    2808,
+    2824,
+    2840,
+    2856,
+    2872,
+    2888,
+    2904,
+    2920,
+    2936,
+    2952,
+    2968,
+    2984,
+    3000,
+    3016,
+    3032,
+    3048,
+    3064,
+    3080,
+    3096,
+    3112,
+    3128,
+    3144,
+    3160,
+    3176,
+    3192,
+    3208,
+    3224,
+    3240,
+    3256,
+    3272,
+    3288,
+    3304,
+    3320,
+    3336,
+    3352,
+    3368,
+    3384,
+    3400,
+    3416,
+    3432,
+    3448,
+    3464,
+    3480,
+    3496,
+    3512,
+    3528,
+    3544,
+    3560,
+    3576,
+    3592,
+    3608,
+    3624,
+    3640,
+    3656,
+    3672,
+    3688,
+    3704,
+    3720,
+    3736,
+    3752,
+    3768,
+    3784,
+    3800,
+    3816,
+    3832,
+    3848,
+    3864,
+    3880,
+    3896,
+    3912,
+    3928,
+    3944,
+    3960,
+    3976,
+    3992,
+    4008
+  ],
+  "per_cube": [
+    {
+      "gidx": 8,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 24,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 40,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 56,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 72,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 88,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 104,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 120,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 136,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 152,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 168,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 184,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 200,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 216,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 232,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 248,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 264,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 280,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 296,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 312,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 328,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 344,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 360,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 376,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 392,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 408,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 424,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 440,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 456,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 472,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 488,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 504,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 520,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 536,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 552,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 568,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 584,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 600,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 616,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 632,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 648,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 664,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 680,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 696,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 712,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 728,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 744,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 760,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 776,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 792,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 808,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 824,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 840,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 856,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 872,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 888,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 904,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 920,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 936,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 952,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 968,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 984,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1000,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1016,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1032,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1048,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1064,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1080,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1096,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1112,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1128,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1144,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1160,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1176,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1192,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1208,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1224,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1240,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1256,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1272,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1288,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1304,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1320,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1336,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1352,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1368,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1384,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1400,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1416,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1432,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1448,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1464,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1480,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1496,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1512,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1528,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1544,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1560,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1576,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1592,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1608,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1624,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1640,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1656,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1672,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1688,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1704,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1720,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1736,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1752,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1768,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1784,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1800,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1816,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1832,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1848,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1864,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1880,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1896,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1912,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1928,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1944,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1960,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1976,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 1992,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2008,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2024,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2040,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2056,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2072,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2088,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2104,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2120,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2136,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2152,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2168,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2184,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2200,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2216,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2232,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2248,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2264,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2280,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2296,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2312,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2328,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2344,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2360,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2376,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2392,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2408,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2424,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2440,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2456,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2472,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2488,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2504,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2520,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2536,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2552,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2568,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2584,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2600,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2616,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2632,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2648,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2664,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2680,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2696,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2712,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2728,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2744,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2760,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2776,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2792,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2808,
+      "cadical_s": 0.002,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2824,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2840,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2856,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2872,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2888,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2904,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2920,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2936,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2952,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2968,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 2984,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3000,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3016,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3032,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3048,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3064,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3080,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3096,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3112,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3128,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3144,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3160,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3176,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3192,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3208,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3224,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3240,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3256,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3272,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3288,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3304,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3320,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3336,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3352,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3368,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3384,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3400,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3416,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3432,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3448,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3464,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3480,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3496,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3512,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3528,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3544,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3560,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3576,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3592,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3608,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3624,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3640,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3656,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3672,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3688,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3704,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3720,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3736,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3752,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3768,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3784,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3800,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3816,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3832,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3848,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3864,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3880,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3896,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3912,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3928,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3944,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3960,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3976,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 3992,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    },
+    {
+      "gidx": 4008,
+      "cadical_s": 0.001,
+      "rc": 1,
+      "native_bytes": null,
+      "trimmed_bytes": null,
+      "sha256_trimmed": null,
+      "checker": "CADICAL_ERR(rc=1)",
+      "checkers": {
+        "lrat_check": "CADICAL_ERR(rc=1)",
+        "cake_lpr": "NOT_RUN"
+      }
+    }
+  ]
+}
