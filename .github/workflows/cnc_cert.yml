@@ -135,32 +135,37 @@ jobs:
           sha=$(git ls-remote https://github.com/marijnheule/CnC.git HEAD | cut -f1)
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "upstream CnC HEAD: $sha"
-      # cadical: PIN a release >= 3.0.1 (never upstream HEAD -- a cert tool's
-      # exact behavior must be reproducible run over run). Resolve which tag
-      # that is ON THE RUNNER (which has real network access, unlike a
-      # sandboxed dev box): list every "rel-*" tag, version-sort them
-      # together with the literal string "3.0.1", and take whichever tag
-      # lands immediately after that marker -- the smallest real release
-      # >= 3.0.1. Falls back to HEAD (loudly logged, never silent) if no
-      # "rel-*" tag parses at or above that floor; either way the ACTUAL
-      # `cadical --version` output is what gets recorded in the verdict
-      # JSON, so a wrong/missing tag guess here can never silently under-pin.
+      # cadical: PIN the EXACT known-good release rel-3.0.1 by its commit sha
+      # (never upstream HEAD, never a computed "latest" -- a cert tool's exact
+      # behavior must be reproducible run over run). rel-3.0.1 is the version
+      # that verifies locally (Homebrew cadical 3.0.1, `cadical --version` ->
+      # "3.0.1") and accepts the exact flag set we drive it with (--lrat
+      # --no-binary --no-factor -> rc 20 on UNSAT).
+      #
+      # DO NOT reintroduce a version-sort "smallest release >= 3.0.1"
+      # heuristic here: upstream carries a junk tag `rel-06w` (a 2006
+      # SAT-competition entry) that `sort -V` mis-ranks as version 6, i.e.
+      # ABOVE 3.0.1, so that heuristic silently pinned a 2006-era cadical
+      # with no --lrat/--no-factor support -> every cube CADICAL_ERR(rc=1),
+      # UNDETERMINED verdict (caught by the t=20 N=381 acceptance run,
+      # 2026-07-24). An exact sha pin is the only safe form for a cert tool.
       - id: cadical_rev
+        env:
+          CADICAL_TAG: rel-3.0.1
+          CADICAL_SHA: c60730422e758ef1cebe7aeddf2dda31c996bf04
         run: |
           git clone --quiet https://github.com/arminbiere/cadical.git /tmp/cadical_src
           cd /tmp/cadical_src
-          tag=$( (echo "3.0.1"; git tag -l 'rel-*' | sed 's/^rel-//') \
-                 | sort -V | awk '/^3\.0\.1$/{f=1;next} f{print; exit}')
-          if [ -z "$tag" ]; then
-            echo "WARNING: no rel-* tag >= 3.0.1 found upstream -- pinning to HEAD (cadical --version in the verdict JSON is the authoritative record of what actually built)"
-            ref="HEAD"
-          else
-            ref="rel-$tag"
+          # Verify the pinned tag still resolves to the pinned sha (guards
+          # against a moved/re-pointed tag upstream); fail LOUD if it drifted.
+          resolved=$(git rev-parse "refs/tags/${CADICAL_TAG}^{commit}")
+          if [ "$resolved" != "$CADICAL_SHA" ]; then
+            echo "FATAL: ${CADICAL_TAG} resolves to $resolved, expected pinned $CADICAL_SHA -- refusing to build an unexpected cadical for a cert run" >&2
+            exit 1
           fi
-          sha=$(git rev-parse "$ref")
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "pinned cadical: ref=$ref sha=$sha"
+          echo "ref=${CADICAL_TAG}" >> "$GITHUB_OUTPUT"
+          echo "sha=${CADICAL_SHA}" >> "$GITHUB_OUTPUT"
+          echo "pinned cadical: ref=${CADICAL_TAG} sha=${CADICAL_SHA}"
       # lrat-trim: PIN the exact commit observed during the PLAN_distributed_
       # cert.md builder session (2026-07-23), not upstream HEAD -- see the
       # plan's tool-provenance note. Update this hash deliberately (new PR)
