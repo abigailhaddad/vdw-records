@@ -30,6 +30,17 @@ from vdw_cnc import (aggregate, slice_members, collect_shard_results,  # noqa: E
                      CADICAL, LRAT_TRIM, LRAT_CHECK, CAKE_LPR)
 
 
+def _have_cert_chain():
+    """True iff the real cert toolchain (march_cu split + the cadical/
+    lrat-trim/lrat-check verify chain) is built in this environment. The
+    live cert tests below need all four binaries; regression.yml runs
+    test_cnc.py in its "no solver needed" step BEFORE the solver build, so
+    they must skip there rather than crash with a FileNotFoundError (same
+    contract as the march_cu/iglucose guards elsewhere in this file)."""
+    return all(os.path.exists(p)
+               for p in (MARCH, CADICAL, LRAT_TRIM, LRAT_CHECK))
+
+
 def _shard(shard, status, n_unsat=0, unresolved=None):
     """A minimal conquer-result dict as aggregate() consumes it."""
     return {"t": 20, "N": 381, "shard": shard, "status": status,
@@ -1058,6 +1069,10 @@ def test_cert_one_cube_real_chain_verifies():
     # split -- same "live" pattern as test_live_t15_parent_split_matches_
     # direct_verdict above): a genuine t=15 leaf must certify VERIFIED, with
     # the leaf/lrat/trimmed files deleted afterward and NO leftover disk use.
+    if not _have_cert_chain():
+        print("    (skipped: march_cu/cadical/lrat-trim/lrat-check not built "
+              "in this environment)")
+        return
     with tempfile.TemporaryDirectory() as d:
         cnf = os.path.join(d, "base.cnf")
         cubes_path = os.path.join(d, "base.cubes")
@@ -1093,6 +1108,10 @@ def test_live_t15_cert_end_to_end_certifies():
     # The local acceptance gate (PLAN_distributed_cert.md): split -> negcubes
     # -> cert shards (nshards=2) -> cover -> cert-aggregate, entirely on a
     # real t=15 N=206 (UNSAT) instance, must reach CERT_VERIFIED.
+    if not _have_cert_chain():
+        print("    (skipped: march_cu/cadical/lrat-trim/lrat-check not built "
+              "in this environment)")
+        return
     with tempfile.TemporaryDirectory() as d:
         cnf = os.path.join(d, "base.cnf")
         cubes_path = os.path.join(d, "base.cubes")
@@ -1172,6 +1191,10 @@ def test_cert_one_cube_cake_lpr_exact_line_not_substring():
     # Real cadical/lrat-trim/lrat-check chain (same real t=15 split as
     # test_cert_one_cube_real_chain_verifies) gets lrat-check to VERIFIED
     # first, so this isolates cake_lpr's own exact-line-matching behavior.
+    if not _have_cert_chain():
+        print("    (skipped: march_cu/cadical/lrat-trim/lrat-check not built "
+              "in this environment)")
+        return
     with tempfile.TemporaryDirectory() as d:
         cnf = os.path.join(d, "base.cnf")
         cubes_path = os.path.join(d, "base.cubes")
@@ -1196,6 +1219,10 @@ def test_cert_one_cube_requires_both_checkers_to_certify():
     # (a crash message with no "VERIFIED" substring at all) -- the cube must
     # still NOT be certified: `checker` requires BOTH checkers to pass, not
     # just lrat-check.
+    if not _have_cert_chain():
+        print("    (skipped: march_cu/cadical/lrat-trim/lrat-check not built "
+              "in this environment)")
+        return
     with tempfile.TemporaryDirectory() as d:
         cnf = os.path.join(d, "base.cnf")
         cubes_path = os.path.join(d, "base.cubes")
