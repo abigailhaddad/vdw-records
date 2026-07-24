@@ -1,0 +1,640 @@
+{"meta": true, "lengths": [3, 26], "encoding": "palindromic", "t": 26, "N": 644, "symmetry_break": false, "shard": 2, "nshards": 6, "ncubes": 3831, "mode": "round-robin", "members": [2, 8, 14, 20, 26, 32, 38, 44, 50, 56, 62, 68, 74, 80, 86, 92, 98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164, 170, 176, 182, 188, 194, 200, 206, 212, 218, 224, 230, 236, 242, 248, 254, 260, 266, 272, 278, 284, 290, 296, 302, 308, 314, 320, 326, 332, 338, 344, 350, 356, 362, 368, 374, 380, 386, 392, 398, 404, 410, 416, 422, 428, 434, 440, 446, 452, 458, 464, 470, 476, 482, 488, 494, 500, 506, 512, 518, 524, 530, 536, 542, 548, 554, 560, 566, 572, 578, 584, 590, 596, 602, 608, 614, 620, 626, 632, 638, 644, 650, 656, 662, 668, 674, 680, 686, 692, 698, 704, 710, 716, 722, 728, 734, 740, 746, 752, 758, 764, 770, 776, 782, 788, 794, 800, 806, 812, 818, 824, 830, 836, 842, 848, 854, 860, 866, 872, 878, 884, 890, 896, 902, 908, 914, 920, 926, 932, 938, 944, 950, 956, 962, 968, 974, 980, 986, 992, 998, 1004, 1010, 1016, 1022, 1028, 1034, 1040, 1046, 1052, 1058, 1064, 1070, 1076, 1082, 1088, 1094, 1100, 1106, 1112, 1118, 1124, 1130, 1136, 1142, 1148, 1154, 1160, 1166, 1172, 1178, 1184, 1190, 1196, 1202, 1208, 1214, 1220, 1226, 1232, 1238, 1244, 1250, 1256, 1262, 1268, 1274, 1280, 1286, 1292, 1298, 1304, 1310, 1316, 1322, 1328, 1334, 1340, 1346, 1352, 1358, 1364, 1370, 1376, 1382, 1388, 1394, 1400, 1406, 1412, 1418, 1424, 1430, 1436, 1442, 1448, 1454, 1460, 1466, 1472, 1478, 1484, 1490, 1496, 1502, 1508, 1514, 1520, 1526, 1532, 1538, 1544, 1550, 1556, 1562, 1568, 1574, 1580, 1586, 1592, 1598, 1604, 1610, 1616, 1622, 1628, 1634, 1640, 1646, 1652, 1658, 1664, 1670, 1676, 1682, 1688, 1694, 1700, 1706, 1712, 1718, 1724, 1730, 1736, 1742, 1748, 1754, 1760, 1766, 1772, 1778, 1784, 1790, 1796, 1802, 1808, 1814, 1820, 1826, 1832, 1838, 1844, 1850, 1856, 1862, 1868, 1874, 1880, 1886, 1892, 1898, 1904, 1910, 1916, 1922, 1928, 1934, 1940, 1946, 1952, 1958, 1964, 1970, 1976, 1982, 1988, 1994, 2000, 2006, 2012, 2018, 2024, 2030, 2036, 2042, 2048, 2054, 2060, 2066, 2072, 2078, 2084, 2090, 2096, 2102, 2108, 2114, 2120, 2126, 2132, 2138, 2144, 2150, 2156, 2162, 2168, 2174, 2180, 2186, 2192, 2198, 2204, 2210, 2216, 2222, 2228, 2234, 2240, 2246, 2252, 2258, 2264, 2270, 2276, 2282, 2288, 2294, 2300, 2306, 2312, 2318, 2324, 2330, 2336, 2342, 2348, 2354, 2360, 2366, 2372, 2378, 2384, 2390, 2396, 2402, 2408, 2414, 2420, 2426, 2432, 2438, 2444, 2450, 2456, 2462, 2468, 2474, 2480, 2486, 2492, 2498, 2504, 2510, 2516, 2522, 2528, 2534, 2540, 2546, 2552, 2558, 2564, 2570, 2576, 2582, 2588, 2594, 2600, 2606, 2612, 2618, 2624, 2630, 2636, 2642, 2648, 2654, 2660, 2666, 2672, 2678, 2684, 2690, 2696, 2702, 2708, 2714, 2720, 2726, 2732, 2738, 2744, 2750, 2756, 2762, 2768, 2774, 2780, 2786, 2792, 2798, 2804, 2810, 2816, 2822, 2828, 2834, 2840, 2846, 2852, 2858, 2864, 2870, 2876, 2882, 2888, 2894, 2900, 2906, 2912, 2918, 2924, 2930, 2936, 2942, 2948, 2954, 2960, 2966, 2972, 2978, 2984, 2990, 2996, 3002, 3008, 3014, 3020, 3026, 3032, 3038, 3044, 3050, 3056, 3062, 3068, 3074, 3080, 3086, 3092, 3098, 3104, 3110, 3116, 3122, 3128, 3134, 3140, 3146, 3152, 3158, 3164, 3170, 3176, 3182, 3188, 3194, 3200, 3206, 3212, 3218, 3224, 3230, 3236, 3242, 3248, 3254, 3260, 3266, 3272, 3278, 3284, 3290, 3296, 3302, 3308, 3314, 3320, 3326, 3332, 3338, 3344, 3350, 3356, 3362, 3368, 3374, 3380, 3386, 3392, 3398, 3404, 3410, 3416, 3422, 3428, 3434, 3440, 3446, 3452, 3458, 3464, 3470, 3476, 3482, 3488, 3494, 3500, 3506, 3512, 3518, 3524, 3530, 3536, 3542, 3548, 3554, 3560, 3566, 3572, 3578, 3584, 3590, 3596, 3602, 3608, 3614, 3620, 3626, 3632, 3638, 3644, 3650, 3656, 3662, 3668, 3674, 3680, 3686, 3692, 3698, 3704, 3710, 3716, 3722, 3728, 3734, 3740, 3746, 3752, 3758, 3764, 3770, 3776, 3782, 3788, 3794, 3800, 3806, 3812, 3818, 3824, 3830], "parent_cube": 4057}
+{"gidx": 2, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 8, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 14, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 20, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 26, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 32, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 38, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 44, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 50, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 56, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 62, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 68, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 74, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 80, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 86, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 92, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 98, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 104, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 110, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 116, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 122, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 128, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 134, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 140, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 146, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 152, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 158, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 164, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 170, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 176, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 182, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 188, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 194, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 200, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 206, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 212, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 218, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 224, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 230, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 236, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 242, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 248, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 254, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 260, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 266, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 272, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 278, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 284, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 290, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 296, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 302, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 308, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 314, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 320, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 326, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 332, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 338, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 344, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 350, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 356, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 362, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 368, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 374, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 380, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 386, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 392, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 398, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 404, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 410, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 416, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 422, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 428, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 434, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 440, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 446, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 452, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 458, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 464, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 470, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 476, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 482, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 488, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 494, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 500, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 506, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 512, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 518, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 524, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 530, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 536, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 542, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 548, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 554, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 560, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 566, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 572, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 578, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 584, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 590, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 596, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 602, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 608, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 614, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 620, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 626, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 632, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 638, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 644, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 650, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 656, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 662, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 668, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 674, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 680, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 686, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 692, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 698, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 704, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 710, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 716, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 722, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 728, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 734, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 740, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 746, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 752, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 758, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 764, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 770, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 776, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 782, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 788, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 794, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 800, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 806, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 812, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 818, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 824, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 830, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 836, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 842, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 848, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 854, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 860, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 866, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 872, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 878, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 884, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 890, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 896, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 902, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 908, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 914, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 920, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 926, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 932, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 938, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 944, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 950, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 956, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 962, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 968, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 974, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 980, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 986, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 992, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 998, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1004, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1010, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1016, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1022, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1028, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1034, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1040, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1046, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1052, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1058, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1064, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1070, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1076, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1082, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1088, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1094, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1100, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1106, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1112, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1118, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1124, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1130, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1136, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1142, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1148, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1154, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1160, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1166, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1172, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1178, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1184, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1190, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1196, "verdict": "UNSAT", "seconds": 0.164, "batched": true}
+{"gidx": 1202, "verdict": "UNSAT", "seconds": 0.016}
+{"gidx": 1208, "verdict": "UNSAT", "seconds": 0.087}
+{"gidx": 1214, "verdict": "UNSAT", "seconds": 0.259}
+{"gidx": 1220, "verdict": "UNSAT", "seconds": 0.013}
+{"gidx": 1226, "verdict": "UNSAT", "seconds": 0.014}
+{"gidx": 1232, "verdict": "UNSAT", "seconds": 0.046}
+{"gidx": 1238, "verdict": "UNSAT", "seconds": 0.092}
+{"gidx": 1244, "verdict": "UNSAT", "seconds": 0.248}
+{"gidx": 1250, "verdict": "UNSAT", "seconds": 0.052}
+{"gidx": 1256, "verdict": "UNSAT", "seconds": 0.718}
+{"gidx": 1262, "verdict": "UNSAT", "seconds": 0.746}
+{"gidx": 1268, "verdict": "UNSAT", "seconds": 0.204}
+{"gidx": 1274, "verdict": "UNSAT", "seconds": 0.165}
+{"gidx": 1280, "verdict": "UNSAT", "seconds": 8.386}
+{"gidx": 1286, "verdict": "UNSAT", "seconds": 0.033}
+{"gidx": 1292, "verdict": "UNSAT", "seconds": 0.731}
+{"gidx": 1298, "verdict": "UNSAT", "seconds": 0.033}
+{"gidx": 1304, "verdict": "UNSAT", "seconds": 1.901}
+{"gidx": 1310, "verdict": "UNSAT", "seconds": 1.928}
+{"gidx": 1316, "verdict": "UNSAT", "seconds": 0.215}
+{"gidx": 1322, "verdict": "UNSAT", "seconds": 0.96}
+{"gidx": 1328, "verdict": "UNSAT", "seconds": 23.09}
+{"gidx": 1334, "verdict": "UNSAT", "seconds": 5.322}
+{"gidx": 1340, "verdict": "UNSAT", "seconds": 206.212}
+{"gidx": 1346, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 1352, "verdict": "UNSAT", "seconds": 0.01}
+{"gidx": 1358, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 1364, "verdict": "UNSAT", "seconds": 0.022}
+{"gidx": 1370, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 1376, "verdict": "UNSAT", "seconds": 0.031}
+{"gidx": 1382, "verdict": "UNSAT", "seconds": 0.017}
+{"gidx": 1388, "verdict": "UNSAT", "seconds": 0.094}
+{"gidx": 1394, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 1400, "verdict": "UNSAT", "seconds": 0.016}
+{"gidx": 1406, "verdict": "UNSAT", "seconds": 0.163}
+{"gidx": 1412, "verdict": "UNSAT", "seconds": 0.014}
+{"gidx": 1418, "verdict": "UNSAT", "seconds": 0.017}
+{"gidx": 1424, "verdict": "UNSAT", "seconds": 0.013}
+{"gidx": 1430, "verdict": "UNSAT", "seconds": 0.017}
+{"gidx": 1436, "verdict": "UNSAT", "seconds": 0.225}
+{"gidx": 1442, "verdict": "UNSAT", "seconds": 0.06}
+{"gidx": 1448, "verdict": "UNSAT", "seconds": 0.136}
+{"gidx": 1454, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 1460, "verdict": "UNSAT", "seconds": 0.019}
+{"gidx": 1466, "verdict": "UNSAT", "seconds": 0.025}
+{"gidx": 1472, "verdict": "UNSAT", "seconds": 0.157}
+{"gidx": 1478, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 1484, "verdict": "UNSAT", "seconds": 0.041}
+{"gidx": 1490, "verdict": "UNSAT", "seconds": 0.223}
+{"gidx": 1496, "verdict": "UNSAT", "seconds": 0.195}
+{"gidx": 1502, "verdict": "UNSAT", "seconds": 0.286}
+{"gidx": 1508, "verdict": "UNSAT", "seconds": 0.036}
+{"gidx": 1514, "verdict": "UNSAT", "seconds": 0.686}
+{"gidx": 1520, "verdict": "UNSAT", "seconds": 0.204}
+{"gidx": 1526, "verdict": "UNSAT", "seconds": 0.307}
+{"gidx": 1532, "verdict": "UNSAT", "seconds": 0.204}
+{"gidx": 1538, "verdict": "UNSAT", "seconds": 12.95}
+{"gidx": 1544, "verdict": "UNSAT", "seconds": 0.168}
+{"gidx": 1550, "verdict": "UNSAT", "seconds": 2.732}
+{"gidx": 1556, "verdict": "UNSAT", "seconds": 1.116}
+{"gidx": 1562, "verdict": "UNSAT", "seconds": 19.051}
+{"gidx": 1568, "verdict": "UNSAT", "seconds": 108.519}
+{"gidx": 1574, "verdict": "UNSAT", "seconds": 0.016}
+{"gidx": 1580, "verdict": "UNSAT", "seconds": 0.019}
+{"gidx": 1586, "verdict": "UNSAT", "seconds": 0.037}
+{"gidx": 1592, "verdict": "UNSAT", "seconds": 0.019}
+{"gidx": 1598, "verdict": "UNSAT", "seconds": 0.146}
+{"gidx": 1604, "verdict": "UNSAT", "seconds": 0.017}
+{"gidx": 1610, "verdict": "UNSAT", "seconds": 0.426}
+{"gidx": 1616, "verdict": "UNSAT", "seconds": 0.655}
+{"gidx": 1622, "verdict": "UNSAT", "seconds": 0.61}
+{"gidx": 1628, "verdict": "UNSAT", "seconds": 0.644}
+{"gidx": 1634, "verdict": "UNSAT", "seconds": 4.034}
+{"gidx": 1640, "verdict": "UNSAT", "seconds": 0.013}
+{"gidx": 1646, "verdict": "UNSAT", "seconds": 0.077}
+{"gidx": 1652, "verdict": "UNSAT", "seconds": 0.05}
+{"gidx": 1658, "verdict": "UNSAT", "seconds": 2.092}
+{"gidx": 1664, "verdict": "UNSAT", "seconds": 0.749}
+{"gidx": 1670, "verdict": "UNSAT", "seconds": 0.07}
+{"gidx": 1676, "verdict": "UNSAT", "seconds": 0.969}
+{"gidx": 1682, "verdict": "UNSAT", "seconds": 11.527}
+{"gidx": 1688, "verdict": "UNSAT", "seconds": 1.691}
+{"gidx": 1694, "verdict": "UNSAT", "seconds": 28.418}
+{"gidx": 1700, "verdict": "UNSAT", "seconds": 0.016}
+{"gidx": 1706, "verdict": "UNSAT", "seconds": 0.341}
+{"gidx": 1712, "verdict": "UNSAT", "seconds": 0.232}
+{"gidx": 1718, "verdict": "UNSAT", "seconds": 0.234}
+{"gidx": 1724, "verdict": "UNSAT", "seconds": 0.616}
+{"gidx": 1730, "verdict": "UNSAT", "seconds": 4.74}
+{"gidx": 1736, "verdict": "UNSAT", "seconds": 0.38}
+{"gidx": 1742, "verdict": "UNSAT", "seconds": 2.259}
+{"gidx": 1748, "verdict": "UNSAT", "seconds": 0.489}
+{"gidx": 1754, "verdict": "UNSAT", "seconds": 42.122}
+{"gidx": 1760, "verdict": "UNSAT", "seconds": 3.967}
+{"gidx": 1766, "verdict": "UNSAT", "seconds": 0.561}
+{"gidx": 1772, "verdict": "UNSAT", "seconds": 0.1}
+{"gidx": 1778, "verdict": "UNSAT", "seconds": 37.872}
+{"gidx": 1784, "verdict": "UNSAT", "seconds": 0.978}
+{"gidx": 1790, "verdict": "UNSAT", "seconds": 28.341}
+{"gidx": 1796, "verdict": "UNSAT", "seconds": 1.922}
+{"gidx": 1802, "verdict": "UNSAT", "seconds": 27.5}
+{"gidx": 1808, "verdict": "UNSAT", "seconds": 15.555}
+{"gidx": 1814, "verdict": "UNSAT", "seconds": 11.14}
+{"gidx": 1820, "verdict": "UNSAT", "seconds": 81.704}
+{"gidx": 1826, "verdict": "UNSAT", "seconds": 308.555}
+{"gidx": 1832, "verdict": "UNSAT", "seconds": 0.016}
+{"gidx": 1838, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 1844, "verdict": "UNSAT", "seconds": 0.035}
+{"gidx": 1850, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 1856, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 1862, "verdict": "UNSAT", "seconds": 0.085}
+{"gidx": 1868, "verdict": "UNSAT", "seconds": 0.017}
+{"gidx": 1874, "verdict": "UNSAT", "seconds": 0.019}
+{"gidx": 1880, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 1886, "verdict": "UNSAT", "seconds": 0.061}
+{"gidx": 1892, "verdict": "UNSAT", "seconds": 0.06}
+{"gidx": 1898, "verdict": "UNSAT", "seconds": 0.049}
+{"gidx": 1904, "verdict": "UNSAT", "seconds": 0.05}
+{"gidx": 1910, "verdict": "UNSAT", "seconds": 2.058}
+{"gidx": 1916, "verdict": "UNSAT", "seconds": 0.041}
+{"gidx": 1922, "verdict": "UNSAT", "seconds": 0.106}
+{"gidx": 1928, "verdict": "UNSAT", "seconds": 0.016}
+{"gidx": 1934, "verdict": "UNSAT", "seconds": 0.233}
+{"gidx": 1940, "verdict": "UNSAT", "seconds": 0.472}
+{"gidx": 1946, "verdict": "UNSAT", "seconds": 0.026}
+{"gidx": 1952, "verdict": "UNSAT", "seconds": 0.019}
+{"gidx": 1958, "verdict": "UNSAT", "seconds": 0.022}
+{"gidx": 1964, "verdict": "UNSAT", "seconds": 0.174}
+{"gidx": 1970, "verdict": "UNSAT", "seconds": 0.062}
+{"gidx": 1976, "verdict": "UNSAT", "seconds": 0.018}
+{"gidx": 1982, "verdict": "UNSAT", "seconds": 0.013}
+{"gidx": 1988, "verdict": "UNSAT", "seconds": 0.041}
+{"gidx": 1994, "verdict": "UNSAT", "seconds": 0.078}
+{"gidx": 2000, "verdict": "UNSAT", "seconds": 0.083}
+{"gidx": 2006, "verdict": "UNSAT", "seconds": 0.018}
+{"gidx": 2012, "verdict": "UNSAT", "seconds": 0.048}
+{"gidx": 2018, "verdict": "UNSAT", "seconds": 0.14}
+{"gidx": 2024, "verdict": "UNSAT", "seconds": 0.072}
+{"gidx": 2030, "verdict": "UNSAT", "seconds": 0.05}
+{"gidx": 2036, "verdict": "UNSAT", "seconds": 5.577}
+{"gidx": 2042, "verdict": "UNSAT", "seconds": 0.134}
+{"gidx": 2048, "verdict": "UNSAT", "seconds": 0.304}
+{"gidx": 2054, "verdict": "UNSAT", "seconds": 0.416}
+{"gidx": 2060, "verdict": "UNSAT", "seconds": 4.295}
+{"gidx": 2066, "verdict": "UNSAT", "seconds": 8.074}
+{"gidx": 2072, "verdict": "UNSAT", "seconds": 0.013}
+{"gidx": 2078, "verdict": "UNSAT", "seconds": 0.013}
+{"gidx": 2084, "verdict": "UNSAT", "seconds": 0.011}
+{"gidx": 2090, "verdict": "UNSAT", "seconds": 0.014}
+{"gidx": 2096, "verdict": "UNSAT", "seconds": 0.1}
+{"gidx": 2102, "verdict": "UNSAT", "seconds": 0.019}
+{"gidx": 2108, "verdict": "UNSAT", "seconds": 0.022}
+{"gidx": 2114, "verdict": "UNSAT", "seconds": 0.022}
+{"gidx": 2120, "verdict": "UNSAT", "seconds": 0.01}
+{"gidx": 2126, "verdict": "UNSAT", "seconds": 0.765}
+{"gidx": 2132, "verdict": "UNSAT", "seconds": 0.023}
+{"gidx": 2138, "verdict": "UNSAT", "seconds": 0.043}
+{"gidx": 2144, "verdict": "UNSAT", "seconds": 0.034}
+{"gidx": 2150, "verdict": "UNSAT", "seconds": 1.522}
+{"gidx": 2156, "verdict": "UNSAT", "seconds": 0.433}
+{"gidx": 2162, "verdict": "UNSAT", "seconds": 0.095}
+{"gidx": 2168, "verdict": "UNSAT", "seconds": 0.049}
+{"gidx": 2174, "verdict": "UNSAT", "seconds": 7.9}
+{"gidx": 2180, "verdict": "UNSAT", "seconds": 0.766}
+{"gidx": 2186, "verdict": "UNSAT", "seconds": 14.759}
+{"gidx": 2192, "verdict": "UNSAT", "seconds": 0.016}
+{"gidx": 2198, "verdict": "UNSAT", "seconds": 0.011}
+{"gidx": 2204, "verdict": "UNSAT", "seconds": 0.128}
+{"gidx": 2210, "verdict": "UNSAT", "seconds": 0.041}
+{"gidx": 2216, "verdict": "UNSAT", "seconds": 0.045}
+{"gidx": 2222, "verdict": "UNSAT", "seconds": 0.021}
+{"gidx": 2228, "verdict": "UNSAT", "seconds": 0.171}
+{"gidx": 2234, "verdict": "UNSAT", "seconds": 0.147}
+{"gidx": 2240, "verdict": "UNSAT", "seconds": 0.019}
+{"gidx": 2246, "verdict": "UNSAT", "seconds": 0.309}
+{"gidx": 2252, "verdict": "UNSAT", "seconds": 7.312}
+{"gidx": 2258, "verdict": "UNSAT", "seconds": 0.145}
+{"gidx": 2264, "verdict": "UNSAT", "seconds": 0.079}
+{"gidx": 2270, "verdict": "UNSAT", "seconds": 0.024}
+{"gidx": 2276, "verdict": "UNSAT", "seconds": 0.946}
+{"gidx": 2282, "verdict": "UNSAT", "seconds": 6.698}
+{"gidx": 2288, "verdict": "UNSAT", "seconds": 0.057}
+{"gidx": 2294, "verdict": "UNSAT", "seconds": 0.153}
+{"gidx": 2300, "verdict": "UNSAT", "seconds": 1.281}
+{"gidx": 2306, "verdict": "UNSAT", "seconds": 2.273}
+{"gidx": 2312, "verdict": "UNSAT", "seconds": 7.804}
+{"gidx": 2318, "verdict": "UNSAT", "seconds": 0.011}
+{"gidx": 2324, "verdict": "UNSAT", "seconds": 0.019}
+{"gidx": 2330, "verdict": "UNSAT", "seconds": 0.02}
+{"gidx": 2336, "verdict": "UNSAT", "seconds": 0.014}
+{"gidx": 2342, "verdict": "UNSAT", "seconds": 0.026}
+{"gidx": 2348, "verdict": "UNSAT", "seconds": 0.11}
+{"gidx": 2354, "verdict": "UNSAT", "seconds": 0.022}
+{"gidx": 2360, "verdict": "UNSAT", "seconds": 0.052}
+{"gidx": 2366, "verdict": "UNSAT", "seconds": 0.013}
+{"gidx": 2372, "verdict": "UNSAT", "seconds": 0.288}
+{"gidx": 2378, "verdict": "UNSAT", "seconds": 0.173}
+{"gidx": 2384, "verdict": "UNSAT", "seconds": 0.017}
+{"gidx": 2390, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 2396, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 2402, "verdict": "UNSAT", "seconds": 0.041}
+{"gidx": 2408, "verdict": "UNSAT", "seconds": 0.134}
+{"gidx": 2414, "verdict": "UNSAT", "seconds": 0.044}
+{"gidx": 2420, "verdict": "UNSAT", "seconds": 0.162}
+{"gidx": 2426, "verdict": "UNSAT", "seconds": 0.062}
+{"gidx": 2432, "verdict": "UNSAT", "seconds": 0.53}
+{"gidx": 2438, "verdict": "UNSAT", "seconds": 3.153}
+{"gidx": 2444, "verdict": "UNSAT", "seconds": 0.019}
+{"gidx": 2450, "verdict": "UNSAT", "seconds": 0.03}
+{"gidx": 2456, "verdict": "UNSAT", "seconds": 0.038}
+{"gidx": 2462, "verdict": "UNSAT", "seconds": 0.077}
+{"gidx": 2468, "verdict": "UNSAT", "seconds": 0.141}
+{"gidx": 2474, "verdict": "UNSAT", "seconds": 0.031}
+{"gidx": 2480, "verdict": "UNSAT", "seconds": 0.03}
+{"gidx": 2486, "verdict": "UNSAT", "seconds": 0.344}
+{"gidx": 2492, "verdict": "UNSAT", "seconds": 0.069}
+{"gidx": 2498, "verdict": "UNSAT", "seconds": 0.663}
+{"gidx": 2504, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 2510, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 2516, "verdict": "UNSAT", "seconds": 0.063}
+{"gidx": 2522, "verdict": "UNSAT", "seconds": 0.023}
+{"gidx": 2528, "verdict": "UNSAT", "seconds": 0.032}
+{"gidx": 2534, "verdict": "UNSAT", "seconds": 0.104}
+{"gidx": 2540, "verdict": "UNSAT", "seconds": 1.37}
+{"gidx": 2546, "verdict": "UNSAT", "seconds": 0.127}
+{"gidx": 2552, "verdict": "UNSAT", "seconds": 0.267}
+{"gidx": 2558, "verdict": "UNSAT", "seconds": 0.356}
+{"gidx": 2564, "verdict": "UNSAT", "seconds": 0.993}
+{"gidx": 2570, "verdict": "UNSAT", "seconds": 0.014}
+{"gidx": 2576, "verdict": "UNSAT", "seconds": 0.013}
+{"gidx": 2582, "verdict": "UNSAT", "seconds": 0.013}
+{"gidx": 2588, "verdict": "UNSAT", "seconds": 0.043}
+{"gidx": 2594, "verdict": "UNSAT", "seconds": 0.08}
+{"gidx": 2600, "verdict": "UNSAT", "seconds": 0.014}
+{"gidx": 2606, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 2612, "verdict": "UNSAT", "seconds": 0.527}
+{"gidx": 2618, "verdict": "UNSAT", "seconds": 0.024}
+{"gidx": 2624, "verdict": "UNSAT", "seconds": 0.201}
+{"gidx": 2630, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 2636, "verdict": "UNSAT", "seconds": 0.059}
+{"gidx": 2642, "verdict": "UNSAT", "seconds": 0.128}
+{"gidx": 2648, "verdict": "UNSAT", "seconds": 0.041}
+{"gidx": 2654, "verdict": "UNSAT", "seconds": 0.097}
+{"gidx": 2660, "verdict": "UNSAT", "seconds": 2.599}
+{"gidx": 2666, "verdict": "UNSAT", "seconds": 0.05}
+{"gidx": 2672, "verdict": "UNSAT", "seconds": 0.236}
+{"gidx": 2678, "verdict": "UNSAT", "seconds": 0.127}
+{"gidx": 2684, "verdict": "UNSAT", "seconds": 2.543}
+{"gidx": 2690, "verdict": "UNSAT", "seconds": 2.278}
+{"gidx": 2696, "verdict": "UNSAT", "seconds": 0.01}
+{"gidx": 2702, "verdict": "UNSAT", "seconds": 0.024}
+{"gidx": 2708, "verdict": "UNSAT", "seconds": 0.416}
+{"gidx": 2714, "verdict": "UNSAT", "seconds": 0.161}
+{"gidx": 2720, "verdict": "UNSAT", "seconds": 0.168}
+{"gidx": 2726, "verdict": "UNSAT", "seconds": 0.027}
+{"gidx": 2732, "verdict": "UNSAT", "seconds": 0.548}
+{"gidx": 2738, "verdict": "UNSAT", "seconds": 0.303}
+{"gidx": 2744, "verdict": "UNSAT", "seconds": 0.16}
+{"gidx": 2750, "verdict": "UNSAT", "seconds": 0.528}
+{"gidx": 2756, "verdict": "UNSAT", "seconds": 3.435}
+{"gidx": 2762, "verdict": "UNSAT", "seconds": 0.057}
+{"gidx": 2768, "verdict": "UNSAT", "seconds": 1.344}
+{"gidx": 2774, "verdict": "UNSAT", "seconds": 0.053}
+{"gidx": 2780, "verdict": "UNSAT", "seconds": 0.588}
+{"gidx": 2786, "verdict": "UNSAT", "seconds": 1.713}
+{"gidx": 2792, "verdict": "UNSAT", "seconds": 0.482}
+{"gidx": 2798, "verdict": "UNSAT", "seconds": 0.411}
+{"gidx": 2804, "verdict": "UNSAT", "seconds": 11.479}
+{"gidx": 2810, "verdict": "UNSAT", "seconds": 6.527}
+{"gidx": 2816, "verdict": "UNSAT", "seconds": 58.164}
+{"gidx": 2822, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 2828, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 2834, "verdict": "UNSAT", "seconds": 0.013}
+{"gidx": 2840, "verdict": "UNSAT", "seconds": 0.019}
+{"gidx": 2846, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 2852, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 2858, "verdict": "UNSAT", "seconds": 0.354}
+{"gidx": 2864, "verdict": "UNSAT", "seconds": 0.054}
+{"gidx": 2870, "verdict": "UNSAT", "seconds": 0.501}
+{"gidx": 2876, "verdict": "UNSAT", "seconds": 0.012}
+{"gidx": 2882, "verdict": "UNSAT", "seconds": 0.017}
+{"gidx": 2888, "verdict": "UNSAT", "seconds": 0.039}
+{"gidx": 2894, "verdict": "UNSAT", "seconds": 0.023}
+{"gidx": 2900, "verdict": "UNSAT", "seconds": 0.141}
+{"gidx": 2906, "verdict": "UNSAT", "seconds": 0.01}
+{"gidx": 2912, "verdict": "UNSAT", "seconds": 0.101}
+{"gidx": 2918, "verdict": "UNSAT", "seconds": 0.051}
+{"gidx": 2924, "verdict": "UNSAT", "seconds": 0.105}
+{"gidx": 2930, "verdict": "UNSAT", "seconds": 0.048}
+{"gidx": 2936, "verdict": "UNSAT", "seconds": 3.97}
+{"gidx": 2942, "verdict": "UNSAT", "seconds": 0.02}
+{"gidx": 2948, "verdict": "UNSAT", "seconds": 0.054}
+{"gidx": 2954, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 2960, "verdict": "UNSAT", "seconds": 0.058}
+{"gidx": 2966, "verdict": "UNSAT", "seconds": 1.343}
+{"gidx": 2972, "verdict": "UNSAT", "seconds": 0.027}
+{"gidx": 2978, "verdict": "UNSAT", "seconds": 0.056}
+{"gidx": 2984, "verdict": "UNSAT", "seconds": 0.018}
+{"gidx": 2990, "verdict": "UNSAT", "seconds": 1.468}
+{"gidx": 2996, "verdict": "UNSAT", "seconds": 2.16}
+{"gidx": 3002, "verdict": "UNSAT", "seconds": 0.066}
+{"gidx": 3008, "verdict": "UNSAT", "seconds": 0.216}
+{"gidx": 3014, "verdict": "UNSAT", "seconds": 4.185}
+{"gidx": 3020, "verdict": "UNSAT", "seconds": 0.277}
+{"gidx": 3026, "verdict": "UNSAT", "seconds": 4.292}
+{"gidx": 3032, "verdict": "UNSAT", "seconds": 0.197}
+{"gidx": 3038, "verdict": "UNSAT", "seconds": 2.405}
+{"gidx": 3044, "verdict": "UNSAT", "seconds": 2.399}
+{"gidx": 3050, "verdict": "UNSAT", "seconds": 17.813}
+{"gidx": 3056, "verdict": "UNSAT", "seconds": 14.591}
+{"gidx": 3062, "verdict": "UNSAT", "seconds": 758.31}
+{"gidx": 3068, "verdict": "UNSAT", "seconds": 0.02}
+{"gidx": 3074, "verdict": "UNSAT", "seconds": 0.026}
+{"gidx": 3080, "verdict": "UNSAT", "seconds": 0.018}
+{"gidx": 3086, "verdict": "UNSAT", "seconds": 0.245}
+{"gidx": 3092, "verdict": "UNSAT", "seconds": 0.179}
+{"gidx": 3098, "verdict": "UNSAT", "seconds": 0.039}
+{"gidx": 3104, "verdict": "UNSAT", "seconds": 0.024}
+{"gidx": 3110, "verdict": "UNSAT", "seconds": 0.47}
+{"gidx": 3116, "verdict": "UNSAT", "seconds": 0.073}
+{"gidx": 3122, "verdict": "UNSAT", "seconds": 2.221}
+{"gidx": 3128, "verdict": "UNSAT", "seconds": 0.017}
+{"gidx": 3134, "verdict": "UNSAT", "seconds": 0.549}
+{"gidx": 3140, "verdict": "UNSAT", "seconds": 0.097}
+{"gidx": 3146, "verdict": "UNSAT", "seconds": 0.052}
+{"gidx": 3152, "verdict": "UNSAT", "seconds": 0.23}
+{"gidx": 3158, "verdict": "UNSAT", "seconds": 19.498}
+{"gidx": 3164, "verdict": "UNSAT", "seconds": 0.082}
+{"gidx": 3170, "verdict": "UNSAT", "seconds": 1.526}
+{"gidx": 3176, "verdict": "UNSAT", "seconds": 1.505}
+{"gidx": 3182, "verdict": "UNSAT", "seconds": 12.843}
+{"gidx": 3188, "verdict": "UNSAT", "seconds": 5.893}
+{"gidx": 3194, "verdict": "UNSAT", "seconds": 0.04}
+{"gidx": 3200, "verdict": "UNSAT", "seconds": 0.071}
+{"gidx": 3206, "verdict": "UNSAT", "seconds": 0.747}
+{"gidx": 3212, "verdict": "UNSAT", "seconds": 0.107}
+{"gidx": 3218, "verdict": "UNSAT", "seconds": 0.527}
+{"gidx": 3224, "verdict": "UNSAT", "seconds": 0.061}
+{"gidx": 3230, "verdict": "UNSAT", "seconds": 5.423}
+{"gidx": 3236, "verdict": "UNSAT", "seconds": 4.129}
+{"gidx": 3242, "verdict": "UNSAT", "seconds": 1.349}
+{"gidx": 3248, "verdict": "UNSAT", "seconds": 1.586}
+{"gidx": 3254, "verdict": "UNSAT", "seconds": 124.22}
+{"gidx": 3260, "verdict": "UNSAT", "seconds": 0.638}
+{"gidx": 3266, "verdict": "UNSAT", "seconds": 4.311}
+{"gidx": 3272, "verdict": "UNSAT", "seconds": 0.534}
+{"gidx": 3278, "verdict": "UNSAT", "seconds": 104.772}
+{"gidx": 3284, "verdict": "UNSAT", "seconds": 13.632}
+{"gidx": 3290, "verdict": "UNSAT", "seconds": 4.188}
+{"gidx": 3296, "verdict": "UNSAT", "seconds": 4.404}
+{"gidx": 3302, "verdict": "UNSAT", "seconds": 375.841}
+{"gidx": 3308, "verdict": "UNSAT", "seconds": 6.441}
+{"gidx": 3314, "verdict": "UNSAT", "seconds": 11.04}
+{"gidx": 3320, "verdict": "UNSAT", "seconds": 0.015}
+{"gidx": 3326, "verdict": "UNSAT", "seconds": 0.051}
+{"gidx": 3332, "verdict": "UNSAT", "seconds": 0.05}
+{"gidx": 3338, "verdict": "UNSAT", "seconds": 0.041}
+{"gidx": 3344, "verdict": "UNSAT", "seconds": 0.031}
+{"gidx": 3350, "verdict": "UNSAT", "seconds": 3.568}
+{"gidx": 3356, "verdict": "UNSAT", "seconds": 0.091}
+{"gidx": 3362, "verdict": "UNSAT", "seconds": 0.086}
+{"gidx": 3368, "verdict": "UNSAT", "seconds": 0.071}
+{"gidx": 3374, "verdict": "UNSAT", "seconds": 1.831}
+{"gidx": 3380, "verdict": "UNSAT", "seconds": 4.044}
+{"gidx": 3386, "verdict": "UNSAT", "seconds": 0.025}
+{"gidx": 3392, "verdict": "UNSAT", "seconds": 0.099}
+{"gidx": 3398, "verdict": "UNSAT", "seconds": 2.55}
+{"gidx": 3404, "verdict": "UNSAT", "seconds": 0.146}
+{"gidx": 3410, "verdict": "UNSAT", "seconds": 2.325}
+{"gidx": 3416, "verdict": "UNSAT", "seconds": 0.056}
+{"gidx": 3422, "verdict": "UNSAT", "seconds": 1.207}
+{"gidx": 3428, "verdict": "UNSAT", "seconds": 3.646}
+{"gidx": 3434, "verdict": "UNSAT", "seconds": 0.394}
+{"gidx": 3440, "verdict": "UNSAT", "seconds": 3.349}
+{"gidx": 3446, "verdict": "UNSAT", "seconds": 282.391}
+{"gidx": 3452, "verdict": "UNSAT", "seconds": 0.045}
+{"gidx": 3458, "verdict": "UNSAT", "seconds": 0.442}
+{"gidx": 3464, "verdict": "UNSAT", "seconds": 0.105}
+{"gidx": 3470, "verdict": "UNSAT", "seconds": 1.366}
+{"gidx": 3476, "verdict": "UNSAT", "seconds": 10.08}
+{"gidx": 3482, "verdict": "UNSAT", "seconds": 0.497}
+{"gidx": 3488, "verdict": "UNSAT", "seconds": 0.264}
+{"gidx": 3494, "verdict": "UNSAT", "seconds": 26.848}
+{"gidx": 3500, "verdict": "UNSAT", "seconds": 1.788}
+{"gidx": 3506, "verdict": "UNSAT", "seconds": 16.989}
+{"gidx": 3512, "verdict": "UNSAT", "seconds": 0.173}
+{"gidx": 3518, "verdict": "UNSAT", "seconds": 29.951}
+{"gidx": 3524, "verdict": "UNSAT", "seconds": 1.35}
+{"gidx": 3530, "verdict": "UNSAT", "seconds": 2.26}
+{"gidx": 3536, "verdict": "UNSAT", "seconds": 3.526}
+{"gidx": 3542, "verdict": "UNSAT", "seconds": 62.39}
+{"gidx": 3548, "verdict": "UNSAT", "seconds": 5.555}
+{"gidx": 3554, "verdict": "UNSAT", "seconds": 10.823}
+{"gidx": 3560, "verdict": "UNSAT", "seconds": 6.102}
+{"gidx": 3566, "verdict": "UNSAT", "seconds": 574.017}
+{"gidx": 3572, "verdict": "UNSAT", "seconds": 160.636}
+{"gidx": 3578, "verdict": "UNSAT", "seconds": 0.092}
+{"gidx": 3584, "verdict": "UNSAT", "seconds": 0.087}
+{"gidx": 3590, "verdict": "UNSAT", "seconds": 2.016}
+{"gidx": 3596, "verdict": "UNSAT", "seconds": 0.105}
+{"gidx": 3602, "verdict": "UNSAT", "seconds": 0.22}
+{"gidx": 3608, "verdict": "UNSAT", "seconds": 0.111}
+{"gidx": 3614, "verdict": "UNSAT", "seconds": 2.339}
+{"gidx": 3620, "verdict": "UNSAT", "seconds": 1.486}
+{"gidx": 3626, "verdict": "UNSAT", "seconds": 9.647}
+{"gidx": 3632, "verdict": "UNSAT", "seconds": 1.519}
+{"gidx": 3638, "verdict": "UNSAT", "seconds": 584.486}
+{"gidx": 3644, "verdict": "UNSAT", "seconds": 0.035}
+{"gidx": 3650, "verdict": "UNSAT", "seconds": 0.409}
+{"gidx": 3656, "verdict": "UNSAT", "seconds": 0.184}
+{"gidx": 3662, "verdict": "UNSAT", "seconds": 11.674}
+{"gidx": 3668, "verdict": "UNSAT", "seconds": 7.378}
+{"gidx": 3674, "verdict": "UNSAT", "seconds": 1.09}
+{"gidx": 3680, "verdict": "UNSAT", "seconds": 2.503}
+{"gidx": 3686, "verdict": "UNSAT", "seconds": 145.642}
+{"gidx": 3692, "verdict": "UNSAT", "seconds": 9.486}
+{"gidx": 3698, "verdict": "UNSAT", "seconds": 341.323}
+{"gidx": 3704, "verdict": "UNSAT", "seconds": 0.093}
+{"gidx": 3710, "verdict": "UNSAT", "seconds": 3.098}
+{"gidx": 3716, "verdict": "UNSAT", "seconds": 3.708}
+{"gidx": 3722, "verdict": "UNSAT", "seconds": 1.03}
+{"gidx": 3728, "verdict": "UNSAT", "seconds": 0.252}
+{"gidx": 3734, "verdict": "UNSAT", "seconds": 266.155}
+{"gidx": 3740, "verdict": "UNSAT", "seconds": 7.412}
+{"gidx": 3746, "verdict": "UNSAT", "seconds": 16.19}
+{"gidx": 3752, "verdict": "UNSAT", "seconds": 3.323}
+{"gidx": 3758, "verdict": "UNSAT", "seconds": 137.627}
+{"gidx": 3764, "verdict": "UNSAT", "seconds": 238.644}
+{"gidx": 3770, "verdict": "UNSAT", "seconds": 1.978}
+{"gidx": 3776, "verdict": "UNSAT", "seconds": 3.596}
+{"gidx": 3782, "verdict": "UNSAT", "seconds": 727.748}
+{"gidx": 3788, "verdict": "UNSAT", "seconds": 4.732}
+{"gidx": 3794, "verdict": "UNSAT", "seconds": 388.27}
+{"gidx": 3800, "verdict": "UNSAT", "seconds": 0.148}
+{"gidx": 3806, "verdict": "UNSAT", "seconds": 19.948}
+{"gidx": 3812, "verdict": "UNSAT", "seconds": 14.809}
+{"gidx": 3818, "verdict": "UNSAT", "seconds": 17.573}
+{"gidx": 3824, "verdict": "UNSAT", "seconds": 24.278}
+{"gidx": 3830, "verdict": "UNSAT", "seconds": 812.593}
