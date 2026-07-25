@@ -65,10 +65,16 @@ GitHub Actions:
   (`sat_portfolio.py`): cells that cost >3600s monolithically land in
   ~60s under multi-arm racing.
 - Current campaign highlights:
-  pdw(2;3,26) decision-complete work in flight; a measured no-go on
-  W(6,2) (`RESULTS_diagonal_ladder.md`): every off-the-shelf solver
-  walls on single cubes at N=1132, floor ≥2048 core-hours — consistent
-  with Kouril's "NEVER" for W(7,2), now with data.
+  pdw(2;3,26) = (634, 643) is machine-decided on all four Theorem-5.1
+  cells (UNSAT 4060/4060 at N=644), and its N=635 cell now carries the
+  repo's first Tier-A *verified-decision certificate* — all 4022
+  cube-refutations checked by two formally-verified checkers (lrat-check
+  and CakeML's cake_lpr), no gaps
+  (`gh_actions_results/cert-run-30090974975-merged-N635-CERT/`);
+  t=27/t=28 decisions in flight. Plus a measured no-go on W(6,2)
+  (`RESULTS_diagonal_ladder.md`): every off-the-shelf solver walls on
+  single cubes at N=1132, floor ≥2048 core-hours — consistent with
+  Kouril's "NEVER" for W(7,2), now with data.
 
 ## Seven claimed van der Waerden lower bounds (July 20, 2026)
 
@@ -82,7 +88,7 @@ GitHub Actions:
 Improved lower bounds for W(3,19)–W(3,25), found by continuing an
 exhaustive power-residue prime scan past its 2019 frontier:
 
-| Number | New bound | Previous best (Monroe, JCMCC 128, Dec 2025) |
+| Number | New bound | Previous best (Monroe, JCMCC 128, 2021) |
 |---|---|---|
 | W(3,19) | **> 17,449,152,859** | > 17,449,137,523 |
 | W(3,20) | **> 18,418,550,240** | > 18,418,533,254 |
@@ -129,7 +135,7 @@ skeptical reader).
   arXiv 2607.00815 — per-cube LRAT → one Lean theorem.
 - Heule, Kullmann, Wieringa, Biere — cube-and-conquer (invented on these
   instances); [github.com/marijnheule/CnC](https://github.com/marijnheule/CnC).
-- J. Rabung (1979), Rabung & Lotts (2012), H. Monroe (JCMCC 128, 2026;
+- J. Rabung (1979), Rabung & Lotts (2012), H. Monroe (JCMCC 128, 2021;
   [arXiv:1603.03301](https://arxiv.org/abs/1603.03301)), Blankenship,
   Cummings, Taranchuk (2018; [arXiv:1705.09673](https://arxiv.org/abs/1705.09673))
   — the lower-bound scan lineage.
