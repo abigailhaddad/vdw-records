@@ -1,0 +1,43 @@
+{
+  "verdict": "CERT_VERIFIED",
+  "lengths": [
+    3,
+    26
+  ],
+  "encoding": "palindromic",
+  "ncubes": 4022,
+  "n_cubes_verified": 4022,
+  "missing_cubes": [],
+  "all_cubes_verified": true,
+  "cover": {
+    "cadical_s": 0.031,
+    "rc": 20,
+    "cover_bytes": 883933,
+    "sha256_cover": "be07e1db8bae6b49b58db065b0a193093f3d5e6b8d4fdf3a6bf39fc60829bde3",
+    "checker": "VERIFIED",
+    "cover_path": "cnc_out/cover.lrat",
+    "checkers": {
+      "lrat_check": "VERIFIED",
+      "cake_lpr": "VERIFIED"
+    }
+  },
+  "cover_verified": true,
+  "tool_provenance": {
+    "cadical": {
+      "path": "/opt/homebrew/bin/cadical",
+      "version": "3.0.1",
+      "sha256": "65eb3da69b48f4fd65f7d557cb21e1fd8efdd381843e10b5e23eba60ddfb25db"
+    },
+    "lrat_trim": {
+      "path": "/Users/abigailhaddad/Documents/repos/proof/tools/lrat-trim/lrat-trim",
+      "version": "0.2.0",
+      "sha256": "83cfd2bfb7ad5815d1cf8e477ce31a41e107d9a5d38b538e517a2a4f511ba35c"
+    },
+    "lrat_check": {
+      "path": "/Users/abigailhaddad/Documents/repos/proof/tools/drat-trim/lrat-check",
+      "sha256": "37f391f62221fb20892f275778b1fab613fa06aeb7401a5a26d75feb64e6e882"
+    },
+    "cadical_flags": "--lrat --no-binary --no-factor",
+    "lrat_trim_flags": "-a"
+  }
+}
