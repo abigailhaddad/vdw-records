@@ -244,6 +244,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main   # latest main, not the triggering SHA -- so the collect
+                      # job's just-committed scan_state.json is present here
       - name: decide whether to keep chaining
         id: decide
         env:
