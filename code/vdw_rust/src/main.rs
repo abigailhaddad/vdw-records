@@ -19,11 +19,21 @@
 //! size instead of the generator: a different chunk boundary independently
 //! exercises the run-carry stitching, which is the only nontrivial logic here.
 //!
-//! Usage:  vdw_scan <p> [--chunk N]
+//! Usage:  vdw_scan <p> [--chunk N] [--abort N]
 //! Output: one line "max_run lead first last" (space-separated integers).
-//!         On early abort (a run reaches ABORT_RUN) it prints ABORT_RUN and
-//!         zeros -- such a prime improves no cell in range, so the exact
-//!         leading/first/last are irrelevant and not computed.
+//!         On early abort (a run reaches the abort threshold) it prints the
+//!         threshold and zeros -- such a prime improves no cell in range, so
+//!         the exact leading/first/last are irrelevant and not computed.
+//!
+//! --abort N overrides the default threshold (25, which is useless for every
+//! cell t <= 25 since it needs t >= 26 -- see vdw_reach.ABORT_RUN). A
+//! t-FOCUSED caller hunting one specific low cell (e.g. t=17) can pass
+//! `--abort 17`: the scan then bails the instant a run reaches 17, which is
+//! already disqualifying for every cell down to 17, so nothing of interest is
+//! lost -- and near the frontier most primes DO contain a run that long
+//! somewhere, so this makes the common case reject fast instead of running to
+//! completion. A surviving (non-aborted) prime's exact max_run is then < N,
+//! so it qualifies not just for the target cell but every larger cell too.
 
 use std::env;
 use std::process;
@@ -32,9 +42,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use rayon::prelude::*;
 
 const R: u64 = 3;
-/// A run this long is useless for every cell t ≤ 25 (needs t ≥ 26), so the scan
-/// short-circuits the instant any range reaches it. Mirrors vdw_reach.ABORT_RUN.
-const ABORT_RUN: u64 = 25;
+/// Default abort threshold: a run this long is useless for every cell t <= 25
+/// (needs t >= 26), so the scan short-circuits the instant any range reaches
+/// it. Mirrors vdw_reach.ABORT_RUN. Overridable via --abort for a t-focused
+/// scan (see the module doc above).
+const DEFAULT_ABORT: u64 = 25;
 const DEFAULT_CHUNK: u64 = 1 << 20;
 
 static ABORT: AtomicBool = AtomicBool::new(false);
@@ -203,11 +215,12 @@ struct RunState {
     pre_open: bool,
     max_run: u64,
     last_c: u8,
+    abort: u64,
 }
 
 impl RunState {
     #[inline]
-    fn new(first: u8) -> RunState {
+    fn new(first: u8, abort: u64) -> RunState {
         RunState {
             cur_c: first,
             cur_len: 1,
@@ -215,6 +228,7 @@ impl RunState {
             pre_open: true,
             max_run: 1,
             last_c: first,
+            abort,
         }
     }
 
@@ -224,7 +238,7 @@ impl RunState {
             self.cur_len += 1;
             if self.cur_len > self.max_run {
                 self.max_run = self.cur_len;
-                if self.max_run >= ABORT_RUN {
+                if self.max_run >= self.abort {
                     return true;
                 }
             }
@@ -268,8 +282,9 @@ impl Seg {
 }
 
 /// Scan n in [lo, hi) sequentially, returning its run summary. Sets/observes the
-/// global ABORT flag so that once any range hits ABORT_RUN every range bails.
-fn scan_range(lo: u64, hi: u64, m: &Mont, e: u64, roots: &[u64; 3]) -> Seg {
+/// global ABORT flag so that once any range hits the abort threshold every
+/// range bails.
+fn scan_range(lo: u64, hi: u64, m: &Mont, e: u64, roots: &[u64; 3], abort: u64) -> Seg {
     if ABORT.load(Ordering::Relaxed) {
         return Seg {
             aborted: true,
@@ -277,7 +292,7 @@ fn scan_range(lo: u64, hi: u64, m: &Mont, e: u64, roots: &[u64; 3]) -> Seg {
         };
     }
     let first = class_of(lo, m, e, roots);
-    let mut rs = RunState::new(first);
+    let mut rs = RunState::new(first, abort);
     let aborted_seg = Seg {
         aborted: true,
         ..Seg::ID
@@ -362,7 +377,7 @@ fn combine(a: Seg, b: Seg) -> Seg {
     }
 }
 
-fn scan(p: u64, chunk: u64) -> (u64, u64, u8, u8) {
+fn scan(p: u64, chunk: u64, abort: u64) -> (u64, u64, u8, u8) {
     let e = (p - 1) / R;
     let m = Mont::new(p);
     let roots = cube_roots(&m, e);
@@ -370,26 +385,34 @@ fn scan(p: u64, chunk: u64) -> (u64, u64, u8, u8) {
 
     // Chunk boundaries over the color domain n = 1 ..= p-1.
     let starts: Vec<u64> = (1..p).step_by(chunk as usize).collect();
-    let total = combine_all(&starts, p, chunk, &m, e, &roots);
+    let total = combine_all(&starts, p, chunk, &m, e, &roots, abort);
 
     if total.aborted {
-        // A range hit ABORT_RUN and bailed before recording its ends; such a
-        // prime beats no cell, so leading/first/last are moot. Mirror Python's
-        // capped return.
-        return (ABORT_RUN, 0, 0, 0);
+        // A range hit the abort threshold and bailed before recording its
+        // ends; such a prime beats no cell down to that threshold, so
+        // leading/first/last are moot. Mirror Python's capped return.
+        return (abort, 0, 0, 0);
     }
     // A run can also cross a chunk seam without any single range aborting; cap
     // it the same way. Real leading run / end colors are still known here.
-    let mr = total.max_run.min(ABORT_RUN);
+    let mr = total.max_run.min(abort);
     (mr, total.pre_len, total.pre_c, total.suf_c)
 }
 
-fn combine_all(starts: &[u64], p: u64, chunk: u64, m: &Mont, e: u64, roots: &[u64; 3]) -> Seg {
+fn combine_all(
+    starts: &[u64],
+    p: u64,
+    chunk: u64,
+    m: &Mont,
+    e: u64,
+    roots: &[u64; 3],
+    abort: u64,
+) -> Seg {
     starts
         .par_iter()
         .map(|&lo| {
             let hi = (lo + chunk).min(p);
-            scan_range(lo, hi, m, e, roots)
+            scan_range(lo, hi, m, e, roots, abort)
         })
         .reduce(|| Seg::ID, combine)
 }
@@ -397,7 +420,7 @@ fn combine_all(starts: &[u64], p: u64, chunk: u64, m: &Mont, e: u64, roots: &[u6
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("usage: vdw_scan <p> [--chunk N]");
+        eprintln!("usage: vdw_scan <p> [--chunk N] [--abort N]");
         process::exit(2);
     }
     let p: u64 = args[1].parse().unwrap_or_else(|_| {
@@ -405,10 +428,14 @@ fn main() {
         process::exit(2);
     });
     let mut chunk = DEFAULT_CHUNK;
+    let mut abort = DEFAULT_ABORT;
     let mut i = 2;
     while i < args.len() {
         if args[i] == "--chunk" && i + 1 < args.len() {
             chunk = args[i + 1].parse().unwrap_or(DEFAULT_CHUNK);
+            i += 2;
+        } else if args[i] == "--abort" && i + 1 < args.len() {
+            abort = args[i + 1].parse().unwrap_or(DEFAULT_ABORT);
             i += 2;
         } else {
             eprintln!("unknown arg: {}", args[i]);
@@ -420,7 +447,10 @@ fn main() {
         process::exit(2);
     }
     let chunk = chunk.max(1);
+    // abort must be >= 2: RunState starts every range at max_run=1, so an
+    // abort of 0 or 1 would fire before a single element is even compared.
+    let abort = abort.max(2);
 
-    let (mr, lead, first, last) = scan(p, chunk);
+    let (mr, lead, first, last) = scan(p, chunk, abort);
     println!("{} {} {} {}", mr, lead, first, last);
 }

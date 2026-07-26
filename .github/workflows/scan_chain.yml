@@ -1,0 +1,294 @@
+name: vdw-scan-chain
+
+# Self-chaining, t-FOCUSED van der Waerden reach scan. Unlike scan.yml (which
+# scans a fixed band once, prints a summary, and commits nothing -- see the
+# diagnosis in this workflow's build report), this workflow:
+#   (a) targets ONE cell / abort threshold at a time (min_t: 17, 18, or 19
+#       are the interesting "long grind" cells -- see NOTES.md), passing
+#       --abort MIN_T to the Rust engine so most primes reject in
+#       milliseconds instead of running to completion (code/vdw_rust's
+#       module doc explains why that's sound).
+#   (b) COMMITS every independently-re-verified, genuinely-better record to
+#       VDW_REACH_RECORDS.json (code/vdw_reach_commit.py: never overwrites a
+#       better existing record, never claims a non-record).
+#   (c) checkpoints its scan position (and iteration count) to scan_state.json.
+#   (d) self-re-dispatches to continue the campaign, using the repo's
+#       existing self-chaining pattern (GH_PAT secret; see sat_pipeline.yml).
+#   (e) stops when: scan_state.json's campaigns.<min_t>.stop is true (the
+#       manual off switch -- edit that file and push, no dispatch needed),
+#       OR the iteration cap (max_iterations) is reached, OR next_start has
+#       descended to/below `floor` (campaign exhausted its band).
+#
+# NOTE ON VDW_REACH_RECORDS.json: this file was previously .gitignore'd (a
+# purely-local scratch file for vdw_reach.py's interactive sessions) and had
+# NEVER been committed -- see the build report for the full diagnosis. It has
+# been removed from .gitignore so this workflow can actually commit to it.
+# Flag this to Abigail explicitly: it's a real policy change to a previously
+# "local only" file.
+permissions:
+  contents: write
+
+# One live run per min_t campaign at a time -- a second dispatch (manual or
+# self-chained) for the SAME min_t queues behind it rather than racing on
+# scan_state.json / VDW_REACH_RECORDS.json. Different min_t campaigns use
+# different groups, so e.g. t=17 and t=19 chains run independently; the
+# residual cross-campaign commit race is handled by the pull --rebase retry
+# loop in the collect job (same pattern as cnc_pipeline.yml / sat_pipeline.yml).
+concurrency:
+  group: vdw-scan-chain-${{ inputs.min_t }}
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_t:
+        description: "target cell / abort threshold (17, 18, or 19 are the interesting rare cells; see NOTES.md)"
+        default: "19"
+      start:
+        description: "top magnitude for this campaign's FIRST generation (ignored once scan_state.json already has a checkpoint for this min_t -- see floor/reset below)"
+        default: "1.07e9"
+      floor:
+        description: "stop-condition floor: the campaign stops self-chaining once its next_start descends to/below this magnitude (default: Monroe's scanned frontier -- no point scanning primes that can't beat it)"
+        default: "969396749"
+      reset:
+        description: "ignore any existing checkpoint for this min_t and restart this campaign from `start` (use to intentionally re-scan; does NOT touch already-committed records)"
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+      nshards:
+        description: "parallel shards (concurrency cap ~20 on free tier)"
+        default: "4"
+      count:
+        description: "primes each shard scans this generation (low abort makes most rejects cheap, but a SURVIVING prime still needs a full scan -- keep this modest)"
+        default: "300"
+      timeout:
+        description: "per-shard minutes (<= 350)"
+        default: "60"
+      max_iterations:
+        description: "bounded chain length: stop self-dispatching once this campaign's iteration count reaches this (raise it manually to keep a campaign going further)"
+        default: "20"
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.gen.outputs.shards }}
+      start: ${{ steps.state.outputs.start }}
+      should_run: ${{ steps.state.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: gen
+        run: |
+          echo "shards=$(python3 -c "import json;print(json.dumps(list(range(${{ inputs.nshards }}))))")" >> "$GITHUB_OUTPUT"
+      # Resolve this generation's start magnitude from scan_state.json's
+      # checkpoint (if one exists for this min_t and reset != true), else
+      # the `start` input. Also the FIRST stop-condition check: if the
+      # campaign's own state already says stop or the checkpoint has already
+      # reached the floor, don't even scan -- just report why.
+      - id: state
+        env:
+          MIN_T: ${{ inputs.min_t }}
+          START_INPUT: ${{ inputs.start }}
+          FLOOR: ${{ inputs.floor }}
+          RESET: ${{ inputs.reset }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+
+          min_t = os.environ["MIN_T"]
+          floor = float(os.environ["FLOOR"])
+          reset = os.environ["RESET"] == "true"
+          start_input = float(os.environ["START_INPUT"])
+
+          try:
+              state = json.load(open("scan_state.json"))
+          except FileNotFoundError:
+              state = {"campaigns": {}}
+          camp = state.get("campaigns", {}).get(min_t)
+
+          should_run = True
+          reason = "fresh campaign" if camp is None or reset else "resuming checkpoint"
+          if camp is not None and not reset:
+              start = camp.get("next_start", start_input)
+              if camp.get("stop"):
+                  should_run = False
+                  reason = "campaign stop flag is set in scan_state.json"
+              elif start <= floor:
+                  should_run = False
+                  reason = f"next_start {start:,} <= floor {floor:,}: campaign exhausted its band"
+          else:
+              start = start_input
+
+          print(f"start={start}")
+          print(f"should_run={'true' if should_run else 'false'}")
+          PY
+          echo "resolved: $(tail -2 "$GITHUB_OUTPUT")"
+
+  build:
+    needs: setup
+    if: needs.setup.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # Same safe-baseline ISA override as scan.yml -- see its comment.
+      - name: Build scanner
+        env:
+          RUSTFLAGS: "-C target-cpu=x86-64-v2"
+        run: cd code/vdw_rust && cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vdw_scan_chain
+          path: code/vdw_rust/target/release/vdw_scan
+
+  scan:
+    needs: [setup, build]
+    if: needs.setup.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.timeout) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.setup.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: vdw_scan_chain
+          path: bin
+      - run: chmod +x bin/vdw_scan
+      - name: Scan shard ${{ matrix.shard }} (min_t=${{ inputs.min_t }})
+        run: |
+          python3 code/scan_chain_shard.py \
+            --start ${{ needs.setup.outputs.start }} \
+            --count ${{ inputs.count }} \
+            --shard ${{ matrix.shard }} \
+            --nshards ${{ inputs.nshards }} \
+            --binary bin/vdw_scan \
+            --min-t ${{ inputs.min_t }} \
+            --out shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chain-hits-${{ matrix.shard }}
+          path: shard-${{ matrix.shard }}.json
+          if-no-files-found: warn
+
+  collect:
+    needs: [setup, scan]
+    if: always() && needs.setup.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: chain-hits-*
+          path: hits
+          merge-multiple: true
+      # Merge + commit, with a pull --rebase retry loop: each retry re-runs
+      # the merge script against whatever is CURRENTLY on main (not stale
+      # in-memory state from an earlier attempt in this job), so a race with
+      # a concurrent push (e.g. a different min_t campaign's collect job) is
+      # resolved against the latest committed file rather than clobbering it.
+      # A conflict git itself can't auto-resolve (two pushes touching the
+      # same lines of the same file) will still fail all 5 attempts -- see
+      # the build report's race-condition caveat.
+      - name: merge shard hits, commit genuine records + checkpoint
+        run: |
+          git config user.name "vdw-scan-chain[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main
+            python3 code/vdw_reach_commit.py \
+              --hits-dir hits \
+              --min-t ${{ inputs.min_t }} \
+              --records-file VDW_REACH_RECORDS.json \
+              --state-file scan_state.json \
+              --start ${{ needs.setup.outputs.start }} \
+              --floor ${{ inputs.floor }} \
+              --max-iterations ${{ inputs.max_iterations }} \
+              --run-id ${{ github.run_id }} \
+              | tee "$GITHUB_STEP_SUMMARY"
+            git add VDW_REACH_RECORDS.json scan_state.json
+            if git diff --cached --quiet; then
+              echo "nothing to commit"; break
+            fi
+            git commit -m "GH Actions: vdw-scan-chain min_t=${{ inputs.min_t }} (run ${{ github.run_id }})"
+            if git push origin main; then
+              break
+            fi
+            echo "push attempt $i failed, retrying..."; sleep 5
+          done
+
+  # Self-chaining: dispatch this same workflow again with the SAME inputs
+  # (scan_chain_shard.py / vdw_reach_commit.py read the fresh checkpoint from
+  # scan_state.json, so the next run picks up wherever this one left off --
+  # no dispatch inputs need to carry state). Uses GH_PAT (not GITHUB_TOKEN --
+  # GITHUB_TOKEN-triggered dispatches don't cascade into further runs), same
+  # secret and mechanism as sat_pipeline.yml's chain job.
+  #
+  # Guarded against BOTH runaway conditions: skips if the concurrency-group
+  # peer check finds another live run of this exact min_t (belt-and-braces;
+  # the concurrency group above already prevents true overlap, this just
+  # avoids piling up queued dispatches), and skips entirely if collect's
+  # merge script reports should-stop via scan_state.json (stop flag,
+  # max_iterations reached, or floor reached) -- re-read fresh here since
+  # collect just updated it.
+  chain:
+    needs: [setup, collect]
+    if: always() && needs.setup.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: decide whether to keep chaining
+        id: decide
+        env:
+          MIN_T: ${{ inputs.min_t }}
+          FLOOR: ${{ inputs.floor }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          min_t = os.environ["MIN_T"]
+          floor = float(os.environ["FLOOR"])
+          state = json.load(open("scan_state.json"))
+          camp = state["campaigns"][min_t]
+          reasons = []
+          if camp.get("stop"):
+              reasons.append("stop flag set")
+          if camp["iteration"] >= camp["max_iterations"]:
+              reasons.append(f"iteration {camp['iteration']}/{camp['max_iterations']} cap reached")
+          if camp["next_start"] <= floor:
+              reasons.append(f"next_start {camp['next_start']:,} <= floor {floor:,}")
+          keep_going = not reasons
+          print(f"keep_going={'true' if keep_going else 'false'}")
+          print(f"reason={'; '.join(reasons) if reasons else 'ok'}")
+          PY
+      - name: dispatch next generation (guarded against overlap)
+        if: steps.decide.outputs.keep_going == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          active=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/scan_chain.yml/runs?per_page=50" \
+            --jq "[.workflow_runs[] | select(.status==\"in_progress\" or .status==\"queued\") | select(.id != ${{ github.run_id }})] | length")
+          if [ "$active" -gt 0 ]; then
+            echo "another vdw-scan-chain run is active ($active); NOT chaining, to avoid overlap"
+            exit 0
+          fi
+          gh workflow run scan_chain.yml \
+            --repo ${{ github.repository }} \
+            -f min_t="${{ inputs.min_t }}" \
+            -f start="${{ inputs.start }}" \
+            -f floor="${{ inputs.floor }}" \
+            -f reset="false" \
+            -f nshards="${{ inputs.nshards }}" \
+            -f count="${{ inputs.count }}" \
+            -f timeout="${{ inputs.timeout }}" \
+            -f max_iterations="${{ inputs.max_iterations }}"
+      - name: not chaining
+        if: steps.decide.outputs.keep_going != 'true'
+        run: echo "stop condition met (${{ steps.decide.outputs.reason }}) -- not dispatching another generation"

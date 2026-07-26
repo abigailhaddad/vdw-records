@@ -5,7 +5,13 @@ __pycache__/
 satenv/
 tools/
 .claude/
-VDW_REACH_RECORDS.json
+# VDW_REACH_RECORDS.json used to be ignored here (local-only scratch for
+# vdw_reach.py's interactive sessions) -- as a result, records that GH
+# Actions scans found were never committed anywhere; see the scan_chain.yml
+# build report (2026-07-25) for the full diagnosis. Un-ignored so
+# .github/workflows/scan_chain.yml's collect job can actually commit it via
+# code/vdw_reach_commit.py. Flagged explicitly for review -- this is a
+# policy change to a file that was previously treated as disposable.
 reach_overnight.log
 reach_scan_*.log
 sat_validate_out/
