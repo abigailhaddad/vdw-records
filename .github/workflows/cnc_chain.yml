@@ -1,0 +1,421 @@
+name: vdw-cnc-chain
+
+# SELF-CHAINING grind for the t=28 UNSAT decision (NOTES.md t=28 STATE):
+# pdw(2;3,28) has two hard UNSAT cells (N=744, N=729), each with a residual
+# of cube-and-conquer cubes that march_cu's split couldn't resolve in one
+# pass. Until now a human ran cnc_pipeline.yml's --cube-indices re-dispatch
+# by hand, generation after generation: dispatch a batch of the residual,
+# harvest which cubes came back UNSAT, recompute the residual, re-dispatch
+# -- with the residual getting HARDER each round (clearing rate decays) as
+# it converges on a "monster core" that plain batches can't clear. This
+# workflow automates that whole drill, reusing:
+#   - cnc_pipeline.yml's own split/conquer machinery (vdw_cnc.py, unchanged)
+#     for both the routine batch rounds AND the parent_cube distributed
+#     re-split races that close monster cubes;
+#   - scan_chain.yml's proven checkpoint/self-chain/kill-switch pattern
+#     (cnc_grind_state.json plays scan_state.json's role: a committed,
+#     hand-editable checkpoint with a `stop` flag and a `max_iterations`
+#     bound).
+#
+# Everything generation-to-generation-varying lives in code/cnc_grind_lib.py
+# + code/cnc_grind_plan.py (setup) + code/cnc_grind_collect.py (collect) --
+# this file is deliberately thin plumbing around those three scripts. See
+# their docstrings for the actual algorithm (progressive escalation ladder:
+# batch -> solo full-job -> distributed parent_cube race; residual is
+# ALWAYS recomputed from scratch from committed evidence, never trusted
+# from memory; a SAT anywhere halts the whole campaign loudly).
+#
+# SEED FIRST: this workflow refuses to run (setup reports stop_now) until
+# cnc_grind_state.json exists -- run `python3 code/cnc_grind_seed.py --t 28
+# --cells 744,729`, review the printed residual counts, commit the file,
+# THEN dispatch this workflow (or let it self-chain from a prior generation).
+#
+# KILL SWITCH: edit cnc_grind_state.json's "stop": true (or lower
+# "max_iterations" below the current "iteration") and push -- no dispatch
+# needed, exactly like scan_state.json's campaign stop flag. A SAT verdict
+# sets "sat_halt": true automatically and the workflow will not resume on
+# its own even after "stop" is cleared -- see code/cnc_grind_collect.py.
+permissions:
+  contents: write
+
+# Single global campaign (unlike cnc_pipeline.yml, which scopes concurrency
+# per instance/N/parent_cube for many simultaneous campaigns): this grind
+# owns ONE state file end to end, so one live run at a time, full stop.
+concurrency:
+  group: vdw-cnc-chain
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      state_file:
+        description: "path to the committed grind checkpoint"
+        default: "cnc_grind_state.json"
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      stop_now: ${{ steps.plan.outputs.stop_now }}
+      reason: ${{ steps.plan.outputs.reason }}
+      t: ${{ steps.plan.outputs.t }}
+      N: ${{ steps.plan.outputs.N }}
+      cell_key: ${{ steps.plan.outputs.cell_key }}
+      residual_count: ${{ steps.plan.outputs.residual_count }}
+      has_batch: ${{ steps.plan.outputs.has_batch }}
+      has_monsters: ${{ steps.plan.outputs.has_monsters }}
+      batch_matrix: ${{ steps.plan.outputs.batch_matrix }}
+      batch_nshards: ${{ steps.plan.outputs.batch_nshards }}
+      monster_split_matrix: ${{ steps.plan.outputs.monster_split_matrix }}
+      monster_conquer_matrix: ${{ steps.plan.outputs.monster_conquer_matrix }}
+      monster_nshards: ${{ steps.plan.outputs.monster_nshards }}
+      monster_cap_seconds: ${{ steps.plan.outputs.monster_cap_seconds }}
+      top_march_opts: ${{ steps.plan.outputs.top_march_opts }}
+      resplit_march_opts: ${{ steps.plan.outputs.resplit_march_opts }}
+      max_resplit_depth: ${{ steps.plan.outputs.max_resplit_depth }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        run: |
+          python3 code/cnc_grind_plan.py \
+            --state-file "${{ inputs.state_file }}" \
+            --run-id "${{ github.run_id }}" \
+            --github-output "$GITHUB_OUTPUT"
+      - run: |
+          echo "stop_now=${{ steps.plan.outputs.stop_now }} reason=${{ steps.plan.outputs.reason }}" | tee "$GITHUB_STEP_SUMMARY"
+
+  # Verbatim copy of cnc_pipeline.yml's build_tools job (same cache key,
+  # same clone+make) -- keeping the two byte-identical means a fix to one
+  # is a fix that's easy to port to the other.
+  build_tools:
+    needs: setup
+    if: needs.setup.outputs.has_batch == 'true' || needs.setup.outputs.has_monsters == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - id: rev
+        run: |
+          sha=$(git ls-remote https://github.com/marijnheule/CnC.git HEAD | cut -f1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: pkg/cncbin
+          key: cnc-tools-${{ runner.os }}-${{ steps.rev.outputs.sha }}
+      - name: apt prerequisites
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential git
+      - name: clone + build march_cu and iglucose
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/marijnheule/CnC.git /tmp/CnC
+          ( cd /tmp/CnC/march_cu && make CC="gcc -fcommon" )
+          ( cd /tmp/CnC/iglucose/core && make )
+          mkdir -p pkg/cncbin
+          cp /tmp/CnC/march_cu/march_cu pkg/cncbin/
+          cp /tmp/CnC/iglucose/core/iglucose pkg/cncbin/
+          chmod +x pkg/cncbin/*
+      - name: package binaries (from cache or fresh build)
+        run: |
+          chmod +x pkg/cncbin/*
+          tar -C pkg -czf cnc-tools.tar.gz cncbin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnc-tools
+          path: cnc-tools.tar.gz
+
+  # Regenerate this generation's top-level split -- march_cu is
+  # deterministic given the same (CNF, march_opts), so this reproduces the
+  # cube file the campaign's cube indices are numbered against, byte for
+  # byte (verified locally before this workflow was built: --march-opts
+  # "-d 12" reproduces N=744 -> 4095 cubes and N=729 -> 4081 cubes, exactly
+  # matching the already-committed evidence). Both the batch/solo conquer
+  # lane AND every monster's parent-split lane read parent literals off
+  # THIS file, so it always runs whenever either lane has work.
+  split_top:
+    needs: [setup, build_tools]
+    if: needs.setup.outputs.has_batch == 'true' || needs.setup.outputs.has_monsters == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-tools
+      - run: |
+          tar -xzf cnc-tools.tar.gz
+          chmod +x cncbin/*
+      - name: split into cubes
+        env:
+          MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
+          IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
+        run: |
+          mkdir -p cnc_out
+          python3 code/vdw_cnc.py split --t ${{ needs.setup.outputs.t }} \
+            --N ${{ needs.setup.outputs.N }} \
+            --march-opts "${{ needs.setup.outputs.top_march_opts }}" \
+            --outdir cnc_out --json-out cnc_out/split.json \
+            | tee cnc_out/split.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnc-grind-instance
+          path: |
+            cnc_out/*.cnf
+            cnc_out/*.cubes
+            cnc_out/split.json
+            cnc_out/split.log
+
+  # Batch tier (routine round, grouped shards, small cap) and solo tier
+  # (stuck_count promoted a cube to its own 1-cube shard with a much bigger
+  # cap -- a full job's wall to itself instead of racing 34 neighbors) are
+  # ONE combined matrix -- see code/cnc_grind_plan.py's comment on why: each
+  # matrix entry already carries its own cap_seconds/batch_size, so the two
+  # tiers need no separate job.
+  conquer_batch:
+    needs: [setup, split_top, build_tools]
+    if: needs.setup.outputs.has_batch == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.setup.outputs.batch_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-tools
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-grind-instance
+          path: cnc_out
+      - run: |
+          tar -xzf cnc-tools.tar.gz
+          chmod +x cncbin/*
+      - name: conquer shard ${{ matrix.shard }} (${{ matrix.tier }} tier)
+        env:
+          MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
+          IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
+        run: |
+          python3 code/vdw_cnc.py conquer --t ${{ needs.setup.outputs.t }} \
+            --N ${{ needs.setup.outputs.N }} \
+            --cnf cnc_out/cnc_t${{ needs.setup.outputs.t }}_N${{ needs.setup.outputs.N }}.cnf \
+            --cubes cnc_out/cnc_t${{ needs.setup.outputs.t }}_N${{ needs.setup.outputs.N }}.cubes \
+            --shard ${{ matrix.shard }} --nshards ${{ needs.setup.outputs.batch_nshards }} \
+            --cube-indices "${{ matrix.cube_indices }}" \
+            --cap-seconds ${{ matrix.cap_seconds }} \
+            --max-resplit-depth ${{ needs.setup.outputs.max_resplit_depth }} \
+            --resplit-march-opts "${{ needs.setup.outputs.resplit_march_opts }}" \
+            --batch-size ${{ matrix.batch_size }} \
+            --outdir cnc_out --json-out cnc_out/shard-${{ matrix.shard }}.json \
+            | tee cnc_out/shard-${{ matrix.shard }}.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-batch-shard-${{ matrix.shard }}
+          path: |
+            cnc_out/shard-${{ matrix.shard }}.json
+            cnc_out/shard-${{ matrix.shard }}.jsonl
+            cnc_out/shard-${{ matrix.shard }}.log
+          if-no-files-found: warn
+
+  # DISTRIBUTED RE-SPLIT (see cnc_pipeline.yml's parent_cube input / NOTES.md
+  # t=26 STATE): one march_cu re-split PER MONSTER cube, run in parallel --
+  # unlike cnc_pipeline.yml (one parent_cube per whole workflow dispatch),
+  # this generation may race SEVERAL monsters at once, so each gets its OWN
+  # uniquely-named artifact (cnc-grind-parent-<idx>) to avoid any collision.
+  split_monster:
+    needs: [setup, split_top, build_tools]
+    if: needs.setup.outputs.has_monsters == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.setup.outputs.monster_split_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-tools
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-grind-instance
+          path: cnc_out
+      - run: |
+          tar -xzf cnc-tools.tar.gz
+          chmod +x cncbin/*
+      - name: split parent cube ${{ matrix.parent_cube }}
+        env:
+          MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
+          IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
+        run: |
+          python3 code/vdw_cnc.py split --t ${{ needs.setup.outputs.t }} \
+            --N ${{ needs.setup.outputs.N }} \
+            --parent-cube ${{ matrix.parent_cube }} \
+            --march-opts "${{ needs.setup.outputs.top_march_opts }}" \
+            --outdir cnc_out --json-out cnc_out/split_parent.json \
+            | tee cnc_out/split_parent.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnc-grind-parent-${{ matrix.parent_cube }}
+          path: |
+            cnc_out/*.parent${{ matrix.parent_cube }}.cnf
+            cnc_out/*.parent${{ matrix.parent_cube }}.cubes
+            cnc_out/split_parent.json
+            cnc_out/split_parent.log
+
+  conquer_monster:
+    needs: [setup, split_monster, build_tools]
+    if: needs.setup.outputs.has_monsters == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.setup.outputs.monster_conquer_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-tools
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-grind-parent-${{ matrix.parent_cube }}
+          path: cnc_out
+      - run: |
+          tar -xzf cnc-tools.tar.gz
+          chmod +x cncbin/*
+      - name: conquer parent ${{ matrix.parent_cube }} shard ${{ matrix.shard }}
+        env:
+          MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
+          IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
+        run: |
+          python3 code/vdw_cnc.py conquer --t ${{ needs.setup.outputs.t }} \
+            --N ${{ needs.setup.outputs.N }} \
+            --parent-cube ${{ matrix.parent_cube }} \
+            --cnf cnc_out/cnc_t${{ needs.setup.outputs.t }}_N${{ needs.setup.outputs.N }}.parent${{ matrix.parent_cube }}.cnf \
+            --cubes cnc_out/cnc_t${{ needs.setup.outputs.t }}_N${{ needs.setup.outputs.N }}.parent${{ matrix.parent_cube }}.cubes \
+            --shard ${{ matrix.shard }} --nshards ${{ needs.setup.outputs.monster_nshards }} \
+            --cap-seconds ${{ needs.setup.outputs.monster_cap_seconds }} \
+            --max-resplit-depth ${{ needs.setup.outputs.max_resplit_depth }} \
+            --resplit-march-opts "${{ needs.setup.outputs.resplit_march_opts }}" \
+            --batch-size 1 \
+            --outdir cnc_out --json-out cnc_out/monster-shard-${{ matrix.shard }}.json \
+            | tee cnc_out/monster-shard-${{ matrix.shard }}.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-monster-${{ matrix.parent_cube }}-shard-${{ matrix.shard }}
+          path: |
+            cnc_out/shard-${{ matrix.shard }}.jsonl
+            cnc_out/monster-shard-${{ matrix.shard }}.json
+            cnc_out/monster-shard-${{ matrix.shard }}.log
+          if-no-files-found: warn
+
+  # Folds this generation's evidence into gh_actions_results/, recomputes
+  # the residual from scratch, updates the stuck_count ladder + cursors +
+  # monster bookkeeping, and -- the two load-bearing checks -- halts loudly
+  # on any SAT or composes the official verdict when a cell's residual
+  # empties. See code/cnc_grind_collect.py's module docstring for the exact
+  # ordering guarantee. always(): runs even if a conquer/split job was
+  # skipped (has_batch or has_monsters false) so a cell already resolved by
+  # existing evidence still gets advanced/decided.
+  collect:
+    needs: [setup, conquer_batch, conquer_monster]
+    if: always() && needs.setup.outputs.stop_now == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-batch-shard-*
+          path: batch_dl
+          merge-multiple: true
+        continue-on-error: true
+      # NOT merge-multiple: several monsters can share a shard INDEX (each
+      # is its own artifact, results-monster-<parent>-shard-<s>), so
+      # flattening into one directory would let files from different
+      # monsters collide on the same "shard-<s>.jsonl" basename. Without
+      # merge-multiple, download-artifact keeps each artifact in its own
+      # subdirectory instead -- collect's evidence scan is recursive, so
+      # the nesting is transparent to it.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-monster-*
+          path: monster_dl
+        continue-on-error: true
+      - name: collect + advance, with a pull --rebase retry loop
+        run: |
+          git config user.name "vdw-cnc-chain[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main
+            python3 code/cnc_grind_collect.py \
+              --state-file "${{ inputs.state_file }}" \
+              --batch-results-dir batch_dl \
+              --monster-results-dir monster_dl \
+              --run-id ${{ github.run_id }} \
+              --summary-out cnc_grind_summary.json \
+              | tee "$GITHUB_STEP_SUMMARY"
+            git add "${{ inputs.state_file }}" gh_actions_results/cnc-grind-*
+            if git diff --cached --quiet; then
+              echo "nothing to commit"; break
+            fi
+            git commit -m "GH Actions: vdw-cnc-chain t=${{ needs.setup.outputs.t }} N=${{ needs.setup.outputs.N }} (run ${{ github.run_id }})"
+            if git push origin main; then
+              break
+            fi
+            echo "push attempt $i failed, retrying..."; sleep 5
+          done
+      # Fail the JOB (run shows red) on a SAT halt -- AFTER the commit
+      # above has already made it durable. Loud-by-design: requirement #7,
+      # a SAT verdict is a genuinely new lower bound, not something to let
+      # scroll by quietly in a green run.
+      - name: fail loudly if SAT was found
+        run: |
+          if python3 -c "import json,sys; sys.exit(0 if json.load(open('cnc_grind_summary.json')).get('sat_halt') else 1)"; then
+            echo "::error::SAT FOUND -- see cnc_grind_state.json's sat_found block. This is a NEW LOWER BOUND. The grind has halted and will NOT self-chain."
+            exit 1
+          fi
+
+  # Self-chaining: dispatch this same workflow again. Everything the next
+  # generation needs (which cell is active, its residual, stuck_count,
+  # cursors, monster state) lives in the just-committed state file --
+  # exactly scan_chain.yml's pattern, no dispatch inputs carry state.
+  chain:
+    needs: [setup, collect]
+    if: always() && needs.setup.outputs.stop_now == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main   # latest main, so collect's just-committed state is present
+      # Re-run the SAME plan script against the now-current state, purely to
+      # get a fresh stop_now/reason -- reuses the one place that logic
+      # lives instead of duplicating the stop-condition rules inline here.
+      - id: replan
+        run: |
+          python3 code/cnc_grind_plan.py \
+            --state-file "${{ inputs.state_file }}" \
+            --run-id "${{ github.run_id }}" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: dispatch next generation (guarded against overlap)
+        if: steps.replan.outputs.stop_now == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          active=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/cnc_chain.yml/runs?per_page=50" \
+            --jq "[.workflow_runs[] | select(.status==\"in_progress\" or .status==\"queued\") | select(.id != ${{ github.run_id }})] | length")
+          if [ "$active" -gt 0 ]; then
+            echo "another vdw-cnc-chain run is active ($active); NOT chaining, to avoid overlap"
+            exit 0
+          fi
+          gh workflow run cnc_chain.yml \
+            --repo ${{ github.repository }} \
+            -f state_file="${{ inputs.state_file }}"
+      - name: not chaining
+        if: steps.replan.outputs.stop_now != 'false'
+        run: echo "stop condition met (${{ steps.replan.outputs.reason }}) -- not dispatching another generation"
