@@ -1,0 +1,5512 @@
+{
+  "lengths": [
+    3,
+    28
+  ],
+  "encoding": "palindromic",
+  "t": 28,
+  "N": 744,
+  "symmetry_break": false,
+  "n_solve_aux_vars": 0,
+  "shard": 5,
+  "nshards": 6,
+  "mode": "round-robin",
+  "ncubes": 3438,
+  "members": [
+    5,
+    11,
+    17,
+    23,
+    29,
+    35,
+    41,
+    47,
+    53,
+    59,
+    65,
+    71,
+    77,
+    83,
+    89,
+    95,
+    101,
+    107,
+    113,
+    119,
+    125,
+    131,
+    137,
+    143,
+    149,
+    155,
+    161,
+    167,
+    173,
+    179,
+    185,
+    191,
+    197,
+    203,
+    209,
+    215,
+    221,
+    227,
+    233,
+    239,
+    245,
+    251,
+    257,
+    263,
+    269,
+    275,
+    281,
+    287,
+    293,
+    299,
+    305,
+    311,
+    317,
+    323,
+    329,
+    335,
+    341,
+    347,
+    353,
+    359,
+    365,
+    371,
+    377,
+    383,
+    389,
+    395,
+    401,
+    407,
+    413,
+    419,
+    425,
+    431,
+    437,
+    443,
+    449,
+    455,
+    461,
+    467,
+    473,
+    479,
+    485,
+    491,
+    497,
+    503,
+    509,
+    515,
+    521,
+    527,
+    533,
+    539,
+    545,
+    551,
+    557,
+    563,
+    569,
+    575,
+    581,
+    587,
+    593,
+    599,
+    605,
+    611,
+    617,
+    623,
+    629,
+    635,
+    641,
+    647,
+    653,
+    659,
+    665,
+    671,
+    677,
+    683,
+    689,
+    695,
+    701,
+    707,
+    713,
+    719,
+    725,
+    731,
+    737,
+    743,
+    749,
+    755,
+    761,
+    767,
+    773,
+    779,
+    785,
+    791,
+    797,
+    803,
+    809,
+    815,
+    821,
+    827,
+    833,
+    839,
+    845,
+    851,
+    857,
+    863,
+    869,
+    875,
+    881,
+    887,
+    893,
+    899,
+    905,
+    911,
+    917,
+    923,
+    929,
+    935,
+    941,
+    947,
+    953,
+    959,
+    965,
+    971,
+    977,
+    983,
+    989,
+    995,
+    1001,
+    1007,
+    1013,
+    1019,
+    1025,
+    1031,
+    1037,
+    1043,
+    1049,
+    1055,
+    1061,
+    1067,
+    1073,
+    1079,
+    1085,
+    1091,
+    1097,
+    1103,
+    1109,
+    1115,
+    1121,
+    1127,
+    1133,
+    1139,
+    1145,
+    1151,
+    1157,
+    1163,
+    1169,
+    1175,
+    1181,
+    1187,
+    1193,
+    1199,
+    1205,
+    1211,
+    1217,
+    1223,
+    1229,
+    1235,
+    1241,
+    1247,
+    1253,
+    1259,
+    1265,
+    1271,
+    1277,
+    1283,
+    1289,
+    1295,
+    1301,
+    1307,
+    1313,
+    1319,
+    1325,
+    1331,
+    1337,
+    1343,
+    1349,
+    1355,
+    1361,
+    1367,
+    1373,
+    1379,
+    1385,
+    1391,
+    1397,
+    1403,
+    1409,
+    1415,
+    1421,
+    1427,
+    1433,
+    1439,
+    1445,
+    1451,
+    1457,
+    1463,
+    1469,
+    1475,
+    1481,
+    1487,
+    1493,
+    1499,
+    1505,
+    1511,
+    1517,
+    1523,
+    1529,
+    1535,
+    1541,
+    1547,
+    1553,
+    1559,
+    1565,
+    1571,
+    1577,
+    1583,
+    1589,
+    1595,
+    1601,
+    1607,
+    1613,
+    1619,
+    1625,
+    1631,
+    1637,
+    1643,
+    1649,
+    1655,
+    1661,
+    1667,
+    1673,
+    1679,
+    1685,
+    1691,
+    1697,
+    1703,
+    1709,
+    1715,
+    1721,
+    1727,
+    1733,
+    1739,
+    1745,
+    1751,
+    1757,
+    1763,
+    1769,
+    1775,
+    1781,
+    1787,
+    1793,
+    1799,
+    1805,
+    1811,
+    1817,
+    1823,
+    1829,
+    1835,
+    1841,
+    1847,
+    1853,
+    1859,
+    1865,
+    1871,
+    1877,
+    1883,
+    1889,
+    1895,
+    1901,
+    1907,
+    1913,
+    1919,
+    1925,
+    1931,
+    1937,
+    1943,
+    1949,
+    1955,
+    1961,
+    1967,
+    1973,
+    1979,
+    1985,
+    1991,
+    1997,
+    2003,
+    2009,
+    2015,
+    2021,
+    2027,
+    2033,
+    2039,
+    2045,
+    2051,
+    2057,
+    2063,
+    2069,
+    2075,
+    2081,
+    2087,
+    2093,
+    2099,
+    2105,
+    2111,
+    2117,
+    2123,
+    2129,
+    2135,
+    2141,
+    2147,
+    2153,
+    2159,
+    2165,
+    2171,
+    2177,
+    2183,
+    2189,
+    2195,
+    2201,
+    2207,
+    2213,
+    2219,
+    2225,
+    2231,
+    2237,
+    2243,
+    2249,
+    2255,
+    2261,
+    2267,
+    2273,
+    2279,
+    2285,
+    2291,
+    2297,
+    2303,
+    2309,
+    2315,
+    2321,
+    2327,
+    2333,
+    2339,
+    2345,
+    2351,
+    2357,
+    2363,
+    2369,
+    2375,
+    2381,
+    2387,
+    2393,
+    2399,
+    2405,
+    2411,
+    2417,
+    2423,
+    2429,
+    2435,
+    2441,
+    2447,
+    2453,
+    2459,
+    2465,
+    2471,
+    2477,
+    2483,
+    2489,
+    2495,
+    2501,
+    2507,
+    2513,
+    2519,
+    2525,
+    2531,
+    2537,
+    2543,
+    2549,
+    2555,
+    2561,
+    2567,
+    2573,
+    2579,
+    2585,
+    2591,
+    2597,
+    2603,
+    2609,
+    2615,
+    2621,
+    2627,
+    2633,
+    2639,
+    2645,
+    2651,
+    2657,
+    2663,
+    2669,
+    2675,
+    2681,
+    2687,
+    2693,
+    2699,
+    2705,
+    2711,
+    2717,
+    2723,
+    2729,
+    2735,
+    2741,
+    2747,
+    2753,
+    2759,
+    2765,
+    2771,
+    2777,
+    2783,
+    2789,
+    2795,
+    2801,
+    2807,
+    2813,
+    2819,
+    2825,
+    2831,
+    2837,
+    2843,
+    2849,
+    2855,
+    2861,
+    2867,
+    2873,
+    2879,
+    2885,
+    2891,
+    2897,
+    2903,
+    2909,
+    2915,
+    2921,
+    2927,
+    2933,
+    2939,
+    2945,
+    2951,
+    2957,
+    2963,
+    2969,
+    2975,
+    2981,
+    2987,
+    2993,
+    2999,
+    3005,
+    3011,
+    3017,
+    3023,
+    3029,
+    3035,
+    3041,
+    3047,
+    3053,
+    3059,
+    3065,
+    3071,
+    3077,
+    3083,
+    3089,
+    3095,
+    3101,
+    3107,
+    3113,
+    3119,
+    3125,
+    3131,
+    3137,
+    3143,
+    3149,
+    3155,
+    3161,
+    3167,
+    3173,
+    3179,
+    3185,
+    3191,
+    3197,
+    3203,
+    3209,
+    3215,
+    3221,
+    3227,
+    3233,
+    3239,
+    3245,
+    3251,
+    3257,
+    3263,
+    3269,
+    3275,
+    3281,
+    3287,
+    3293,
+    3299,
+    3305,
+    3311,
+    3317,
+    3323,
+    3329,
+    3335,
+    3341,
+    3347,
+    3353,
+    3359,
+    3365,
+    3371,
+    3377,
+    3383,
+    3389,
+    3395,
+    3401,
+    3407,
+    3413,
+    3419,
+    3425,
+    3431,
+    3437
+  ],
+  "parent_cube": 1021,
+  "cap_seconds": 600.0,
+  "max_resplit_depth": 3,
+  "batch_size": 1,
+  "n_batched_unsat": 0,
+  "n_cubes_in_slice": 573,
+  "n_unsat": 573,
+  "unresolved_cubes": [],
+  "sat_cube": null,
+  "witness": null,
+  "status": "UNSAT",
+  "slice_seconds": 2479.3731532096863,
+  "n_solves": 701,
+  "per_solve": [
+    {
+      "tag": "5",
+      "depth": 0,
+      "nlits": 22,
+      "status": "UNSAT",
+      "seconds": 0.017083168029785156
+    },
+    {
+      "tag": "11",
+      "depth": 0,
+      "nlits": 22,
+      "status": "UNSAT",
+      "seconds": 0.015601634979248047
+    },
+    {
+      "tag": "17",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014938116073608398
+    },
+    {
+      "tag": "23",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016938209533691406
+    },
+    {
+      "tag": "29",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016607284545898438
+    },
+    {
+      "tag": "35",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.017292499542236328
+    },
+    {
+      "tag": "41",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.016654014587402344
+    },
+    {
+      "tag": "47",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.012092113494873047
+    },
+    {
+      "tag": "53",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014969825744628906
+    },
+    {
+      "tag": "59",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.013873100280761719
+    },
+    {
+      "tag": "65",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01874542236328125
+    },
+    {
+      "tag": "71",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014644384384155273
+    },
+    {
+      "tag": "77",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.013770103454589844
+    },
+    {
+      "tag": "83",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.013016462326049805
+    },
+    {
+      "tag": "89",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.026355743408203125
+    },
+    {
+      "tag": "95",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03153228759765625
+    },
+    {
+      "tag": "101",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02789473533630371
+    },
+    {
+      "tag": "107",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02254319190979004
+    },
+    {
+      "tag": "113",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.017924785614013672
+    },
+    {
+      "tag": "119",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07216477394104004
+    },
+    {
+      "tag": "125",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.018928050994873047
+    },
+    {
+      "tag": "131",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.012504100799560547
+    },
+    {
+      "tag": "137",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01901865005493164
+    },
+    {
+      "tag": "143",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03429150581359863
+    },
+    {
+      "tag": "149",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03594183921813965
+    },
+    {
+      "tag": "155",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02777409553527832
+    },
+    {
+      "tag": "161",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.015697002410888672
+    },
+    {
+      "tag": "167",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02186131477355957
+    },
+    {
+      "tag": "173",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.026645183563232422
+    },
+    {
+      "tag": "179",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.039008140563964844
+    },
+    {
+      "tag": "185",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.019166231155395508
+    },
+    {
+      "tag": "191",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016210317611694336
+    },
+    {
+      "tag": "197",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.031020402908325195
+    },
+    {
+      "tag": "203",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013775348663330078
+    },
+    {
+      "tag": "209",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01737809181213379
+    },
+    {
+      "tag": "215",
+      "depth": 0,
+      "nlits": 22,
+      "status": "UNSAT",
+      "seconds": 0.012575387954711914
+    },
+    {
+      "tag": "221",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014352560043334961
+    },
+    {
+      "tag": "227",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.013141393661499023
+    },
+    {
+      "tag": "233",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.12364983558654785
+    },
+    {
+      "tag": "239",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014372825622558594
+    },
+    {
+      "tag": "245",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016400575637817383
+    },
+    {
+      "tag": "251",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02600884437561035
+    },
+    {
+      "tag": "257",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07717108726501465
+    },
+    {
+      "tag": "263",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013123273849487305
+    },
+    {
+      "tag": "269",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.018155813217163086
+    },
+    {
+      "tag": "275",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014927387237548828
+    },
+    {
+      "tag": "281",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04289984703063965
+    },
+    {
+      "tag": "287",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.036322832107543945
+    },
+    {
+      "tag": "293",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02470231056213379
+    },
+    {
+      "tag": "299",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.029026269912719727
+    },
+    {
+      "tag": "305",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.15658116340637207
+    },
+    {
+      "tag": "311",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06136775016784668
+    },
+    {
+      "tag": "317",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.18956828117370605
+    },
+    {
+      "tag": "323",
+      "depth": 0,
+      "nlits": 21,
+      "status": "UNSAT",
+      "seconds": 0.015092849731445312
+    },
+    {
+      "tag": "329",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.012959480285644531
+    },
+    {
+      "tag": "335",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.015029191970825195
+    },
+    {
+      "tag": "341",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.017511844635009766
+    },
+    {
+      "tag": "347",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.0176084041595459
+    },
+    {
+      "tag": "353",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.020975112915039062
+    },
+    {
+      "tag": "359",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.017900705337524414
+    },
+    {
+      "tag": "365",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01649618148803711
+    },
+    {
+      "tag": "371",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016402006149291992
+    },
+    {
+      "tag": "377",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.028374433517456055
+    },
+    {
+      "tag": "383",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04078936576843262
+    },
+    {
+      "tag": "389",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02548360824584961
+    },
+    {
+      "tag": "395",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014481782913208008
+    },
+    {
+      "tag": "401",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1288318634033203
+    },
+    {
+      "tag": "407",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01301884651184082
+    },
+    {
+      "tag": "413",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.018268346786499023
+    },
+    {
+      "tag": "419",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.020346403121948242
+    },
+    {
+      "tag": "425",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016608715057373047
+    },
+    {
+      "tag": "431",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013418912887573242
+    },
+    {
+      "tag": "437",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.019469261169433594
+    },
+    {
+      "tag": "443",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.017246007919311523
+    },
+    {
+      "tag": "449",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03741765022277832
+    },
+    {
+      "tag": "455",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.01284027099609375
+    },
+    {
+      "tag": "461",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03588104248046875
+    },
+    {
+      "tag": "467",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07238602638244629
+    },
+    {
+      "tag": "473",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0880277156829834
+    },
+    {
+      "tag": "479",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.5783047676086426
+    },
+    {
+      "tag": "485",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02019333839416504
+    },
+    {
+      "tag": "491",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3680264949798584
+    },
+    {
+      "tag": "497",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07087945938110352
+    },
+    {
+      "tag": "503",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.2457003593444824
+    },
+    {
+      "tag": "509",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 7.0571448802948
+    },
+    {
+      "tag": "515",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014856338500976562
+    },
+    {
+      "tag": "521",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.028699398040771484
+    },
+    {
+      "tag": "527",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.015434026718139648
+    },
+    {
+      "tag": "533",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04937291145324707
+    },
+    {
+      "tag": "539",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014085054397583008
+    },
+    {
+      "tag": "545",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03629016876220703
+    },
+    {
+      "tag": "551",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0557861328125
+    },
+    {
+      "tag": "557",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2935006618499756
+    },
+    {
+      "tag": "563",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03592848777770996
+    },
+    {
+      "tag": "569",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04681134223937988
+    },
+    {
+      "tag": "575",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0599362850189209
+    },
+    {
+      "tag": "581",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03307485580444336
+    },
+    {
+      "tag": "587",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.017359495162963867
+    },
+    {
+      "tag": "593",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.012530803680419922
+    },
+    {
+      "tag": "599",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02858877182006836
+    },
+    {
+      "tag": "605",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06579971313476562
+    },
+    {
+      "tag": "611",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.4299635887145996
+    },
+    {
+      "tag": "617",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.013815164566040039
+    },
+    {
+      "tag": "623",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014618635177612305
+    },
+    {
+      "tag": "629",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.01288294792175293
+    },
+    {
+      "tag": "635",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0348055362701416
+    },
+    {
+      "tag": "641",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07349824905395508
+    },
+    {
+      "tag": "647",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02644181251525879
+    },
+    {
+      "tag": "653",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.028359174728393555
+    },
+    {
+      "tag": "659",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2743568420410156
+    },
+    {
+      "tag": "665",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07909631729125977
+    },
+    {
+      "tag": "671",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3943908214569092
+    },
+    {
+      "tag": "677",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014371395111083984
+    },
+    {
+      "tag": "683",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014447450637817383
+    },
+    {
+      "tag": "689",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1971580982208252
+    },
+    {
+      "tag": "695",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.029492855072021484
+    },
+    {
+      "tag": "701",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07859468460083008
+    },
+    {
+      "tag": "707",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0339815616607666
+    },
+    {
+      "tag": "713",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3369300365447998
+    },
+    {
+      "tag": "719",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04074716567993164
+    },
+    {
+      "tag": "725",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.21813654899597168
+    },
+    {
+      "tag": "731",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.09599852561950684
+    },
+    {
+      "tag": "737",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.3867380619049072
+    },
+    {
+      "tag": "743",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.01306462287902832
+    },
+    {
+      "tag": "749",
+      "depth": 0,
+      "nlits": 22,
+      "status": "UNSAT",
+      "seconds": 0.012685537338256836
+    },
+    {
+      "tag": "755",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016776561737060547
+    },
+    {
+      "tag": "761",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014253616333007812
+    },
+    {
+      "tag": "767",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02366805076599121
+    },
+    {
+      "tag": "773",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016597986221313477
+    },
+    {
+      "tag": "779",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.01328587532043457
+    },
+    {
+      "tag": "785",
+      "depth": 0,
+      "nlits": 22,
+      "status": "UNSAT",
+      "seconds": 0.014650821685791016
+    },
+    {
+      "tag": "791",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03196859359741211
+    },
+    {
+      "tag": "797",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01365518569946289
+    },
+    {
+      "tag": "803",
+      "depth": 0,
+      "nlits": 22,
+      "status": "UNSAT",
+      "seconds": 0.01241445541381836
+    },
+    {
+      "tag": "809",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.01278543472290039
+    },
+    {
+      "tag": "815",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.013935565948486328
+    },
+    {
+      "tag": "821",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014954090118408203
+    },
+    {
+      "tag": "827",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.018642187118530273
+    },
+    {
+      "tag": "833",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.028479814529418945
+    },
+    {
+      "tag": "839",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07592988014221191
+    },
+    {
+      "tag": "845",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.022634506225585938
+    },
+    {
+      "tag": "851",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016965627670288086
+    },
+    {
+      "tag": "857",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.017442703247070312
+    },
+    {
+      "tag": "863",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.021983623504638672
+    },
+    {
+      "tag": "869",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.027942895889282227
+    },
+    {
+      "tag": "875",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.031693458557128906
+    },
+    {
+      "tag": "881",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.019580841064453125
+    },
+    {
+      "tag": "887",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.015575885772705078
+    },
+    {
+      "tag": "893",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0309445858001709
+    },
+    {
+      "tag": "899",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06196713447570801
+    },
+    {
+      "tag": "905",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014473438262939453
+    },
+    {
+      "tag": "911",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.017130136489868164
+    },
+    {
+      "tag": "917",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02052474021911621
+    },
+    {
+      "tag": "923",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.012643098831176758
+    },
+    {
+      "tag": "929",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07044863700866699
+    },
+    {
+      "tag": "935",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014773130416870117
+    },
+    {
+      "tag": "941",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.05904746055603027
+    },
+    {
+      "tag": "947",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.08692169189453125
+    },
+    {
+      "tag": "953",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016548871994018555
+    },
+    {
+      "tag": "959",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03844594955444336
+    },
+    {
+      "tag": "965",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0830228328704834
+    },
+    {
+      "tag": "971",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.033071041107177734
+    },
+    {
+      "tag": "977",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3590099811553955
+    },
+    {
+      "tag": "983",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.056986331939697266
+    },
+    {
+      "tag": "989",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.13450217247009277
+    },
+    {
+      "tag": "995",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1499621868133545
+    },
+    {
+      "tag": "1001",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.034332275390625
+    },
+    {
+      "tag": "1007",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.21437907218933105
+    },
+    {
+      "tag": "1013",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 3.9076616764068604
+    },
+    {
+      "tag": "1019",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0435023307800293
+    },
+    {
+      "tag": "1025",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07513260841369629
+    },
+    {
+      "tag": "1031",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.020013809204101562
+    },
+    {
+      "tag": "1037",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02028965950012207
+    },
+    {
+      "tag": "1043",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.25965309143066406
+    },
+    {
+      "tag": "1049",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.031382083892822266
+    },
+    {
+      "tag": "1055",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.10936355590820312
+    },
+    {
+      "tag": "1061",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03308534622192383
+    },
+    {
+      "tag": "1067",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.10708236694335938
+    },
+    {
+      "tag": "1073",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.4791722297668457
+    },
+    {
+      "tag": "1079",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02240586280822754
+    },
+    {
+      "tag": "1085",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.11475872993469238
+    },
+    {
+      "tag": "1091",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.23026657104492188
+    },
+    {
+      "tag": "1097",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.14989423751831055
+    },
+    {
+      "tag": "1103",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2357177734375
+    },
+    {
+      "tag": "1109",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03211688995361328
+    },
+    {
+      "tag": "1115",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04098343849182129
+    },
+    {
+      "tag": "1121",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.6300661563873291
+    },
+    {
+      "tag": "1127",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1997697353363037
+    },
+    {
+      "tag": "1133",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.44531774520874023
+    },
+    {
+      "tag": "1139",
+      "depth": 0,
+      "nlits": 21,
+      "status": "UNSAT",
+      "seconds": 0.01351165771484375
+    },
+    {
+      "tag": "1145",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016756772994995117
+    },
+    {
+      "tag": "1151",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01516866683959961
+    },
+    {
+      "tag": "1157",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.039684295654296875
+    },
+    {
+      "tag": "1163",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014530181884765625
+    },
+    {
+      "tag": "1169",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02075028419494629
+    },
+    {
+      "tag": "1175",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014114141464233398
+    },
+    {
+      "tag": "1181",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.055767059326171875
+    },
+    {
+      "tag": "1187",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014757633209228516
+    },
+    {
+      "tag": "1193",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.023910999298095703
+    },
+    {
+      "tag": "1199",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01771831512451172
+    },
+    {
+      "tag": "1205",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.013174057006835938
+    },
+    {
+      "tag": "1211",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0752415657043457
+    },
+    {
+      "tag": "1217",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.057479143142700195
+    },
+    {
+      "tag": "1223",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.35234522819519043
+    },
+    {
+      "tag": "1229",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2348942756652832
+    },
+    {
+      "tag": "1235",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.020064830780029297
+    },
+    {
+      "tag": "1241",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.11773681640625
+    },
+    {
+      "tag": "1247",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 4.612132787704468
+    },
+    {
+      "tag": "1253",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.017980337142944336
+    },
+    {
+      "tag": "1259",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03213071823120117
+    },
+    {
+      "tag": "1265",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.017910242080688477
+    },
+    {
+      "tag": "1271",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0805654525756836
+    },
+    {
+      "tag": "1277",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014738321304321289
+    },
+    {
+      "tag": "1283",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.08384108543395996
+    },
+    {
+      "tag": "1289",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06090998649597168
+    },
+    {
+      "tag": "1295",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02263951301574707
+    },
+    {
+      "tag": "1301",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.025501728057861328
+    },
+    {
+      "tag": "1307",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2290356159210205
+    },
+    {
+      "tag": "1313",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.031053543090820312
+    },
+    {
+      "tag": "1319",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1289973258972168
+    },
+    {
+      "tag": "1325",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04346275329589844
+    },
+    {
+      "tag": "1331",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.38700032234191895
+    },
+    {
+      "tag": "1337",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.5153234004974365
+    },
+    {
+      "tag": "1343",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.10315370559692383
+    },
+    {
+      "tag": "1349",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07259607315063477
+    },
+    {
+      "tag": "1355",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.24501824378967285
+    },
+    {
+      "tag": "1361",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.028254032135009766
+    },
+    {
+      "tag": "1367",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.3171870708465576
+    },
+    {
+      "tag": "1373",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.01576972007751465
+    },
+    {
+      "tag": "1379",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014525651931762695
+    },
+    {
+      "tag": "1385",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014745950698852539
+    },
+    {
+      "tag": "1391",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.027401447296142578
+    },
+    {
+      "tag": "1397",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.028684616088867188
+    },
+    {
+      "tag": "1403",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.040641069412231445
+    },
+    {
+      "tag": "1409",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04868006706237793
+    },
+    {
+      "tag": "1415",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.11118912696838379
+    },
+    {
+      "tag": "1421",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.08252978324890137
+    },
+    {
+      "tag": "1427",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.20708656311035156
+    },
+    {
+      "tag": "1433",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.026689529418945312
+    },
+    {
+      "tag": "1439",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.33759641647338867
+    },
+    {
+      "tag": "1445",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04036545753479004
+    },
+    {
+      "tag": "1451",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.5267505645751953
+    },
+    {
+      "tag": "1457",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.040399789810180664
+    },
+    {
+      "tag": "1463",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.7308135032653809
+    },
+    {
+      "tag": "1469",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1847066879272461
+    },
+    {
+      "tag": "1475",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.19252943992614746
+    },
+    {
+      "tag": "1481",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.033617496490478516
+    },
+    {
+      "tag": "1487",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.3253867626190186
+    },
+    {
+      "tag": "1493",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.6392526626586914
+    },
+    {
+      "tag": "1499",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01868748664855957
+    },
+    {
+      "tag": "1505",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01790904998779297
+    },
+    {
+      "tag": "1511",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.12707924842834473
+    },
+    {
+      "tag": "1517",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07621145248413086
+    },
+    {
+      "tag": "1523",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2049107551574707
+    },
+    {
+      "tag": "1529",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0689249038696289
+    },
+    {
+      "tag": "1535",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.7143070697784424
+    },
+    {
+      "tag": "1541",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.26622700691223145
+    },
+    {
+      "tag": "1547",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.5973818302154541
+    },
+    {
+      "tag": "1553",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.814016580581665
+    },
+    {
+      "tag": "1559",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 3.2884914875030518
+    },
+    {
+      "tag": "1565",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.09929180145263672
+    },
+    {
+      "tag": "1571",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.8378787040710449
+    },
+    {
+      "tag": "1577",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06110692024230957
+    },
+    {
+      "tag": "1583",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 9.607595682144165
+    },
+    {
+      "tag": "1589",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 4.841693162918091
+    },
+    {
+      "tag": "1595",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.35370469093322754
+    },
+    {
+      "tag": "1601",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.1365602016448975
+    },
+    {
+      "tag": "1607",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 34.03321862220764
+    },
+    {
+      "tag": "1613",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 5.390342950820923
+    },
+    {
+      "tag": "1619",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 203.4977285861969
+    },
+    {
+      "tag": "1625",
+      "depth": 0,
+      "nlits": 22,
+      "status": "UNSAT",
+      "seconds": 0.013576030731201172
+    },
+    {
+      "tag": "1631",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014190912246704102
+    },
+    {
+      "tag": "1637",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01382756233215332
+    },
+    {
+      "tag": "1643",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.012941360473632812
+    },
+    {
+      "tag": "1649",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014507532119750977
+    },
+    {
+      "tag": "1655",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.012715339660644531
+    },
+    {
+      "tag": "1661",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01508951187133789
+    },
+    {
+      "tag": "1667",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01590752601623535
+    },
+    {
+      "tag": "1673",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02405858039855957
+    },
+    {
+      "tag": "1679",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.016767501831054688
+    },
+    {
+      "tag": "1685",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013271808624267578
+    },
+    {
+      "tag": "1691",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016863346099853516
+    },
+    {
+      "tag": "1697",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02744150161743164
+    },
+    {
+      "tag": "1703",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03879523277282715
+    },
+    {
+      "tag": "1709",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02078866958618164
+    },
+    {
+      "tag": "1715",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.013578653335571289
+    },
+    {
+      "tag": "1721",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01705312728881836
+    },
+    {
+      "tag": "1727",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014202356338500977
+    },
+    {
+      "tag": "1733",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.017898082733154297
+    },
+    {
+      "tag": "1739",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.025487899780273438
+    },
+    {
+      "tag": "1745",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.020071983337402344
+    },
+    {
+      "tag": "1751",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014753103256225586
+    },
+    {
+      "tag": "1757",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014197111129760742
+    },
+    {
+      "tag": "1763",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.018217086791992188
+    },
+    {
+      "tag": "1769",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.019866943359375
+    },
+    {
+      "tag": "1775",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.016412973403930664
+    },
+    {
+      "tag": "1781",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013948678970336914
+    },
+    {
+      "tag": "1787",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.035318613052368164
+    },
+    {
+      "tag": "1793",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.05324745178222656
+    },
+    {
+      "tag": "1799",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01778578758239746
+    },
+    {
+      "tag": "1805",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013353347778320312
+    },
+    {
+      "tag": "1811",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016185760498046875
+    },
+    {
+      "tag": "1817",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014678478240966797
+    },
+    {
+      "tag": "1823",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.015480756759643555
+    },
+    {
+      "tag": "1829",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014912843704223633
+    },
+    {
+      "tag": "1835",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016628742218017578
+    },
+    {
+      "tag": "1841",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014898538589477539
+    },
+    {
+      "tag": "1847",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.018329620361328125
+    },
+    {
+      "tag": "1853",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03545093536376953
+    },
+    {
+      "tag": "1859",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014557838439941406
+    },
+    {
+      "tag": "1865",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014904260635375977
+    },
+    {
+      "tag": "1871",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014173269271850586
+    },
+    {
+      "tag": "1877",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.015903949737548828
+    },
+    {
+      "tag": "1883",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04117560386657715
+    },
+    {
+      "tag": "1889",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.08491230010986328
+    },
+    {
+      "tag": "1895",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.012506484985351562
+    },
+    {
+      "tag": "1901",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.012310504913330078
+    },
+    {
+      "tag": "1907",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01517629623413086
+    },
+    {
+      "tag": "1913",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03544735908508301
+    },
+    {
+      "tag": "1919",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.033212900161743164
+    },
+    {
+      "tag": "1925",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02075505256652832
+    },
+    {
+      "tag": "1931",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014276266098022461
+    },
+    {
+      "tag": "1937",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.14918065071105957
+    },
+    {
+      "tag": "1943",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03005385398864746
+    },
+    {
+      "tag": "1949",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014647722244262695
+    },
+    {
+      "tag": "1955",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01310276985168457
+    },
+    {
+      "tag": "1961",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.023895740509033203
+    },
+    {
+      "tag": "1967",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1119987964630127
+    },
+    {
+      "tag": "1973",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03881549835205078
+    },
+    {
+      "tag": "1979",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.4847371578216553
+    },
+    {
+      "tag": "1985",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.18865275382995605
+    },
+    {
+      "tag": "1991",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.5865697860717773
+    },
+    {
+      "tag": "1997",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1614375114440918
+    },
+    {
+      "tag": "2003",
+      "depth": 0,
+      "nlits": 22,
+      "status": "UNSAT",
+      "seconds": 0.019426345825195312
+    },
+    {
+      "tag": "2009",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.020629405975341797
+    },
+    {
+      "tag": "2015",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.021959304809570312
+    },
+    {
+      "tag": "2021",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014006853103637695
+    },
+    {
+      "tag": "2027",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01828598976135254
+    },
+    {
+      "tag": "2033",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.022952556610107422
+    },
+    {
+      "tag": "2039",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.026454925537109375
+    },
+    {
+      "tag": "2045",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016661405563354492
+    },
+    {
+      "tag": "2051",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.012410163879394531
+    },
+    {
+      "tag": "2057",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0164644718170166
+    },
+    {
+      "tag": "2063",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.040491580963134766
+    },
+    {
+      "tag": "2069",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.017130374908447266
+    },
+    {
+      "tag": "2075",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03917217254638672
+    },
+    {
+      "tag": "2081",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.018259525299072266
+    },
+    {
+      "tag": "2087",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06454849243164062
+    },
+    {
+      "tag": "2093",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.09023857116699219
+    },
+    {
+      "tag": "2099",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01566290855407715
+    },
+    {
+      "tag": "2105",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013472795486450195
+    },
+    {
+      "tag": "2111",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.018624067306518555
+    },
+    {
+      "tag": "2117",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04266810417175293
+    },
+    {
+      "tag": "2123",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014966249465942383
+    },
+    {
+      "tag": "2129",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.015135765075683594
+    },
+    {
+      "tag": "2135",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.022545576095581055
+    },
+    {
+      "tag": "2141",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06304359436035156
+    },
+    {
+      "tag": "2147",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.018576622009277344
+    },
+    {
+      "tag": "2153",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016814470291137695
+    },
+    {
+      "tag": "2159",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.031031131744384766
+    },
+    {
+      "tag": "2165",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07072567939758301
+    },
+    {
+      "tag": "2171",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03374290466308594
+    },
+    {
+      "tag": "2177",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.020833492279052734
+    },
+    {
+      "tag": "2183",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0576021671295166
+    },
+    {
+      "tag": "2189",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.020188331604003906
+    },
+    {
+      "tag": "2195",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.20389032363891602
+    },
+    {
+      "tag": "2201",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013416290283203125
+    },
+    {
+      "tag": "2207",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013624906539916992
+    },
+    {
+      "tag": "2213",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03732705116271973
+    },
+    {
+      "tag": "2219",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01561427116394043
+    },
+    {
+      "tag": "2225",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.027216196060180664
+    },
+    {
+      "tag": "2231",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03217768669128418
+    },
+    {
+      "tag": "2237",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2293412685394287
+    },
+    {
+      "tag": "2243",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.05904579162597656
+    },
+    {
+      "tag": "2249",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.7456541061401367
+    },
+    {
+      "tag": "2255",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.01859760284423828
+    },
+    {
+      "tag": "2261",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014705657958984375
+    },
+    {
+      "tag": "2267",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02010202407836914
+    },
+    {
+      "tag": "2273",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0247342586517334
+    },
+    {
+      "tag": "2279",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.24276423454284668
+    },
+    {
+      "tag": "2285",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06108903884887695
+    },
+    {
+      "tag": "2291",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.025786399841308594
+    },
+    {
+      "tag": "2297",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.46839118003845215
+    },
+    {
+      "tag": "2303",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.10945534706115723
+    },
+    {
+      "tag": "2309",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 2.064889669418335
+    },
+    {
+      "tag": "2315",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013171672821044922
+    },
+    {
+      "tag": "2321",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.015478849411010742
+    },
+    {
+      "tag": "2327",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01361846923828125
+    },
+    {
+      "tag": "2333",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04426407814025879
+    },
+    {
+      "tag": "2339",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02711963653564453
+    },
+    {
+      "tag": "2345",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013370037078857422
+    },
+    {
+      "tag": "2351",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0222623348236084
+    },
+    {
+      "tag": "2357",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.019013404846191406
+    },
+    {
+      "tag": "2363",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.10004067420959473
+    },
+    {
+      "tag": "2369",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.09022808074951172
+    },
+    {
+      "tag": "2375",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014874696731567383
+    },
+    {
+      "tag": "2381",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.09448862075805664
+    },
+    {
+      "tag": "2387",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06341052055358887
+    },
+    {
+      "tag": "2393",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.11130023002624512
+    },
+    {
+      "tag": "2399",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.11716341972351074
+    },
+    {
+      "tag": "2405",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 4.1342480182647705
+    },
+    {
+      "tag": "2411",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.05509138107299805
+    },
+    {
+      "tag": "2417",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.24882841110229492
+    },
+    {
+      "tag": "2423",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1124429702758789
+    },
+    {
+      "tag": "2429",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.5766751766204834
+    },
+    {
+      "tag": "2435",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.4921450614929199
+    },
+    {
+      "tag": "2441",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.01730966567993164
+    },
+    {
+      "tag": "2447",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.015452384948730469
+    },
+    {
+      "tag": "2453",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04460620880126953
+    },
+    {
+      "tag": "2459",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0399322509765625
+    },
+    {
+      "tag": "2465",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.015067815780639648
+    },
+    {
+      "tag": "2471",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013701438903808594
+    },
+    {
+      "tag": "2477",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06909656524658203
+    },
+    {
+      "tag": "2483",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.025684833526611328
+    },
+    {
+      "tag": "2489",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03276968002319336
+    },
+    {
+      "tag": "2495",
+      "depth": 0,
+      "nlits": 23,
+      "status": "UNSAT",
+      "seconds": 0.014966487884521484
+    },
+    {
+      "tag": "2501",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014261960983276367
+    },
+    {
+      "tag": "2507",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.018407344818115234
+    },
+    {
+      "tag": "2513",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01699090003967285
+    },
+    {
+      "tag": "2519",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02680373191833496
+    },
+    {
+      "tag": "2525",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.012682676315307617
+    },
+    {
+      "tag": "2531",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.11574649810791016
+    },
+    {
+      "tag": "2537",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.09692692756652832
+    },
+    {
+      "tag": "2543",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3051719665527344
+    },
+    {
+      "tag": "2549",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.046555519104003906
+    },
+    {
+      "tag": "2555",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.738663911819458
+    },
+    {
+      "tag": "2561",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.021286725997924805
+    },
+    {
+      "tag": "2567",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.025067567825317383
+    },
+    {
+      "tag": "2573",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.018626928329467773
+    },
+    {
+      "tag": "2579",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03809499740600586
+    },
+    {
+      "tag": "2585",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2558138370513916
+    },
+    {
+      "tag": "2591",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.020259857177734375
+    },
+    {
+      "tag": "2597",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02937459945678711
+    },
+    {
+      "tag": "2603",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03217649459838867
+    },
+    {
+      "tag": "2609",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0641336441040039
+    },
+    {
+      "tag": "2615",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.05811595916748047
+    },
+    {
+      "tag": "2621",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.024204254150390625
+    },
+    {
+      "tag": "2627",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.025744199752807617
+    },
+    {
+      "tag": "2633",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.31963276863098145
+    },
+    {
+      "tag": "2639",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.030758380889892578
+    },
+    {
+      "tag": "2645",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.542259931564331
+    },
+    {
+      "tag": "2651",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016187429428100586
+    },
+    {
+      "tag": "2657",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1593315601348877
+    },
+    {
+      "tag": "2663",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0751805305480957
+    },
+    {
+      "tag": "2669",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3595714569091797
+    },
+    {
+      "tag": "2675",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.05951428413391113
+    },
+    {
+      "tag": "2681",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.64546799659729
+    },
+    {
+      "tag": "2687",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03374147415161133
+    },
+    {
+      "tag": "2693",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03986525535583496
+    },
+    {
+      "tag": "2699",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.030192852020263672
+    },
+    {
+      "tag": "2705",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.054770708084106445
+    },
+    {
+      "tag": "2711",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.18137669563293457
+    },
+    {
+      "tag": "2717",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016570568084716797
+    },
+    {
+      "tag": "2723",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.024275541305541992
+    },
+    {
+      "tag": "2729",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04441046714782715
+    },
+    {
+      "tag": "2735",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2401905059814453
+    },
+    {
+      "tag": "2741",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.16520166397094727
+    },
+    {
+      "tag": "2747",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03364109992980957
+    },
+    {
+      "tag": "2753",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.027331113815307617
+    },
+    {
+      "tag": "2759",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.29451560974121094
+    },
+    {
+      "tag": "2765",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.049820899963378906
+    },
+    {
+      "tag": "2771",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03277778625488281
+    },
+    {
+      "tag": "2777",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.012910127639770508
+    },
+    {
+      "tag": "2783",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.16377902030944824
+    },
+    {
+      "tag": "2789",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.022320985794067383
+    },
+    {
+      "tag": "2795",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06536507606506348
+    },
+    {
+      "tag": "2801",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07623124122619629
+    },
+    {
+      "tag": "2807",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.9431672096252441
+    },
+    {
+      "tag": "2813",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.032735347747802734
+    },
+    {
+      "tag": "2819",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04912400245666504
+    },
+    {
+      "tag": "2825",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02368903160095215
+    },
+    {
+      "tag": "2831",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07907652854919434
+    },
+    {
+      "tag": "2837",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.30314064025878906
+    },
+    {
+      "tag": "2843",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03595614433288574
+    },
+    {
+      "tag": "2849",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.038033246994018555
+    },
+    {
+      "tag": "2855",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.0016226768493652
+    },
+    {
+      "tag": "2861",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.08917617797851562
+    },
+    {
+      "tag": "2867",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.4301259517669678
+    },
+    {
+      "tag": "2873",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02142643928527832
+    },
+    {
+      "tag": "2879",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.12511491775512695
+    },
+    {
+      "tag": "2885",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.06006979942321777
+    },
+    {
+      "tag": "2891",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.056865692138671875
+    },
+    {
+      "tag": "2897",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.08594012260437012
+    },
+    {
+      "tag": "2903",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.7589423656463623
+    },
+    {
+      "tag": "2909",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3331937789916992
+    },
+    {
+      "tag": "2915",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.4994230270385742
+    },
+    {
+      "tag": "2921",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04817557334899902
+    },
+    {
+      "tag": "2927",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 2.3187406063079834
+    },
+    {
+      "tag": "2933",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 4.621964454650879
+    },
+    {
+      "tag": "2939",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.01814746856689453
+    },
+    {
+      "tag": "2945",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.023316383361816406
+    },
+    {
+      "tag": "2951",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014624357223510742
+    },
+    {
+      "tag": "2957",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03108072280883789
+    },
+    {
+      "tag": "2963",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.050508737564086914
+    },
+    {
+      "tag": "2969",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.014806032180786133
+    },
+    {
+      "tag": "2975",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.040302276611328125
+    },
+    {
+      "tag": "2981",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013222932815551758
+    },
+    {
+      "tag": "2987",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.12594842910766602
+    },
+    {
+      "tag": "2993",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07061052322387695
+    },
+    {
+      "tag": "2999",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.018884897232055664
+    },
+    {
+      "tag": "3005",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.08965945243835449
+    },
+    {
+      "tag": "3011",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2507593631744385
+    },
+    {
+      "tag": "3017",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02945685386657715
+    },
+    {
+      "tag": "3023",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.021344900131225586
+    },
+    {
+      "tag": "3029",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.08957123756408691
+    },
+    {
+      "tag": "3035",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.1282799243927002
+    },
+    {
+      "tag": "3041",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.42559313774108887
+    },
+    {
+      "tag": "3047",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.05330085754394531
+    },
+    {
+      "tag": "3053",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 2.646275043487549
+    },
+    {
+      "tag": "3059",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.013588428497314453
+    },
+    {
+      "tag": "3065",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.037122488021850586
+    },
+    {
+      "tag": "3071",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04677867889404297
+    },
+    {
+      "tag": "3077",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0757443904876709
+    },
+    {
+      "tag": "3083",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04117441177368164
+    },
+    {
+      "tag": "3089",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.5641698837280273
+    },
+    {
+      "tag": "3095",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.016376495361328125
+    },
+    {
+      "tag": "3101",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.09319496154785156
+    },
+    {
+      "tag": "3107",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.07874083518981934
+    },
+    {
+      "tag": "3113",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.2402818202972412
+    },
+    {
+      "tag": "3119",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.8875019550323486
+    },
+    {
+      "tag": "3125",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.024454116821289062
+    },
+    {
+      "tag": "3131",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03809070587158203
+    },
+    {
+      "tag": "3137",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.09344768524169922
+    },
+    {
+      "tag": "3143",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.05686783790588379
+    },
+    {
+      "tag": "3149",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.431365966796875
+    },
+    {
+      "tag": "3155",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.027039527893066406
+    },
+    {
+      "tag": "3161",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.8112342357635498
+    },
+    {
+      "tag": "3167",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.4799437522888184
+    },
+    {
+      "tag": "3173",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.5543358325958252
+    },
+    {
+      "tag": "3179",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.6032204627990723
+    },
+    {
+      "tag": "3185",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 59.29324221611023
+    },
+    {
+      "tag": "3191",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02488994598388672
+    },
+    {
+      "tag": "3197",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.04037022590637207
+    },
+    {
+      "tag": "3203",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.05074906349182129
+    },
+    {
+      "tag": "3209",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.5117194652557373
+    },
+    {
+      "tag": "3215",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.09710264205932617
+    },
+    {
+      "tag": "3221",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0935361385345459
+    },
+    {
+      "tag": "3227",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.03837132453918457
+    },
+    {
+      "tag": "3233",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.43433547019958496
+    },
+    {
+      "tag": "3239",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.40692734718322754
+    },
+    {
+      "tag": "3245",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.8412449359893799
+    },
+    {
+      "tag": "3251",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.017737865447998047
+    },
+    {
+      "tag": "3257",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.08520078659057617
+    },
+    {
+      "tag": "3263",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.02499079704284668
+    },
+    {
+      "tag": "3269",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.46074461936950684
+    },
+    {
+      "tag": "3275",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.1698400974273682
+    },
+    {
+      "tag": "3281",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 5.083104133605957
+    },
+    {
+      "tag": "3287",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.19966793060302734
+    },
+    {
+      "tag": "3293",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 3.6703221797943115
+    },
+    {
+      "tag": "3299",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.21543431282043457
+    },
+    {
+      "tag": "3305",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 54.439955711364746
+    },
+    {
+      "tag": "3311",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 78.20544242858887
+    },
+    {
+      "tag": "3317",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.05417442321777344
+    },
+    {
+      "tag": "3323",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3319740295410156
+    },
+    {
+      "tag": "3329",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0679323673248291
+    },
+    {
+      "tag": "3335",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3869752883911133
+    },
+    {
+      "tag": "3341",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 5.013568878173828
+    },
+    {
+      "tag": "3347",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.0820913314819336
+    },
+    {
+      "tag": "3353",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.7369043827056885
+    },
+    {
+      "tag": "3359",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.7805216312408447
+    },
+    {
+      "tag": "3365",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.8989999294281006
+    },
+    {
+      "tag": "3371",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 3.864248514175415
+    },
+    {
+      "tag": "3377",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3457953929901123
+    },
+    {
+      "tag": "3383",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.3422267436981201
+    },
+    {
+      "tag": "3389",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 2.1509816646575928
+    },
+    {
+      "tag": "3395",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.6373789310455322
+    },
+    {
+      "tag": "3401",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 33.31795954704285
+    },
+    {
+      "tag": "3407",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 0.49935340881347656
+    },
+    {
+      "tag": "3413",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 49.2916100025177
+    },
+    {
+      "tag": "3419",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 8.61565613746643
+    },
+    {
+      "tag": "3425",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 35.44444036483765
+    },
+    {
+      "tag": "3431",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 110.53131127357483
+    },
+    {
+      "tag": "3437",
+      "depth": 0,
+      "nlits": 24,
+      "status": "TIMEOUT",
+      "seconds": 600.0906112194061
+    },
+    {
+      "tag": "3437.0",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.02836918830871582
+    },
+    {
+      "tag": "3437.1",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.06086993217468262
+    },
+    {
+      "tag": "3437.2",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.03812599182128906
+    },
+    {
+      "tag": "3437.3",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.10955357551574707
+    },
+    {
+      "tag": "3437.4",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.027751684188842773
+    },
+    {
+      "tag": "3437.5",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.05393052101135254
+    },
+    {
+      "tag": "3437.6",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.1644284725189209
+    },
+    {
+      "tag": "3437.7",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.2978243827819824
+    },
+    {
+      "tag": "3437.8",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.04480147361755371
+    },
+    {
+      "tag": "3437.9",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.12191009521484375
+    },
+    {
+      "tag": "3437.10",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.08407449722290039
+    },
+    {
+      "tag": "3437.11",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.09222722053527832
+    },
+    {
+      "tag": "3437.12",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.049490928649902344
+    },
+    {
+      "tag": "3437.13",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.1009371280670166
+    },
+    {
+      "tag": "3437.14",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.4685499668121338
+    },
+    {
+      "tag": "3437.15",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 1.3775053024291992
+    },
+    {
+      "tag": "3437.16",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.04364204406738281
+    },
+    {
+      "tag": "3437.17",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.13184404373168945
+    },
+    {
+      "tag": "3437.18",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.04664921760559082
+    },
+    {
+      "tag": "3437.19",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.4019911289215088
+    },
+    {
+      "tag": "3437.20",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.11020040512084961
+    },
+    {
+      "tag": "3437.21",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.5854337215423584
+    },
+    {
+      "tag": "3437.22",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.6636512279510498
+    },
+    {
+      "tag": "3437.23",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 1.2271449565887451
+    },
+    {
+      "tag": "3437.24",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.5213005542755127
+    },
+    {
+      "tag": "3437.25",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.6460866928100586
+    },
+    {
+      "tag": "3437.26",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 1.6459589004516602
+    },
+    {
+      "tag": "3437.27",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 4.004506826400757
+    },
+    {
+      "tag": "3437.28",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.6885418891906738
+    },
+    {
+      "tag": "3437.29",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 2.3739781379699707
+    },
+    {
+      "tag": "3437.30",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 3.077975034713745
+    },
+    {
+      "tag": "3437.31",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 6.466834783554077
+    },
+    {
+      "tag": "3437.32",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.06131482124328613
+    },
+    {
+      "tag": "3437.33",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.07377195358276367
+    },
+    {
+      "tag": "3437.34",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.04428744316101074
+    },
+    {
+      "tag": "3437.35",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.10896492004394531
+    },
+    {
+      "tag": "3437.36",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.05728411674499512
+    },
+    {
+      "tag": "3437.37",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.260648250579834
+    },
+    {
+      "tag": "3437.38",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.17371058464050293
+    },
+    {
+      "tag": "3437.39",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.5340454578399658
+    },
+    {
+      "tag": "3437.40",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.42658019065856934
+    },
+    {
+      "tag": "3437.41",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.5594344139099121
+    },
+    {
+      "tag": "3437.42",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.7271039485931396
+    },
+    {
+      "tag": "3437.43",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 1.9908666610717773
+    },
+    {
+      "tag": "3437.44",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.25415992736816406
+    },
+    {
+      "tag": "3437.45",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 2.0741639137268066
+    },
+    {
+      "tag": "3437.46",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 4.09609580039978
+    },
+    {
+      "tag": "3437.47",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 43.747077226638794
+    },
+    {
+      "tag": "3437.48",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.18669557571411133
+    },
+    {
+      "tag": "3437.49",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.17029976844787598
+    },
+    {
+      "tag": "3437.50",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.08843827247619629
+    },
+    {
+      "tag": "3437.51",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.9001636505126953
+    },
+    {
+      "tag": "3437.52",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 1.930217981338501
+    },
+    {
+      "tag": "3437.53",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 4.709787130355835
+    },
+    {
+      "tag": "3437.54",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 0.41622447967529297
+    },
+    {
+      "tag": "3437.55",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 33.79968547821045
+    },
+    {
+      "tag": "3437.56",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 1.1660795211791992
+    },
+    {
+      "tag": "3437.57",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 3.5136122703552246
+    },
+    {
+      "tag": "3437.58",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 6.896173477172852
+    },
+    {
+      "tag": "3437.59",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 62.56986975669861
+    },
+    {
+      "tag": "3437.60",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 4.894311904907227
+    },
+    {
+      "tag": "3437.61",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 40.051039695739746
+    },
+    {
+      "tag": "3437.62",
+      "depth": 1,
+      "nlits": 30,
+      "status": "UNSAT",
+      "seconds": 80.57912731170654
+    },
+    {
+      "tag": "3437.63",
+      "depth": 1,
+      "nlits": 30,
+      "status": "TIMEOUT",
+      "seconds": 600.0845203399658
+    },
+    {
+      "tag": "3437.63.0",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.014406204223632812
+    },
+    {
+      "tag": "3437.63.1",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.018565893173217773
+    },
+    {
+      "tag": "3437.63.2",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.030223608016967773
+    },
+    {
+      "tag": "3437.63.3",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.06852316856384277
+    },
+    {
+      "tag": "3437.63.4",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.042563438415527344
+    },
+    {
+      "tag": "3437.63.5",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.30548882484436035
+    },
+    {
+      "tag": "3437.63.6",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.1044464111328125
+    },
+    {
+      "tag": "3437.63.7",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.733879566192627
+    },
+    {
+      "tag": "3437.63.8",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.03206181526184082
+    },
+    {
+      "tag": "3437.63.9",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.03734421730041504
+    },
+    {
+      "tag": "3437.63.10",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.05842757225036621
+    },
+    {
+      "tag": "3437.63.11",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.2984278202056885
+    },
+    {
+      "tag": "3437.63.12",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.1374988555908203
+    },
+    {
+      "tag": "3437.63.13",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.23042750358581543
+    },
+    {
+      "tag": "3437.63.14",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.4553854465484619
+    },
+    {
+      "tag": "3437.63.15",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 1.8758018016815186
+    },
+    {
+      "tag": "3437.63.16",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.07711482048034668
+    },
+    {
+      "tag": "3437.63.17",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.2802450656890869
+    },
+    {
+      "tag": "3437.63.18",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.0949258804321289
+    },
+    {
+      "tag": "3437.63.19",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.2981693744659424
+    },
+    {
+      "tag": "3437.63.20",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.07745528221130371
+    },
+    {
+      "tag": "3437.63.21",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.25731897354125977
+    },
+    {
+      "tag": "3437.63.22",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.14673876762390137
+    },
+    {
+      "tag": "3437.63.23",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 1.0772895812988281
+    },
+    {
+      "tag": "3437.63.24",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.1361687183380127
+    },
+    {
+      "tag": "3437.63.25",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.5642616748809814
+    },
+    {
+      "tag": "3437.63.26",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.5753633975982666
+    },
+    {
+      "tag": "3437.63.27",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 1.2577056884765625
+    },
+    {
+      "tag": "3437.63.28",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.6672801971435547
+    },
+    {
+      "tag": "3437.63.29",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 2.4893927574157715
+    },
+    {
+      "tag": "3437.63.30",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 2.672306776046753
+    },
+    {
+      "tag": "3437.63.31",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 20.17405390739441
+    },
+    {
+      "tag": "3437.63.32",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.03706026077270508
+    },
+    {
+      "tag": "3437.63.33",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.09844231605529785
+    },
+    {
+      "tag": "3437.63.34",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.04311060905456543
+    },
+    {
+      "tag": "3437.63.35",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.5208151340484619
+    },
+    {
+      "tag": "3437.63.36",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.0987088680267334
+    },
+    {
+      "tag": "3437.63.37",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.6149458885192871
+    },
+    {
+      "tag": "3437.63.38",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.46708178520202637
+    },
+    {
+      "tag": "3437.63.39",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 2.172510862350464
+    },
+    {
+      "tag": "3437.63.40",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.12532615661621094
+    },
+    {
+      "tag": "3437.63.41",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 1.3945715427398682
+    },
+    {
+      "tag": "3437.63.42",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.5168454647064209
+    },
+    {
+      "tag": "3437.63.43",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 4.762474060058594
+    },
+    {
+      "tag": "3437.63.44",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 1.2280778884887695
+    },
+    {
+      "tag": "3437.63.45",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 1.4064462184906006
+    },
+    {
+      "tag": "3437.63.46",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 8.518438816070557
+    },
+    {
+      "tag": "3437.63.47",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 11.469340562820435
+    },
+    {
+      "tag": "3437.63.48",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.037003517150878906
+    },
+    {
+      "tag": "3437.63.49",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.17844939231872559
+    },
+    {
+      "tag": "3437.63.50",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.39687108993530273
+    },
+    {
+      "tag": "3437.63.51",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 1.8873803615570068
+    },
+    {
+      "tag": "3437.63.52",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.26132631301879883
+    },
+    {
+      "tag": "3437.63.53",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.7838027477264404
+    },
+    {
+      "tag": "3437.63.54",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 2.6258444786071777
+    },
+    {
+      "tag": "3437.63.55",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 3.432140588760376
+    },
+    {
+      "tag": "3437.63.56",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.05736231803894043
+    },
+    {
+      "tag": "3437.63.57",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 1.3472959995269775
+    },
+    {
+      "tag": "3437.63.58",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.9882159233093262
+    },
+    {
+      "tag": "3437.63.59",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 2.4274966716766357
+    },
+    {
+      "tag": "3437.63.60",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 0.6152098178863525
+    },
+    {
+      "tag": "3437.63.61",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 6.117037296295166
+    },
+    {
+      "tag": "3437.63.62",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 2.07958984375
+    },
+    {
+      "tag": "3437.63.63",
+      "depth": 2,
+      "nlits": 36,
+      "status": "UNSAT",
+      "seconds": 47.0763475894928
+    }
+  ]
+}
