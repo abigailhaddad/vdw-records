@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cnc_grind_lib import (  # noqa: E402
     DEFAULT_STATE_PATH, assign_tiers, build_batch_matrix, build_solo_matrix,
     cfg_of, default_evidence_dirs, filtered_verdict, load_state,
-    select_monsters)
+    monster_march_opts, select_monsters)
 
 
 def emit(out, key, value):
@@ -143,8 +143,23 @@ def main():
                         "batch_size": 1, "tier": "solo"})
         shard_i += 1
 
-    monster_split_matrix = [{"parent_cube": m} for m in monsters]
-    monster_conquer_matrix = [{"parent_cube": m, "shard": s}
+    # DEPTH-ESCALATING MONSTER RE-SPLIT: each monster is re-split at a depth
+    # that ESCALATES with how many times it has already been raced (march_cu
+    # is deterministic -- re-racing at the same depth reproduces identical
+    # children forever). The march_opts string doubles as the split_tag so
+    # merge_jsonl_verdicts keeps each depth's children a SEPARATE independent
+    # cover (never unioning two depths' non-comparable local child indices).
+    monster_state = cell.get("monster_state", {})
+
+    def monster_opts(m):
+        attempts = monster_state.get(str(m), {}).get("attempts", 0)
+        return monster_march_opts(attempts, cfg)
+
+    monster_split_matrix = [{"parent_cube": m, "march_opts": monster_opts(m),
+                             "split_tag": monster_opts(m)} for m in monsters]
+    monster_conquer_matrix = [{"parent_cube": m, "shard": s,
+                               "march_opts": monster_opts(m),
+                               "split_tag": monster_opts(m)}
                                for m in monsters for s in range(cfg["monster_nshards"])]
 
     emit(out, "stop_now", False)

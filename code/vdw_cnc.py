@@ -706,7 +706,8 @@ def conquer_cube(nvars, clause_lines, solve_clause_lines, cube_lits, cap,
 
 def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
                   outdir, certified, resplit_opts, max_resplit_depth,
-                  cube_indices=None, batch_size=1, parent_cube=None):
+                  cube_indices=None, batch_size=1, parent_cube=None,
+                  split_tag=None):
     """Solve this shard's cubes: normally its round-robin slice (cube i goes
     to shard i%nshards), but if cube_indices is given, exactly those global
     cube indices instead (the re-dispatch path -- re-run only the cubes a
@@ -729,7 +730,24 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     top-level global indices -- and the workdir gets a distinguishing
     "_parent<P>" tag so a parent-split conquer run can never collide on
     scratch icnf files with a plain top-level run of the same instance/N
-    sharing the same --outdir."""
+    sharing the same --outdir.
+
+    split_tag (DEPTH-ESCALATING MONSTER RE-SPLIT): a string identifying WHICH
+    parent re-split this evidence belongs to -- in practice the march_cu
+    --march-opts used to split the parent (e.g. "-d 16"). march_cu is
+    deterministic, so re-racing a parent at the SAME depth reproduces the
+    IDENTICAL children forever; a monster that fails its first race therefore
+    fails every race unless the re-split depth ESCALATES. But two DIFFERENT
+    depths split the SAME parent into DIFFERENT (and differently-COUNTED)
+    child sets whose LOCAL child indices 0..n-1 mean different things -- so
+    merge_jsonl_verdicts must never union them. The tag is what keeps them
+    apart: it is written into this file's meta line (the ONLY place merge
+    reads it), and merge groups a parent's evidence by (parent_cube,
+    split_tag), treating each depth-split as an INDEPENDENT complete cover.
+    None (the default, and every pre-existing committed file, which has no
+    split_tag field) is the single default group -- so untagged evidence
+    merges byte-for-byte as it always did. Only meaningful together with
+    parent_cube (a top-level run's split_tag is ignored by merge)."""
     lengths, encoding, N = meta["lengths"], meta["encoding"], meta["N"]
     symmetry_break = meta.get("symmetry_break", False)
     slug = instance_slug(lengths, encoding, N, symmetry_break)
@@ -769,7 +787,8 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
                          "shard": shard,
                          "nshards": nshards, "ncubes": len(cubes),
                          "mode": mode, "members": members,
-                         "parent_cube": parent_cube}) + "\n")
+                         "parent_cube": parent_cube,
+                         "split_tag": split_tag}) + "\n")
     jf.flush()
 
     records = []
@@ -858,7 +877,7 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
             "n_solve_aux_vars": n_solve_aux_vars,
             "shard": shard, "nshards": nshards, "mode": mode,
             "ncubes": len(cubes), "members": members,
-            "parent_cube": parent_cube,
+            "parent_cube": parent_cube, "split_tag": split_tag,
             "cap_seconds": cap, "max_resplit_depth": max_resplit_depth,
             "batch_size": eff_batch, "n_batched_unsat": n_batched,
             "n_cubes_in_slice": len(mine), "n_unsat": n_unsat,
@@ -1544,15 +1563,35 @@ def merge_jsonl_verdicts(results_dir):
     run (e.g. the parent cube being logged UNSAT outright by an earlier,
     non-distributed conquer attempt): whichever source resolves a given
     global index first, the other can never un-resolve it -- a plain set
-    union is exactly the OR this composition needs."""
+    union is exactly the OR this composition needs.
+
+    DEPTH-ESCALATING MONSTER RE-SPLIT (split_tag): the SAME parent may be
+    re-split at DIFFERENT march_cu depths across generations (the monster
+    depth ladder -- see cnc_grind_lib.monster_march_opts), because re-racing
+    a parent at the SAME depth reproduces the IDENTICAL deterministic
+    children forever. Two different depths produce DIFFERENT child sets, with
+    DIFFERENT counts, whose local child indices 0..n-1 are NOT comparable --
+    unioning them would be unsound TWICE OVER: (a) same child count, different
+    children -> the union of two incomplete covers' local-index UNSAT sets
+    could falsely appear complete (a FALSE UNSAT); (b) different counts -> a
+    spurious "disagree on child count" crash. So parent evidence is grouped
+    by (parent_cube, split_tag): each (parent, tag) group is an INDEPENDENT
+    complete cover of the parent, and the child-count-agreement guard applies
+    only WITHIN a tag (a real corruption). A parent is UNSAT if ANY single
+    (parent, tag) group is count-complete-and-all-UNSAT; SAT if ANY child in
+    ANY group is SAT; otherwise unresolved. Evidence with no split_tag field
+    (every pre-existing committed file, and every top-level run) falls in the
+    single default group tag=None, so untagged parents merge byte-for-byte
+    exactly as before this field existed."""
     ncubes = None
     lengths = None
     encoding = None
     symmetry_break = None
     unsat, sat = set(), set()
-    # parent (global int) -> {"n_children": int or None, "unsat": set(local
-    # int), "sat": set(local int)} -- see the DISTRIBUTED RE-SPLIT docstring
-    # section above.
+    # parent (global int) -> {split_tag (str or None) -> {"n_children": int or
+    # None, "unsat": set(local int), "sat": set(local int)}} -- one INNER
+    # group per (parent, split_tag), each an independent complete cover of the
+    # parent. See the DEPTH-ESCALATING MONSTER RE-SPLIT docstring section.
     parents = {}
     for p in sorted(glob.glob(os.path.join(results_dir, "**", "shard-*.jsonl"),
                               recursive=True)):
@@ -1587,15 +1626,25 @@ def merge_jsonl_verdicts(results_dir):
             for g, v in verdicts.items():
                 (sat if v == "SAT" else unsat if v == "UNSAT" else set()).add(g)
         else:
-            pinfo = parents.setdefault(
-                parent, {"n_children": None, "unsat": set(), "sat": set()})
+            # Group by (parent_cube, split_tag). "" and a missing/None
+            # split_tag are the SAME default group (None) -- that is what makes
+            # every pre-existing untagged file merge exactly as before.
+            split_tag = (meta.get("split_tag") if meta is not None else None)
+            if split_tag == "":
+                split_tag = None
+            tag_groups = parents.setdefault(parent, {})
+            pinfo = tag_groups.setdefault(
+                split_tag, {"n_children": None, "unsat": set(), "sat": set()})
             if meta is not None and meta.get("ncubes") is not None:
+                # Child-count disagreement is a real corruption ONLY WITHIN a
+                # single (parent, split_tag) group -- two DIFFERENT tags are
+                # two different splits and are EXPECTED to differ in count.
                 if (pinfo["n_children"] is not None
                         and pinfo["n_children"] != meta["ncubes"]):
                     raise ValueError(
                         f"JSONL files disagree on child count for parent "
-                        f"cube {parent}: {pinfo['n_children']} vs "
-                        f"{meta['ncubes']} in {p}")
+                        f"cube {parent} split_tag {split_tag!r}: "
+                        f"{pinfo['n_children']} vs {meta['ncubes']} in {p}")
                 pinfo["n_children"] = meta["ncubes"]
             for g, v in verdicts.items():
                 if v == "SAT":
@@ -1604,22 +1653,56 @@ def merge_jsonl_verdicts(results_dir):
                     pinfo["unsat"].add(g)
 
     parent_detail = {}
-    for parent, info in sorted(parents.items()):
-        n = info["n_children"]
-        full_range = set(range(n)) if n is not None else set()
-        closed_via_children = (n is not None and full_range <= info["unsat"])
-        if info["sat"]:
+    for parent, tag_groups in sorted(parents.items()):
+        # Per-(parent, tag) detail. A parent is UNSAT if ANY tag group is a
+        # count-complete all-UNSAT cover; SAT if ANY child in ANY group is
+        # SAT. Different tags NEVER share their local child indices.
+        tag_detail = {}
+        any_sat = False
+        any_closed = False
+        all_sat_local = set()
+        rep = None          # representative group for the flat summary fields
+        rep_score = None    # (closed?, n_children_refuted) -- prefer a closer
+        for tag, info in sorted(tag_groups.items(),
+                                key=lambda kv: ("" if kv[0] is None else kv[0])):
+            n = info["n_children"]
+            full_range = set(range(n)) if n is not None else set()
+            closed = (n is not None and full_range <= info["unsat"])
+            n_refuted = len(info["unsat"] & full_range)
+            d = {"n_children": n,
+                 "n_children_refuted": n_refuted,
+                 "children_without_unsat": (sorted(full_range - info["unsat"])
+                                            if n is not None else None),
+                 "sat_children": sorted(info["sat"]),
+                 "closed_via_children": closed}
+            # tags-dict key must be a string; the default group (None) is "".
+            tag_detail["" if tag is None else tag] = d
+            any_sat = any_sat or bool(info["sat"])
+            any_closed = any_closed or closed
+            all_sat_local |= info["sat"]
+            score = (closed, n_refuted)
+            if rep_score is None or score > rep_score:
+                rep_score, rep = score, d
+        if any_sat:
             sat.add(parent)
-        elif closed_via_children:
+        elif any_closed:
             unsat.add(parent)
+        # Flat summary fields: for a parent with a SINGLE group (every
+        # untagged / single-depth parent -- the entire backward-compat case)
+        # these are byte-for-byte that one group's own values. For a parent
+        # split at several depths they summarize the representative (closing,
+        # else best-refuted) group; the authoritative per-split breakdown is
+        # in "tags". "closed_via_children"/"resolved"/"sat_children" always
+        # reflect the whole parent (any group suffices), which is what drives
+        # the top-level unsat/sat union above.
         parent_detail[parent] = {
-            "n_children": n,
-            "n_children_refuted": len(info["unsat"] & full_range),
-            "children_without_unsat": (sorted(full_range - info["unsat"])
-                                       if n is not None else None),
-            "sat_children": sorted(info["sat"]),
-            "closed_via_children": closed_via_children,
-            "resolved": bool(info["sat"]) or closed_via_children}
+            "n_children": rep["n_children"],
+            "n_children_refuted": rep["n_children_refuted"],
+            "children_without_unsat": rep["children_without_unsat"],
+            "sat_children": sorted(all_sat_local),
+            "closed_via_children": any_closed,
+            "resolved": any_sat or any_closed,
+            "tags": tag_detail}
 
     if sat:
         status = "SAT"
@@ -2393,6 +2476,19 @@ def main():
                           "from (default: <outdir>/cnc_<slug>.cubes, the "
                           "sibling file a plain `split` of this same "
                           "instance/N already writes)")
+    ap.add_argument("--split-tag", default=None,
+                     help="conquer --parent-cube: a string identifying WHICH "
+                          "parent re-split this evidence belongs to -- pass "
+                          "the SAME --march-opts the parent was split with "
+                          "(e.g. '-d 16'). Written into the shard JSONL meta "
+                          "line so merge_jsonl_verdicts groups a parent's "
+                          "evidence by (parent_cube, split_tag) and treats "
+                          "each depth-split as an INDEPENDENT complete cover "
+                          "-- never unioning the DIFFERENT children two "
+                          "depths produce (the depth-escalating monster "
+                          "ladder). Leave unset (the default) for the single "
+                          "default group; every pre-existing untagged file "
+                          "merges byte-for-byte as before.")
     ap.add_argument("--results-dir", default=None,
                      help="aggregate: directory of per-shard conquer JSONs")
     ap.add_argument("--merge-jsonl", action="store_true",
@@ -2770,7 +2866,8 @@ def main():
                             args.certified, args.resplit_march_opts,
                             args.max_resplit_depth, cube_indices=cube_indices,
                             batch_size=args.batch_size,
-                            parent_cube=args.parent_cube)
+                            parent_cube=args.parent_cube,
+                            split_tag=args.split_tag)
         scope = (f" [parent cube {args.parent_cube}'s children only]"
                 if args.parent_cube is not None else "")
         print(f"\n  shard {args.shard} verdict: {res['status']}{scope} "

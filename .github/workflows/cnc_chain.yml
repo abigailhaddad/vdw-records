@@ -222,6 +222,17 @@ jobs:
   # unlike cnc_pipeline.yml (one parent_cube per whole workflow dispatch),
   # this generation may race SEVERAL monsters at once, so each gets its OWN
   # uniquely-named artifact (cnc-grind-parent-<idx>) to avoid any collision.
+  # DEPTH-ESCALATING: each monster's re-split depth comes from matrix.march_opts
+  # (the monster depth ladder, indexed by prior attempt count -- see
+  # cnc_grind_plan.py / cnc_grind_lib.monster_march_opts), NOT the fixed
+  # top_march_opts. march_cu is deterministic, so re-racing at the SAME depth
+  # reproduces identical children forever; escalating the depth is what lets a
+  # monster converge. conquer_monster tags its evidence with matrix.split_tag
+  # (== march_opts) so merge_jsonl_verdicts keeps each depth's children a
+  # SEPARATE independent cover. The parent .cnf/.cubes basename does not encode
+  # depth, but each generation is a fresh workflow run with its own cnc_out and
+  # its own per-run artifact namespace, so two depths of the same parent (in
+  # two different generations) never share an artifact -- no collision.
   split_monster:
     needs: [setup, split_top, build_tools]
     if: needs.setup.outputs.has_monsters == 'true'
@@ -250,7 +261,7 @@ jobs:
           python3 code/vdw_cnc.py split --t ${{ needs.setup.outputs.t }} \
             --N ${{ needs.setup.outputs.N }} \
             --parent-cube ${{ matrix.parent_cube }} \
-            --march-opts "${{ needs.setup.outputs.top_march_opts }}" \
+            --march-opts "${{ matrix.march_opts }}" \
             --outdir cnc_out --json-out cnc_out/split_parent.json \
             | tee cnc_out/split_parent.log
       - uses: actions/upload-artifact@v4
@@ -291,6 +302,7 @@ jobs:
           python3 code/vdw_cnc.py conquer --t ${{ needs.setup.outputs.t }} \
             --N ${{ needs.setup.outputs.N }} \
             --parent-cube ${{ matrix.parent_cube }} \
+            --split-tag "${{ matrix.split_tag }}" \
             --cnf cnc_out/cnc_t${{ needs.setup.outputs.t }}_N${{ needs.setup.outputs.N }}.parent${{ matrix.parent_cube }}.cnf \
             --cubes cnc_out/cnc_t${{ needs.setup.outputs.t }}_N${{ needs.setup.outputs.N }}.parent${{ matrix.parent_cube }}.cubes \
             --shard ${{ matrix.shard }} --nshards ${{ needs.setup.outputs.monster_nshards }} \

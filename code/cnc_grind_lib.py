@@ -90,7 +90,45 @@ CONFIG_DEFAULTS = {
     "max_monsters_per_gen": 3,
     "escalate_solo_at": 2,
     "escalate_monster_at": 3,
+    # DEPTH-ESCALATING MONSTER RE-SPLIT: march_cu is deterministic, so
+    # re-racing a monster parent at the SAME depth reproduces the IDENTICAL
+    # children every generation -- a monster that fails its first race fails
+    # forever, never converging. Each successive race must split the parent
+    # DEEPER (more, finer children -> each easier to refute). This ladder maps
+    # a monster's prior attempt count -> the --march-opts for its NEXT split;
+    # attempt 0 (a brand-new monster) uses ladder[0], and it clamps at the
+    # deepest entry so a stubborn monster keeps re-racing at max depth rather
+    # than falling off the end. UNLIKE top_march_opts (the TOP-level split,
+    # which must NEVER change -- it defines the cube numbering the whole
+    # campaign's indices are relative to), this only ever governs a parent's
+    # OWN residual re-split, whose children are numbered per (parent,
+    # split_tag) -- so escalating it renumbers nothing at the top level. The
+    # march_opts string doubles as the merge split_tag (see
+    # monster_march_opts / vdw_cnc.merge_jsonl_verdicts).
+    "monster_depth_ladder": ["-d 12", "-d 16", "-d 20", "-d 24"],
 }
+
+
+def monster_march_opts(attempts, cfg):
+    """The --march-opts a monster parent's NEXT re-split should use, given how
+    many times it has ALREADY been raced (attempts; 0 for a brand-new
+    monster). Indexes cfg["monster_depth_ladder"], clamped at the deepest
+    entry so a monster that survives the whole ladder keeps re-racing at max
+    depth rather than IndexError-ing or silently repeating a shallower depth.
+    This string is BOTH the march_cu options passed to `split --parent-cube`
+    AND the split_tag passed to `conquer --parent-cube` -- they MUST match, so
+    the children a given depth produces are grouped (and covered) together and
+    never unioned with a different depth's children (the soundness point of
+    merge_jsonl_verdicts's (parent_cube, split_tag) grouping)."""
+    ladder = cfg.get("monster_depth_ladder")
+    if ladder is None:  # key absent (old/hand-edited state) -> the default
+        ladder = CONFIG_DEFAULTS["monster_depth_ladder"]
+    if not ladder:
+        # Degenerate config (explicitly empty ladder): fall back to the
+        # top-level split opts so a monster still gets SOME split rather than
+        # crashing.
+        return cfg.get("top_march_opts", CONFIG_DEFAULTS["top_march_opts"])
+    return ladder[min(attempts, len(ladder) - 1)]
 
 
 # ---------------------------------------------------------------- state io
