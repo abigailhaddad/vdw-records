@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cnc_grind_lib import (  # noqa: E402
     DEFAULT_STATE_PATH, assign_tiers, build_batch_matrix, build_solo_matrix,
     cfg_of, default_evidence_dirs, filtered_verdict, load_state,
-    monster_march_opts, select_monsters)
+    monster_march_opts, monster_split_tag, select_monsters)
 
 
 def emit(out, key, value):
@@ -151,15 +151,22 @@ def main():
     # cover (never unioning two depths' non-comparable local child indices).
     monster_state = cell.get("monster_state", {})
 
+    # split_tag is None (-> the None default group) when the depth is the
+    # top-level -d12 -- so a -d12 re-race COMPOSES with the near-complete
+    # legacy untagged cover and FINISHES it, rather than starting a fresh
+    # tagged cover from scratch (see cnc_grind_lib.monster_split_tag).
     def monster_opts(m):
         attempts = monster_state.get(str(m), {}).get("attempts", 0)
         return monster_march_opts(attempts, cfg)
 
+    def monster_tag(m):
+        return monster_split_tag(monster_opts(m), cfg)
+
     monster_split_matrix = [{"parent_cube": m, "march_opts": monster_opts(m),
-                             "split_tag": monster_opts(m)} for m in monsters]
+                             "split_tag": monster_tag(m)} for m in monsters]
     monster_conquer_matrix = [{"parent_cube": m, "shard": s,
                                "march_opts": monster_opts(m),
-                               "split_tag": monster_opts(m)}
+                               "split_tag": monster_tag(m)}
                                for m in monsters for s in range(cfg["monster_nshards"])]
 
     emit(out, "stop_now", False)

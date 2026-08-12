@@ -131,6 +131,26 @@ def monster_march_opts(attempts, cfg):
     return ladder[min(attempts, len(ladder) - 1)]
 
 
+def monster_split_tag(march_opts, cfg):
+    """The split_tag a monster re-split at `march_opts` should carry.
+
+    CRITICAL for FINISHING a near-complete parent: the original top-level
+    depth (top_march_opts, -d12) is the SAME deterministic march_cu split that
+    produced every pre-Move-2 UNTAGGED parent-cube cover -- many of which are
+    already 99%+ refuted, a handful of hard children from closing. A -d12
+    re-race must therefore land in the None default group so its evidence
+    COMPOSES with (and finishes) that legacy cover, NOT start a fresh tagged
+    one from scratch. So march_opts == top_march_opts -> None (untagged, ==
+    legacy); any DEEPER depth (-d16/-d20/...) has no legacy evidence and keeps
+    its own opts-string tag so two different real splits are never unioned
+    (the merge soundness invariant). Sound because all -d12 splits of a given
+    parent are byte-identical (march_cu is deterministic), so unioning -d12
+    re-race UNSATs with the legacy -d12 UNSATs is the same OR-composition the
+    re-dispatch path already relies on."""
+    top = cfg.get("top_march_opts", CONFIG_DEFAULTS["top_march_opts"])
+    return None if march_opts == top else march_opts
+
+
 # ---------------------------------------------------------------- state io
 
 def load_state(path=DEFAULT_STATE_PATH):

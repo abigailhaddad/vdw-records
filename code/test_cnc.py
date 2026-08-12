@@ -1611,6 +1611,23 @@ def test_monster_march_opts_empty_ladder_falls_back():
     assert lib.monster_march_opts(7, cfg) == cfg["top_march_opts"]
 
 
+def test_monster_split_tag_top_depth_is_none_composes_with_legacy():
+    # THE FINISH-NEAR-COMPLETE fix: a re-split at the top-level depth (-d12,
+    # the depth every pre-Move-2 UNTAGGED parent cover used) must get
+    # split_tag None so it lands in the None default group and COMPOSES with
+    # that near-complete legacy cover -- while any DEEPER depth keeps its own
+    # opts-string tag (never unioned with a different real split).
+    import cnc_grind_lib as lib
+    cfg = dict(lib.CONFIG_DEFAULTS)  # top_march_opts == "-d 12"
+    assert lib.monster_split_tag("-d 12", cfg) is None
+    assert lib.monster_split_tag("-d 16", cfg) == "-d 16"
+    assert lib.monster_split_tag("-d 24", cfg) == "-d 24"
+    # and it tracks a non-default top depth too
+    cfg2 = dict(lib.CONFIG_DEFAULTS); cfg2["top_march_opts"] = "-d 10"
+    assert lib.monster_split_tag("-d 10", cfg2) is None
+    assert lib.monster_split_tag("-d 12", cfg2) == "-d 12"
+
+
 def test_plan_monster_matrix_carries_escalating_march_opts_and_tag():
     # cnc_grind_plan.py must emit monster_split_matrix / monster_conquer_matrix
     # entries carrying per-monster march_opts AND a matching split_tag drawn

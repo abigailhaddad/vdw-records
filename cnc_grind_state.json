@@ -3164,11 +3164,14 @@
   "escalate_solo_at": 2,
   "max_batch_shards": 20,
   "max_monsters_per_gen": 8,
-  "max_resplit_depth": 7,
+  "max_resplit_depth": 9,
   "max_solo_shards": 24,
-  "monster_cap_seconds": 600,
+  "monster_cap_seconds": 2400,
+  "monster_depth_ladder": [
+   "-d 12"
+  ],
   "monster_nshards": 4,
-  "resplit_march_opts": "-d 8",
+  "resplit_march_opts": "-d 10",
   "solo_cap_seconds": 1200,
   "top_march_opts": "-d 12"
  },
