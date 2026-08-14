@@ -1,0 +1,192 @@
+name: vdw-cnc-finish
+
+# ONE-SHOT surgical finisher for pdw(2;3,28) N=744's near-complete monster
+# parents (see code/cnc_finish_plan.py). Each of ~18 parents is 99%+ refuted
+# under its original -d12 split and stuck on a HANDFUL of intrinsically-hard
+# leftover -d12 children (finisher_targets.json). The self-chaining grind's
+# monster tier re-races the WHOLE parent (re-solving ~3300 children) and times
+# out before the hard children get enough compute. This workflow conquers ONLY
+# the leftover children -- each in a small batch with a big per-child cap and
+# deep recursive re-split -- and tags the evidence split_tag="" (the None
+# default group) so it COMPOSES with the parent's legacy -d12 cover in
+# merge_jsonl_verdicts: refuting the last child CLOSES the parent, and the
+# self-chaining grind (cnc_chain.yml) folds the committed evidence in on its
+# next collect. Sound: -d12 is deterministic (child indices match the legacy
+# cover) and a child is only recorded UNSAT if the solver proved it -- this can
+# only ADD genuine refutations, never a false UNSAT.
+#
+# NOT self-chaining, NOT stateful: it commits raw shard evidence and stops. Run
+# once; re-running just re-attempts the same (deterministic) hard children.
+permissions:
+  contents: write
+
+concurrency:
+  group: vdw-cnc-finish
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: "leftover children per job (batch*cap must stay < 21000s)"
+        default: "2"
+      cap_seconds:
+        description: "per-child solve cap before deep re-split"
+        default: "8000"
+      max_resplit_depth:
+        description: "recursive re-split depth on a walled hard child"
+        default: "10"
+      resplit_march_opts:
+        description: "march_cu opts for the per-child re-split"
+        default: "-d 12"
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      njobs: ${{ steps.plan.outputs.njobs }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        run: |
+          python3 code/cnc_finish_plan.py \
+            --batch "${{ inputs.batch }}" \
+            --cap-seconds "${{ inputs.cap_seconds }}" \
+            --github-output "$GITHUB_OUTPUT"
+      - run: echo "finisher jobs=${{ steps.plan.outputs.njobs }}" | tee "$GITHUB_STEP_SUMMARY"
+
+  build_tools:
+    runs-on: ubuntu-latest
+    steps:
+      - id: rev
+        run: echo "sha=$(git ls-remote https://github.com/marijnheule/CnC.git HEAD | cut -f1)" >> "$GITHUB_OUTPUT"
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: pkg/cncbin
+          key: cnc-tools-${{ runner.os }}-${{ steps.rev.outputs.sha }}
+      - name: apt prerequisites
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential git
+      - name: clone + build march_cu and iglucose
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/marijnheule/CnC.git /tmp/CnC
+          ( cd /tmp/CnC/march_cu && make CC="gcc -fcommon" )
+          ( cd /tmp/CnC/iglucose/core && make )
+          mkdir -p pkg/cncbin
+          cp /tmp/CnC/march_cu/march_cu pkg/cncbin/
+          cp /tmp/CnC/iglucose/core/iglucose pkg/cncbin/
+          chmod +x pkg/cncbin/*
+      - name: package binaries
+        run: |
+          chmod +x pkg/cncbin/*
+          tar -C pkg -czf cnc-tools.tar.gz cncbin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnc-tools
+          path: cnc-tools.tar.gz
+
+  finish:
+    needs: [setup, build_tools]
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnc-tools
+      - run: |
+          tar -xzf cnc-tools.tar.gz
+          chmod +x cncbin/*
+      - name: split parent ${{ matrix.parent_cube }} at -d12 (matches legacy child indexing)
+        env:
+          MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
+          IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
+        run: |
+          mkdir -p cnc_out
+          python3 code/vdw_cnc.py split --t 28 --N 744 \
+            --parent-cube ${{ matrix.parent_cube }} \
+            --march-opts "-d 12" \
+            --outdir cnc_out --json-out cnc_out/split_parent.json \
+            | tee cnc_out/split_parent.log
+      - name: conquer ONLY leftover children ${{ matrix.cube_indices }} with max compute
+        env:
+          MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
+          IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
+        run: |
+          python3 code/vdw_cnc.py conquer --t 28 --N 744 \
+            --parent-cube ${{ matrix.parent_cube }} \
+            --split-tag "" \
+            --cnf cnc_out/cnc_t28_N744.parent${{ matrix.parent_cube }}.cnf \
+            --cubes cnc_out/cnc_t28_N744.parent${{ matrix.parent_cube }}.cubes \
+            --shard ${{ matrix.shard }} --nshards 1 \
+            --cube-indices "${{ matrix.cube_indices }}" \
+            --cap-seconds ${{ matrix.cap_seconds }} \
+            --max-resplit-depth ${{ inputs.max_resplit_depth }} \
+            --resplit-march-opts "${{ inputs.resplit_march_opts }}" \
+            --batch-size 1 \
+            --outdir cnc_out --json-out cnc_out/shard-${{ matrix.shard }}.json \
+            | tee cnc_out/shard-${{ matrix.shard }}.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-finish-shard-${{ matrix.shard }}
+          path: |
+            cnc_out/shard-${{ matrix.shard }}.json
+            cnc_out/shard-${{ matrix.shard }}.jsonl
+            cnc_out/shard-${{ matrix.shard }}.log
+          if-no-files-found: warn
+
+  collect:
+    needs: [setup, finish]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-finish-shard-*
+          path: finish_dl
+          merge-multiple: true
+        continue-on-error: true
+      - name: commit finisher evidence (grind's next collect folds it in)
+        run: |
+          git config user.name "vdw-cnc-finish[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          mkdir -p "gh_actions_results/cnc-finish-${{ github.run_id }}"
+          if [ -d finish_dl ] && [ -n "$(ls -A finish_dl 2>/dev/null)" ]; then
+            cp -r finish_dl/* "gh_actions_results/cnc-finish-${{ github.run_id }}/" || true
+          fi
+          # count how many leftover children this run refuted (for the summary)
+          python3 - <<'PY' | tee "$GITHUB_STEP_SUMMARY"
+          import glob, json, os
+          d = f"gh_actions_results/cnc-finish-${{ github.run_id }}"
+          unsat = sat = 0
+          for p in glob.glob(os.path.join(d, "**", "shard-*.jsonl"), recursive=True):
+              for line in open(p):
+                  try: r = json.loads(line)
+                  except Exception: continue
+                  if r.get("meta"): continue
+                  if r.get("verdict") == "UNSAT": unsat += 1
+                  elif r.get("verdict") == "SAT": sat += 1
+          print(f"finisher: {unsat} leftover children refuted, {sat} SAT")
+          PY
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main
+            git add "gh_actions_results/cnc-finish-${{ github.run_id }}"
+            if git diff --cached --quiet; then echo "nothing to commit"; break; fi
+            git commit -m "GH Actions: vdw-cnc-finish surgical strike on N=744 leftover children (run ${{ github.run_id }})"
+            if git push origin main; then break; fi
+            echo "push attempt $i failed, retrying..."; sleep 5
+          done
