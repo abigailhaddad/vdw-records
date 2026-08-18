@@ -2867,9 +2867,31 @@
      "run_id": "31979716888",
      "solo_shards": 24,
      "timestamp": "2026-08-17T16:04:26Z"
+    },
+    {
+     "batch_shards": 0,
+     "cleared": 0,
+     "cleared_cubes": [],
+     "iteration": 51,
+     "monsters_raced": [
+      4061,
+      4062,
+      4070,
+      4076,
+      4078,
+      4086,
+      2974,
+      3006
+     ],
+     "new_stuck_count_entries": 96,
+     "residual_after": 80,
+     "residual_before": 80,
+     "run_id": "32044281454",
+     "solo_shards": 24,
+     "timestamp": "2026-08-18T03:48:52Z"
     }
    ],
-   "monster_cursor": 240,
+   "monster_cursor": 248,
    "monster_state": {
     "1995": {
      "attempts": 1,
@@ -2890,6 +2912,20 @@
      "last_run_id": "30556713458",
      "n_children": 3460,
      "n_children_refuted": 3459,
+     "resolved": false
+    },
+    "2974": {
+     "attempts": 1,
+     "last_run_id": "32044281454",
+     "n_children": null,
+     "n_children_refuted": null,
+     "resolved": false
+    },
+    "3006": {
+     "attempts": 1,
+     "last_run_id": "32044281454",
+     "n_children": null,
+     "n_children_refuted": null,
      "resolved": false
     },
     "3030": {
@@ -3089,22 +3125,22 @@
      "resolved": false
     },
     "4061": {
-     "attempts": 2,
-     "last_run_id": "31874320190",
+     "attempts": 3,
+     "last_run_id": "32044281454",
      "n_children": 3688,
      "n_children_refuted": 3687,
      "resolved": false
     },
     "4062": {
-     "attempts": 2,
-     "last_run_id": "31874320190",
+     "attempts": 3,
+     "last_run_id": "32044281454",
      "n_children": 3974,
      "n_children_refuted": 2386,
      "resolved": false
     },
     "4070": {
-     "attempts": 1,
-     "last_run_id": "31145481306",
+     "attempts": 2,
+     "last_run_id": "32044281454",
      "n_children": 3852,
      "n_children_refuted": 3354,
      "resolved": false
@@ -3117,8 +3153,8 @@
      "resolved": false
     },
     "4076": {
-     "attempts": 15,
-     "last_run_id": "31614266129",
+     "attempts": 16,
+     "last_run_id": "32044281454",
      "n_children": 3712,
      "n_children_refuted": 3450,
      "resolved": false
@@ -3131,8 +3167,8 @@
      "resolved": false
     },
     "4078": {
-     "attempts": 3,
-     "last_run_id": "31614266129",
+     "attempts": 4,
+     "last_run_id": "32044281454",
      "n_children": 3999,
      "n_children_refuted": 2210,
      "resolved": false
@@ -3152,8 +3188,8 @@
      "resolved": false
     },
     "4086": {
-     "attempts": 1,
-     "last_run_id": "31810591039",
+     "attempts": 2,
+     "last_run_id": "32044281454",
      "n_children": 4018,
      "n_children_refuted": 2401,
      "resolved": false
@@ -3242,35 +3278,35 @@
     4093,
     4094
    ],
-   "solo_cursor": 1013,
+   "solo_cursor": 1037,
    "status": "active",
    "stuck_count": {
-    "1786": 6,
-    "2014": 4,
-    "2026": 4,
-    "2028": 4,
-    "2029": 3,
-    "2030": 3,
-    "2034": 3,
-    "2036": 3,
-    "2037": 3,
-    "2038": 3,
-    "2040": 5,
-    "2042": 5,
-    "2043": 5,
-    "2044": 5,
-    "2045": 5,
-    "2046": 5,
-    "2558": 5,
-    "2622": 6,
-    "2686": 6,
-    "2798": 6,
+    "1786": 7,
+    "2014": 5,
+    "2026": 5,
+    "2028": 5,
+    "2029": 4,
+    "2030": 4,
+    "2034": 4,
+    "2036": 4,
+    "2037": 4,
+    "2038": 4,
+    "2040": 6,
+    "2042": 6,
+    "2043": 6,
+    "2044": 6,
+    "2045": 6,
+    "2046": 6,
+    "2558": 6,
+    "2622": 7,
+    "2686": 7,
+    "2798": 7,
     "2812": 6,
-    "2814": 6,
-    "2910": 6,
-    "2942": 7,
-    "2974": 8,
-    "3006": 8,
+    "2814": 7,
+    "2910": 7,
+    "2942": 8,
+    "2974": 9,
+    "3006": 9,
     "3030": 9,
     "3038": 12,
     "3050": 6,
@@ -3325,22 +3361,22 @@
     "4058": 18,
     "4059": 9,
     "4060": 10,
-    "4061": 9,
-    "4062": 9,
-    "4070": 8,
+    "4061": 10,
+    "4062": 10,
+    "4070": 9,
     "4073": 8,
-    "4076": 18,
+    "4076": 19,
     "4077": 18,
-    "4078": 9,
+    "4078": 10,
     "4085": 8,
-    "4086": 9,
+    "4086": 10,
     "4088": 7,
     "4089": 7,
     "4090": 7,
     "4091": 7,
     "4092": 6,
     "4093": 6,
-    "4094": 6
+    "4094": 7
    }
   }
  },
@@ -3364,7 +3400,7 @@
   "top_march_opts": "-d 12"
  },
  "final_verdict": null,
- "iteration": 50,
+ "iteration": 51,
  "max_iterations": 140,
  "sat_halt": false,
  "stop": false,
