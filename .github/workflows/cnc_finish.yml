@@ -39,6 +39,12 @@ on:
       resplit_march_opts:
         description: "march_cu opts for the per-child re-split"
         default: "-d 12"
+  # SELF-TARGETING daily strike: each run recomputes the near-complete hit-list
+  # live from committed evidence and closes whatever parents have since become
+  # near-complete -- a no-op (has_targets=false) on days with none. This is what
+  # drives the unattended FULL CLOSE of N=744 alongside the grind (cnc_chain.yml).
+  schedule:
+    - cron: "0 6 * * *"
 
 jobs:
   setup:
@@ -46,17 +52,22 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       njobs: ${{ steps.plan.outputs.njobs }}
+      has_targets: ${{ steps.plan.outputs.has_targets }}
     steps:
       - uses: actions/checkout@v4
       - id: plan
         run: |
           python3 code/cnc_finish_plan.py \
-            --batch "${{ inputs.batch }}" \
-            --cap-seconds "${{ inputs.cap_seconds }}" \
+            --batch "${{ inputs.batch || '2' }}" \
+            --cap-seconds "${{ inputs.cap_seconds || '8000' }}" \
+            --targets-out finisher_targets_live.json \
             --github-output "$GITHUB_OUTPUT"
-      - run: echo "finisher jobs=${{ steps.plan.outputs.njobs }}" | tee "$GITHUB_STEP_SUMMARY"
+      - run: |
+          echo "finisher jobs=${{ steps.plan.outputs.njobs }} has_targets=${{ steps.plan.outputs.has_targets }}" | tee "$GITHUB_STEP_SUMMARY"
 
   build_tools:
+    needs: setup
+    if: needs.setup.outputs.has_targets == 'true'
     runs-on: ubuntu-latest
     steps:
       - id: rev
@@ -95,6 +106,7 @@ jobs:
   # before any finish job runs.
   split_top:
     needs: [setup, build_tools]
+    if: needs.setup.outputs.has_targets == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -125,6 +137,7 @@ jobs:
 
   finish:
     needs: [setup, build_tools, split_top]
+    if: needs.setup.outputs.has_targets == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 350
     strategy:
@@ -169,8 +182,8 @@ jobs:
             --shard ${{ matrix.shard }} --nshards 1 \
             --cube-indices "${{ matrix.cube_indices }}" \
             --cap-seconds ${{ matrix.cap_seconds }} \
-            --max-resplit-depth ${{ inputs.max_resplit_depth }} \
-            --resplit-march-opts "${{ inputs.resplit_march_opts }}" \
+            --max-resplit-depth ${{ inputs.max_resplit_depth || '10' }} \
+            --resplit-march-opts "${{ inputs.resplit_march_opts || '-d 12' }}" \
             --batch-size 1 \
             --outdir cnc_out --json-out cnc_out/shard-${{ matrix.shard }}.json \
             | tee cnc_out/shard-${{ matrix.shard }}.log
@@ -186,7 +199,7 @@ jobs:
 
   collect:
     needs: [setup, finish]
-    if: always()
+    if: always() && needs.setup.outputs.has_targets == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

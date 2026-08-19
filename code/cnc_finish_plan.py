@@ -58,27 +58,71 @@ def build_matrix(targets, batch, cap_seconds):
     return matrix
 
 
+def compute_targets_from_evidence(t, N, max_left):
+    """SELF-TARGETING: recompute the hit-list live from the CURRENTLY committed
+    evidence (merge_jsonl_verdicts via cnc_grind_lib.filtered_verdict), so a
+    finisher re-run automatically strikes whatever parents have SINCE become
+    near-complete -- no stale hand-committed finisher_targets.json to babysit.
+    A parent is a target iff it is still in the residual, is deep-split (has a
+    None/-d12 tag group), and has between 1 and `max_left` leftover -d12
+    children. Returns {parent(str): {n_children, left:[local child indices]}}
+    -- the same shape the static finisher_targets.json used."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import cnc_grind_lib as lib
+    r, _ = lib.filtered_verdict(t, N, lib.default_evidence_dirs())
+    resid = set(r.get("cubes_without_unsat") or [])
+    parents = r.get("parents") or {}
+    targets = {}
+    for p, info in parents.items():
+        if p not in resid:
+            continue
+        d12 = (info.get("tags") or {}).get("")   # the None/-d12 default group
+        if not d12 or d12.get("n_children") is None:
+            continue
+        left = sorted(d12.get("children_without_unsat") or [])
+        if 0 < len(left) <= max_left:
+            targets[str(p)] = {"n_children": d12["n_children"], "left": left}
+    return targets
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--targets", default=DEFAULT_TARGETS)
+    ap.add_argument("--targets", default=DEFAULT_TARGETS,
+                     help="static hit-list JSON; used only with --from-file")
+    ap.add_argument("--from-file", action="store_true",
+                     help="read the static --targets JSON instead of recomputing "
+                          "the hit-list live from committed evidence (default)")
+    ap.add_argument("--t", type=int, default=28)
+    ap.add_argument("--N", type=int, default=744)
+    ap.add_argument("--max-left", type=int, default=60,
+                     help="only strike parents with <= this many leftover -d12 "
+                          "children (a near-complete parent; default 60)")
     ap.add_argument("--batch", type=int, default=2,
                      help="leftover children per job (batch*cap must stay under "
                           "the 350-min=21000s job wall; default 2)")
     ap.add_argument("--cap-seconds", type=int, default=8000,
                      help="per-child solve cap before the deep re-split kicks "
                           "in (default 8000s ~= 133 min)")
+    ap.add_argument("--targets-out", default=None,
+                     help="write the computed hit-list here (provenance)")
     ap.add_argument("--github-output", default=None)
     a = ap.parse_args()
 
-    if not os.path.exists(a.targets):
-        raise SystemExit(f"{a.targets} missing -- regenerate the hit-list first")
-    targets = json.load(open(a.targets))
+    if a.from_file:
+        if not os.path.exists(a.targets):
+            raise SystemExit(f"{a.targets} missing -- regenerate the hit-list first")
+        targets = json.load(open(a.targets))
+    else:
+        targets = compute_targets_from_evidence(a.t, a.N, a.max_left)
+        if a.targets_out:
+            json.dump(targets, open(a.targets_out, "w"), indent=1, sort_keys=True)
     matrix = build_matrix(targets, a.batch, a.cap_seconds)
 
     out = open(a.github_output, "a") if a.github_output else sys.stdout
     print(f"matrix={json.dumps(matrix)}", file=out)
     print(f"njobs={len(matrix)}", file=out)
+    print(f"has_targets={'true' if matrix else 'false'}", file=out)
     n_children = sum(len(t["left"]) for t in targets.values())
     print(f"# finisher: {len(targets)} parents, {n_children} leftover children, "
           f"{len(matrix)} jobs (batch={a.batch}, cap={a.cap_seconds}s)",
