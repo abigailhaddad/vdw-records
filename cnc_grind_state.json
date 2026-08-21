@@ -2992,9 +2992,39 @@
      "run_id": "32335813364",
      "solo_shards": 0,
      "timestamp": "2026-08-20T17:15:02Z"
+    },
+    {
+     "batch_shards": 0,
+     "cleared": 3,
+     "cleared_cubes": [
+      3058,
+      3061,
+      3066
+     ],
+     "iteration": 56,
+     "monsters_raced": [
+      2910,
+      2942,
+      3006,
+      3038,
+      3054,
+      3058,
+      3061,
+      3062,
+      3066,
+      3068,
+      3069,
+      3070
+     ],
+     "new_stuck_count_entries": 89,
+     "residual_after": 65,
+     "residual_before": 68,
+     "run_id": "32396619388",
+     "solo_shards": 0,
+     "timestamp": "2026-08-21T05:00:21Z"
     }
    ],
-   "monster_cursor": 288,
+   "monster_cursor": 300,
    "monster_state": {
     "1995": {
      "attempts": 1,
@@ -3059,11 +3089,18 @@
      "n_children_refuted": 3459,
      "resolved": false
     },
-    "2942": {
+    "2910": {
      "attempts": 1,
-     "last_run_id": "32096857753",
+     "last_run_id": "32396619388",
+     "n_children": 3510,
+     "n_children_refuted": 3509,
+     "resolved": false
+    },
+    "2942": {
+     "attempts": 2,
+     "last_run_id": "32396619388",
      "n_children": 3869,
-     "n_children_refuted": 3172,
+     "n_children_refuted": 3543,
      "resolved": false
     },
     "2974": {
@@ -3074,10 +3111,10 @@
      "resolved": false
     },
     "3006": {
-     "attempts": 2,
-     "last_run_id": "32096857753",
+     "attempts": 3,
+     "last_run_id": "32396619388",
      "n_children": 3916,
-     "n_children_refuted": 3061,
+     "n_children_refuted": 3434,
      "resolved": false
     },
     "3030": {
@@ -3088,8 +3125,8 @@
      "resolved": false
     },
     "3038": {
-     "attempts": 5,
-     "last_run_id": "31979716888",
+     "attempts": 6,
+     "last_run_id": "32396619388",
      "n_children": 3826,
      "n_children_refuted": 3685,
      "resolved": false
@@ -3099,6 +3136,41 @@
      "last_run_id": "30583044199",
      "n_children": 3426,
      "n_children_refuted": 3425,
+     "resolved": false
+    },
+    "3054": {
+     "attempts": 1,
+     "last_run_id": "32396619388",
+     "n_children": 3823,
+     "n_children_refuted": 3541,
+     "resolved": false
+    },
+    "3062": {
+     "attempts": 1,
+     "last_run_id": "32396619388",
+     "n_children": 3837,
+     "n_children_refuted": 3574,
+     "resolved": false
+    },
+    "3068": {
+     "attempts": 1,
+     "last_run_id": "32396619388",
+     "n_children": 3963,
+     "n_children_refuted": 3530,
+     "resolved": false
+    },
+    "3069": {
+     "attempts": 1,
+     "last_run_id": "32396619388",
+     "n_children": 3794,
+     "n_children_refuted": 3531,
+     "resolved": false
+    },
+    "3070": {
+     "attempts": 1,
+     "last_run_id": "32396619388",
+     "n_children": 3981,
+     "n_children_refuted": 1772,
      "resolved": false
     },
     "3550": {
@@ -3468,10 +3540,7 @@
     3006,
     3038,
     3054,
-    3058,
-    3061,
     3062,
-    3066,
     3068,
     3069,
     3070,
@@ -3537,21 +3606,18 @@
     "2798": 8,
     "2812": 6,
     "2814": 8,
-    "2910": 8,
-    "2942": 9,
+    "2910": 9,
+    "2942": 10,
     "2974": 10,
-    "3006": 10,
+    "3006": 11,
     "3030": 10,
-    "3038": 12,
+    "3038": 13,
     "3050": 6,
-    "3054": 8,
-    "3058": 8,
-    "3061": 8,
-    "3062": 8,
-    "3066": 8,
-    "3068": 8,
-    "3069": 8,
-    "3070": 8,
+    "3054": 9,
+    "3062": 9,
+    "3068": 9,
+    "3069": 9,
+    "3070": 9,
     "3454": 8,
     "3550": 9,
     "3580": 7,
@@ -3634,7 +3700,7 @@
   "top_march_opts": "-d 12"
  },
  "final_verdict": null,
- "iteration": 55,
+ "iteration": 56,
  "max_iterations": 140,
  "sat_halt": false,
  "stop": false,
