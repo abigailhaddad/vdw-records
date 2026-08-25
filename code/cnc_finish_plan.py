@@ -95,7 +95,7 @@ def main():
                           "the hit-list live from committed evidence (default)")
     ap.add_argument("--t", type=int, default=28)
     ap.add_argument("--N", type=int, default=744)
-    ap.add_argument("--max-left", type=int, default=60,
+    ap.add_argument("--max-left", type=int, default=150,
                      help="only strike parents with <= this many leftover -d12 "
                           "children (a near-complete parent; default 60)")
     ap.add_argument("--batch", type=int, default=2,

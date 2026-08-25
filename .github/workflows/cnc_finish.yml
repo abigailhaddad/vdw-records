@@ -29,10 +29,10 @@ on:
     inputs:
       batch:
         description: "leftover children per job (batch*cap must stay < 21000s)"
-        default: "2"
+        default: "3"
       cap_seconds:
         description: "per-child solve cap before deep re-split"
-        default: "8000"
+        default: "6000"
       max_resplit_depth:
         description: "recursive re-split depth on a walled hard child"
         default: "10"
