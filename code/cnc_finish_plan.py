@@ -95,9 +95,14 @@ def main():
                           "the hit-list live from committed evidence (default)")
     ap.add_argument("--t", type=int, default=28)
     ap.add_argument("--N", type=int, default=744)
-    ap.add_argument("--max-left", type=int, default=150,
+    ap.add_argument("--max-left", type=int, default=400,
                      help="only strike parents with <= this many leftover -d12 "
-                          "children (a near-complete parent; default 60)")
+                          "children (default 400)")
+    ap.add_argument("--max-jobs", type=int, default=250,
+                     help="cap total finish jobs per run; the matrix is sorted "
+                          "fewest-leftover-first so this keeps the closest-to-"
+                          "closing parents and defers the rest to later daily "
+                          "runs (prevents a job explosion on big parents)")
     ap.add_argument("--batch", type=int, default=2,
                      help="leftover children per job (batch*cap must stay under "
                           "the 350-min=21000s job wall; default 2)")
@@ -118,6 +123,8 @@ def main():
         if a.targets_out:
             json.dump(targets, open(a.targets_out, "w"), indent=1, sort_keys=True)
     matrix = build_matrix(targets, a.batch, a.cap_seconds)
+    if a.max_jobs and len(matrix) > a.max_jobs:
+        matrix = matrix[:a.max_jobs]  # fewest-leftover parents first (build_matrix sort order)
 
     out = open(a.github_output, "a") if a.github_output else sys.stdout
     print(f"matrix={json.dumps(matrix)}", file=out)
