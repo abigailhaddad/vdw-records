@@ -1,0 +1,49 @@
+{
+  "lengths": [
+    3,
+    28
+  ],
+  "encoding": "palindromic",
+  "t": 28,
+  "N": 744,
+  "symmetry_break": false,
+  "n_solve_aux_vars": 0,
+  "shard": 121,
+  "nshards": 1,
+  "mode": "explicit",
+  "ncubes": 3710,
+  "members": [
+    3672,
+    3673
+  ],
+  "parent_cube": 4089,
+  "split_tag": "",
+  "cap_seconds": 8000.0,
+  "max_resplit_depth": 10,
+  "batch_size": 1,
+  "n_batched_unsat": 0,
+  "n_cubes_in_slice": 2,
+  "n_unsat": 2,
+  "unresolved_cubes": [],
+  "sat_cube": null,
+  "witness": null,
+  "status": "UNSAT",
+  "slice_seconds": 18.737158060073853,
+  "n_solves": 2,
+  "per_solve": [
+    {
+      "tag": "3672",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 1.5664951801300049
+    },
+    {
+      "tag": "3673",
+      "depth": 0,
+      "nlits": 24,
+      "status": "UNSAT",
+      "seconds": 17.159554958343506
+    }
+  ]
+}
