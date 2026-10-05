@@ -1654,6 +1654,405 @@ def test_plan_monster_matrix_carries_escalating_march_opts_and_tag():
     assert by_parent[100]["march_opts"] != by_parent[200]["march_opts"], by_parent
 
 
+# ---------------------------------------------------------------------------
+# Sub-cube resume cache + graceful deadline (SubcubeCache / conquer_cube).
+# Hermetic: solve_lits / split_residual are replaced by a deterministic fake
+# "instance" so no solver binaries are needed. The invariant under test is the
+# one the proof campaign rests on: the cache and the deadline may only SKIP or
+# STOP work -- they must never change a verdict.
+# ---------------------------------------------------------------------------
+import contextlib
+import shutil
+import hashlib as _hashlib
+import random as _random
+import types as _types
+
+
+class _FakeInstance:
+    """Deterministic fake formula: every cube (a set of literals) has a fixed
+    status, and re-splitting is a fixed function of its literals -- exactly
+    what march_cu/iglucose give us (the finisher relies on that determinism)."""
+
+    def __init__(self, seed, allow_sat=False, allow_err=False, clock=None,
+                 hard_depth=3):
+        self.seed, self.allow_sat, self.allow_err = seed, allow_sat, allow_err
+        self.clock, self.hard_depth = clock, hard_depth
+        self.solved = []       # lits of every cube actually handed to the solver
+        self.splits = []       # lits of every cube actually re-split
+
+    def _h(self, lits, salt):
+        d = _hashlib.sha256(f"{self.seed}/{salt}/{sorted(lits)}".encode())
+        return int(d.hexdigest(), 16)
+
+    def status(self, lits, depth):
+        r = self._h(lits, "st") % 100
+        if r < 55:
+            return "UNSAT"
+        if r < 85 and depth < self.hard_depth:
+            return "TIMEOUT"
+        if self.allow_sat and r == 99:
+            return "SAT"
+        if self.allow_err and r == 98:
+            return "ERR(rc=1)"
+        return "UNSAT"
+
+    def solve_lits(self, clause_lines, cube_lits, cap, workdir, tag, certified):
+        self.solved.append(list(cube_lits))
+        depth = tag.count(".")
+        st = self.status(cube_lits, depth)
+        secs = 1.0 + (self._h(cube_lits, "t") % 40)      # 1..40 fake seconds
+        if st == "TIMEOUT":
+            secs = cap                                   # a timeout burns the cap
+        if self.clock is not None:
+            if secs > cap:                               # clipped by the caller
+                secs, st = cap, "TIMEOUT"
+            self.clock.now += secs
+        if st == "SAT":
+            return "SAT", secs, list(cube_lits) + [999]
+        return st, secs, None
+
+    def split_residual(self, nvars, clause_lines, cube_lits, workdir, tag, opts):
+        self.splits.append(list(cube_lits))
+        k = 2 + self._h(cube_lits, "k") % 3
+        base = 1000 + 10 * len(cube_lits)
+        return [[base + j] for j in range(k)]
+
+
+class _FakeClock:
+    def __init__(self):
+        self.now = 1000.0
+
+    def time(self):
+        return self.now
+
+
+@contextlib.contextmanager
+def _patched(inst, clock=None):
+    saved = (vdw_cnc.solve_lits, vdw_cnc.split_residual, vdw_cnc.time)
+    vdw_cnc.solve_lits = inst.solve_lits
+    vdw_cnc.split_residual = inst.split_residual
+    if clock is not None:
+        vdw_cnc.time = clock
+    try:
+        yield
+    finally:
+        vdw_cnc.solve_lits, vdw_cnc.split_residual, vdw_cnc.time = saved
+
+
+_BASE = [1, 2, 3]
+_FORMULA = ["1 2 0\n"]
+_FSHA = _hashlib.sha256("".join(_FORMULA).encode()).hexdigest()
+
+
+def _cube(inst, cache=None, deadline=None, cap=100.0, depth=6, base=None):
+    """One conquer_cube call on the fake instance -> (verdict, model)."""
+    return vdw_cnc.conquer_cube(10, _FORMULA, _FORMULA, list(base or _BASE), cap,
+                                tempfile.gettempdir(), "0", "-d 12", depth, 0,
+                                False, [], cache, deadline)
+
+
+def _new_cache(d, tag, fsha=_FSHA, child=0):
+    return vdw_cnc.SubcubeCache(d, 1, child, tag, fsha,
+                                {"subcache": 1, "formula_sha256": fsha})
+
+
+def test_resume_cache_never_changes_verdict():
+    # THE soundness test. For 400 random fake instances (SAT leaves, solver
+    # errors, and cubes that stay unresolved at the depth limit all mixed in)
+    # the verdict must be identical with: no cache; a fresh cache; a warm
+    # cache; a cache truncated at a random line plus a torn last line; and a
+    # run interrupted by the deadline and then resumed -- repeatedly -- to
+    # completion from whatever the cache saved.
+    seen = {"UNSAT": 0, "SAT": 0, "UNRESOLVED": 0, "interrupted": 0,
+            "multi_round": 0}
+    for seed in range(400):
+        rng = _random.Random(seed)
+        md = rng.choice([1, 2, 6])                  # max re-split depth
+        mk = lambda clock=None: _FakeInstance(seed, True, True, clock=clock,
+                                              hard_depth=4)
+        inst = mk()
+        with _patched(inst):
+            ref = _cube(inst, depth=md)
+        seen[ref[0]] += 1
+        with tempfile.TemporaryDirectory() as d:
+            i2 = mk()
+            with _patched(i2):
+                c = _new_cache(d, "a")
+                v1 = _cube(i2, c, depth=md)
+                c.close()
+            assert v1 == ref, (seed, "fresh cache", v1, ref)
+            i3 = mk()
+            with _patched(i3):
+                c = _new_cache(d, "b")
+                v2 = _cube(i3, c, depth=md)
+                c.close()
+            assert v2 == ref, (seed, "warm cache", v2, ref)
+            if ref[0] == "UNSAT":
+                assert i3.solved == [], (seed, "warm UNSAT re-solved cubes")
+            path = os.path.join(d, "subcache-parent1_child0.a.jsonl")
+            if os.path.exists(path):        # absent if nothing was worth saving
+                lines = open(path).read().splitlines()
+                with open(path, "w") as f:  # truncate + tear the last line
+                    f.write("\n".join(lines[:rng.randint(1, len(lines))])
+                            + '\n{"k": "deadbeef", "v": "UN')
+            i4 = mk()
+            with _patched(i4):
+                c = _new_cache(d, "c")
+                v3 = _cube(i4, c, depth=md)
+                c.close()
+            assert v3 == ref, (seed, "truncated cache", v3, ref)
+        with tempfile.TemporaryDirectory() as d:
+            clock = _FakeClock()
+            i5 = mk(clock)
+            with _patched(i5, clock):
+                c = _new_cache(d, "r0")
+                v = _cube(i5, c, depth=md, deadline=clock.now + rng.randint(20, 700))
+                c.close()
+            assert v[0] in ("DEADLINE", ref[0]), (seed, "interrupted", v, ref)
+            if v[0] == "DEADLINE":
+                seen["interrupted"] += 1
+                # Resume until it finishes. The wall is many caps long, as in
+                # production (20100s vs 8000s): cubes left unresolved at the
+                # depth limit are NOT cached and re-burn a cap each round.
+                for rnd in range(1, 80):
+                    clock = _FakeClock()
+                    i6 = mk(clock)
+                    with _patched(i6, clock):
+                        c = _new_cache(d, f"r{rnd}")
+                        wall = (rng.randint(1500, 3000) if ref[0] == "UNRESOLVED"
+                                else rng.randint(150, 400))
+                        v = _cube(i6, c, depth=md, deadline=clock.now + wall)
+                        c.close()
+                    if v[0] != "DEADLINE":
+                        break
+                assert v == ref, (seed, "resumed", v, ref)
+                seen["multi_round"] += rnd > 1
+    assert (seen["UNSAT"] > 20 and seen["SAT"] > 5 and seen["UNRESOLVED"] > 5
+            and seen["interrupted"] > 40 and seen["multi_round"] > 5), seen
+
+def test_resume_cache_resumed_run_does_not_redo_refuted_cubes():
+    # After an interrupted run, the resumed run must not hand any already
+    # refuted leaf back to the solver, and must do strictly less work than
+    # starting from scratch (the whole point of the cache).
+    checked = 0
+    for seed in range(300):
+        clock = _FakeClock()
+        inst = _FakeInstance(seed, clock=clock)
+        with _patched(inst, clock):
+            ref_v, _ = _cube(inst)
+        if ref_v != "UNSAT" or len(inst.solved) < 12:
+            continue
+        with tempfile.TemporaryDirectory() as d:
+            clock = _FakeClock()
+            inst1 = _FakeInstance(seed, clock=clock)
+            with _patched(inst1, clock):
+                c = _new_cache(d, "x")
+                v, _ = _cube(inst1, c, deadline=clock.now + 150)
+                c.close()
+            if v != "DEADLINE":
+                continue
+            unsat1 = {tuple(sorted(x)) for x in inst1.solved
+                      if inst1.status(x, 0) == "UNSAT"}
+            clock = _FakeClock()
+            inst2 = _FakeInstance(seed, clock=clock)
+            with _patched(inst2, clock):
+                c = _new_cache(d, "y")
+                v2, _ = _cube(inst2, c)
+                c.close()
+            assert v2 == "UNSAT", (seed, v2)
+            again = [x for x in inst2.solved if tuple(sorted(x)) in unsat1]
+            assert not again, (seed, "re-solved refuted cubes", again[:3])
+            assert len(inst2.solved) < len(inst.solved), \
+                (seed, len(inst2.solved), len(inst.solved))
+            checked += 1
+    assert checked >= 10, checked
+
+
+def test_resume_cache_ignores_a_different_formula():
+    # A cache written for another formula must never be read back.
+    with tempfile.TemporaryDirectory() as d:
+        inst = _FakeInstance(7)
+        with _patched(inst):
+            other = _new_cache(d, "a", fsha="0" * 64)
+            _cube(inst, other)
+            other.close()
+            assert other.new_unsat > 0
+            mine = _new_cache(d, "b")           # real fingerprint
+        assert mine.unsat == set() and len(mine.ignored_files) == 1, \
+            (len(mine.unsat), mine.ignored_files)
+        # and a file with no header at all is ignored too
+        with open(os.path.join(d, "subcache-parent1_child0.z.jsonl"), "w") as f:
+            f.write(json.dumps({"k": "ab" * 32, "v": "UNSAT"}) + "\n")
+        again = _new_cache(d, "c")
+        assert len(again.ignored_files) == 2 and not again.unsat
+
+
+def test_resume_cache_split_marker_skips_repeat_timeout_only_when_valid():
+    # Interrupt a run right after the top cube times out (deadline = cap + 5s)
+    # so the tree is NOT complete: only the SPLIT marker is saved.
+    seed = next(s for s in range(500)
+                if _FakeInstance(s).status(_BASE, 0) == "TIMEOUT")
+    top = sorted(_BASE)
+    with tempfile.TemporaryDirectory() as d:
+        clock = _FakeClock()
+        inst = _FakeInstance(seed, clock=clock)
+        with _patched(inst, clock):
+            c = _new_cache(d, "a")
+            v, _ = _cube(inst, c, cap=100.0, deadline=clock.now + 105)
+            c.close()
+        assert v == "DEADLINE", v
+        assert c.split.get(c.key(_BASE)) == 100.0 and not c.unsat, \
+            (c.split, c.unsat)
+        # same cap: the repeat 100s timeout on the top cube is skipped
+        inst2 = _FakeInstance(seed)
+        with _patched(inst2):
+            c2 = _new_cache(d, "b")
+            v2, _ = _cube(inst2, c2, cap=100.0)
+            c2.close()
+        ref = _FakeInstance(seed)
+        with _patched(ref):
+            ref_v, _ = _cube(ref, cap=100.0)
+        assert v2 == ref_v, (v2, ref_v)
+        assert top not in [sorted(x) for x in inst2.solved], \
+            "top cube re-solved despite a valid SPLIT marker"
+        assert c2.split_skips >= 1
+        # Runs 3-4 start from a cache holding ONLY run 1's SPLIT marker (run 2
+        # finished the tree and so also saved the top cube as UNSAT).
+        with tempfile.TemporaryDirectory() as d2:
+            shutil.copy(os.path.join(d, "subcache-parent1_child0.a.jsonl"), d2)
+            # a LARGER cap today: the marker (timed out at 100s) must NOT be used
+            inst3 = _FakeInstance(seed)
+            with _patched(inst3):
+                c3 = _new_cache(d2, "c")
+                _cube(inst3, c3, cap=500.0)
+                c3.close()
+            assert top in [sorted(x) for x in inst3.solved], \
+                "SPLIT marker wrongly reused for a bigger cap"
+        with tempfile.TemporaryDirectory() as d2:
+            shutil.copy(os.path.join(d, "subcache-parent1_child0.a.jsonl"), d2)
+            # at max depth a skipped solve would become UNRESOLVED: must solve
+            inst4 = _FakeInstance(seed)
+            with _patched(inst4):
+                c4 = _new_cache(d2, "d")
+                _cube(inst4, c4, cap=100.0, depth=0)
+                c4.close()
+            assert top in [sorted(x) for x in inst4.solved]
+
+def test_deadline_clipped_solve_is_not_a_timeout():
+    # A solve cut short by the deadline says nothing about the cube: it must
+    # not be re-split, must not leave a SPLIT marker, and must never be UNSAT.
+    clock = _FakeClock()
+    seed = next(s for s in range(500)
+                if _FakeInstance(s).status(_BASE, 0) == "TIMEOUT")
+    inst = _FakeInstance(seed, clock=clock)
+    with tempfile.TemporaryDirectory() as d, _patched(inst, clock):
+        c = _new_cache(d, "a")
+        v, _ = _cube(inst, c, deadline=clock.now + 50, cap=100.0)
+        c.close()
+        assert v == "DEADLINE", v
+        assert inst.splits == [], "clipped solve was re-split"
+        assert c.split == {} and c.unsat == set()
+        # less than the minimum solve window left: nothing is started at all
+        inst2 = _FakeInstance(seed, clock=clock)
+    with _patched(inst2, clock):
+        v2, _ = _cube(inst2, None, deadline=clock.now + 5)
+    assert v2 == "DEADLINE" and inst2.solved == [], (v2, inst2.solved)
+
+
+def _slice(inst, clock, d, cubes, tag, deadline=None, certified=False,
+           resume=True, cap=100.0):
+    meta = {"lengths": [3, 28], "encoding": "palindromic", "N": 744, "t": 28,
+            "symmetry_break": False}
+    out = os.path.join(d, f"out-{tag}")
+    os.makedirs(out, exist_ok=True)
+    with _patched(inst, clock):
+        res = vdw_cnc.conquer_slice(
+            meta, 10, _FORMULA, cubes, 0, 1, cap, out, certified, "-d 12", 6,
+            cube_indices=list(range(len(cubes))), batch_size=1,
+            parent_cube=77, split_tag="",
+            resume_dir=(os.path.join(d, "cache") if resume else None),
+            cache_tag=tag, deadline_seconds=deadline)
+    return res, os.path.join(out, "shard-0.jsonl")
+
+
+def test_conquer_slice_deadline_then_resume_closes_the_cube():
+    # cap=100, deadline=105: day 1 spends 100s on the top cube's timeout and is
+    # cut off with 5s left -- the only thing saved is the SPLIT marker. Later
+    # days skip that repeat timeout and make real progress until it closes.
+    seed = next(s for s in range(500)
+                if _FakeInstance(s).status([4, 5], 0) == "TIMEOUT")
+    cubes = [[4, 5], [6, 7]]
+    with tempfile.TemporaryDirectory() as d:
+        ref_clock = _FakeClock()
+        ref, _ = _slice(_FakeInstance(seed, clock=ref_clock), ref_clock, d,
+                        cubes, "ref", resume=False)
+        clock = _FakeClock()
+        r1, j1 = _slice(_FakeInstance(seed, clock=clock), clock, d, cubes, "d1",
+                        deadline=105)
+        assert r1["deadline_hit"] is True and r1["status"] == "UNRESOLVED", r1
+        recs = [json.loads(x) for x in open(j1)]
+        verdicts = {x["gidx"]: x["verdict"] for x in recs if "gidx" in x}
+        assert verdicts.get(0) == "UNRESOLVED", verdicts
+        assert 1 not in verdicts, "shard kept going after the deadline"
+        assert all(v != "UNSAT" for v in verdicts.values()), verdicts
+        # read back through the real merge path: must count as NOT refuted
+        meta, vd = vdw_cnc.read_shard_jsonl(j1)
+        rec = vdw_cnc.reconstruct_shard_from_jsonl(meta, vd)
+        assert rec["status"] == "UNRESOLVED" and rec["unresolved_cubes"] == [0, 1]
+        # resume day after day until it closes; must match the uncached verdict
+        skipped = 0
+        for day in range(2, 40):
+            clock = _FakeClock()
+            r, j = _slice(_FakeInstance(seed, clock=clock), clock, d, cubes,
+                          f"d{day}", deadline=105)
+            skipped += r["resume_cache"]["repeat_timeouts_skipped"]
+            if not r["deadline_hit"]:
+                break
+        assert not r["deadline_hit"], "never closed within 40 simulated days"
+        assert r["status"] == ref["status"] == "UNSAT", (r["status"], ref["status"])
+        assert r["n_unsat"] == ref["n_unsat"] == 2
+        assert skipped > 0, "the repeat top-cube timeout was never skipped"
+        assert r["resume_cache"]["files_ignored"] == []
+        assert r["n_solves"] < ref["n_solves"], (r["n_solves"], ref["n_solves"])
+
+def test_conquer_slice_without_cache_flags_is_unchanged():
+    # No --resume-cache-dir / --deadline-seconds: the shard result must be
+    # exactly what it was before this feature existed (apart from the two new
+    # always-present fields).
+    seed = 3
+    cubes = [[4, 5], [6, 7], [8, 9]]
+    with tempfile.TemporaryDirectory() as d:
+        c1 = _FakeClock()
+        r, j = _slice(_FakeInstance(seed, clock=c1), c1, d, cubes, "n",
+                      resume=False)
+        assert r["deadline_hit"] is False and r["resume_cache"] is None
+        assert not os.path.exists(os.path.join(d, "cache")), \
+            "cache dir created without --resume-cache-dir"
+        vs = {json.loads(x)["gidx"]: json.loads(x)["verdict"]
+              for x in open(j) if '"gidx"' in x}
+        assert set(vs) == {0, 1, 2} and set(vs.values()) <= {"UNSAT", "UNRESOLVED"}
+
+
+def test_resume_cache_refuses_certified_and_missing_tag():
+    for kw, needle in (({"certified": True}, "certified"),):
+        with tempfile.TemporaryDirectory() as d:
+            c = _FakeClock()
+            try:
+                _slice(_FakeInstance(1, clock=c), c, d, [[4, 5]], "t", **kw)
+            except SystemExit as e:
+                assert needle in str(e), e
+            else:
+                raise AssertionError("expected SystemExit for certified+cache")
+    with tempfile.TemporaryDirectory() as d:
+        c = _FakeClock()
+        try:
+            _slice(_FakeInstance(1, clock=c), c, d, [[4, 5]], "")
+        except SystemExit as e:
+            assert "cache-tag" in str(e), e
+        else:
+            raise AssertionError("expected SystemExit for a missing cache tag")
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = []

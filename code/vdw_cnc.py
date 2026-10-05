@@ -646,16 +646,131 @@ def split_residual(nvars, clause_lines, cube_lits, workdir, tag, march_opts):
     return subs
 
 
+# A solve is not started with less than this many seconds left before the
+# --deadline-seconds wall (a few seconds of iglucose proves nothing and the
+# clipped solve would just be thrown away).
+DEADLINE_MIN_SOLVE_SECONDS = 30
+
+
+class SubcubeCache:
+    """Resume cache for ONE top-level cube's re-split tree.
+
+    WHY: conquer_cube re-splits a hard child into thousands of sub-cubes and
+    solves them in sequence, but the child's verdict is only written once the
+    WHOLE tree is refuted. A job that hits the wall therefore loses every
+    sub-cube it refuted, and the next day redoes all of it from scratch. This
+    cache persists each finished node so the next run skips it.
+
+    Two kinds of entry, both keyed by sha256 of the cube's SORTED literals:
+      UNSAT  every descendant of this cube was refuted (a leaf iglucose proved
+             UNSAT, or an inner node whose sub-cubes all were). Next run
+             returns UNSAT without solving.
+      SPLIT  iglucose TIMED OUT on this cube at `cap` seconds. Next run skips
+             the repeat attempt and re-splits straight away (a hint only:
+             re-splitting is always a valid way to attack a cube).
+
+    SOUNDNESS: an UNSAT entry is only read back for the SAME formula -- each
+    file's first line carries sha256 of the exact clause set iglucose solves
+    (including any symmetry-breaking clauses), and a file whose fingerprint
+    differs is IGNORED with a warning, never trusted. UNSAT of (formula AND
+    cube literals) is a property of those two things alone, so the key needs
+    no parent/index/split-option context, and literal order is irrelevant
+    (conjunction commutes). SAT is never cached. Entries are append-only and
+    only ever record a refutation that was actually obtained, so a cache can
+    only SKIP work, never change a verdict (tested against an uncached run on
+    random trees: test_resume_cache_never_changes_verdict).
+
+    Files are write-once-per-run: <dir>/subcache-parent<P>_child<C>.<tag>.jsonl
+    (tag = the workflow run id), so concurrent jobs and successive days never
+    write the same file and nothing is ever merged or rewritten."""
+
+    def __init__(self, directory, parent, child, tag, formula_sha, header):
+        self.formula_sha = formula_sha
+        self.unsat = set()
+        self.split = {}        # key -> the cap (s) at which it timed out
+        self.hits = 0          # sub-cube solves skipped via an UNSAT entry
+        self.split_skips = 0   # repeat solves skipped via a SPLIT entry
+        self.new_unsat = 0
+        self.ignored_files = []
+        stem = f"subcache-parent{parent}_child{child}"
+        self.out_path = os.path.join(directory, f"{stem}.{tag}.jsonl")
+        self._header = header
+        self._out = None
+        for path in sorted(glob.glob(os.path.join(directory, stem + ".*.jsonl"))):
+            if path != self.out_path:
+                self._load(path)
+
+    @staticmethod
+    def key(cube_lits):
+        return hashlib.sha256(
+            ",".join(str(l) for l in sorted(cube_lits)).encode()).hexdigest()
+
+    def _load(self, path):
+        head, unsat, split = None, [], {}
+        for ln in open(path):
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                obj = json.loads(ln)
+            except json.JSONDecodeError:
+                continue  # torn last line from a job killed mid-write
+            if "subcache" in obj:
+                head = obj
+            elif obj.get("v") == "UNSAT":
+                unsat.append(obj["k"])
+            elif obj.get("v") == "SPLIT":
+                split[obj["k"]] = max(split.get(obj["k"], 0), obj["cap"])
+        if head is None or head.get("formula_sha256") != self.formula_sha:
+            self.ignored_files.append(path)
+            print(f"  WARNING: resume cache {path} is for a different formula "
+                  f"(or has no header) -- IGNORED", flush=True)
+            return
+        self.unsat.update(unsat)
+        for k, c in split.items():
+            self.split[k] = max(self.split.get(k, 0), c)
+
+    def _write(self, obj):
+        if self._out is None:
+            self._out = open(self.out_path, "w")
+            self._out.write(json.dumps(self._header) + "\n")
+        self._out.write(json.dumps(obj) + "\n")
+        self._out.flush()
+
+    def add_unsat(self, key):
+        if key not in self.unsat:
+            self.unsat.add(key)
+            self.new_unsat += 1
+            self._write({"k": key, "v": "UNSAT"})
+
+    def add_split(self, key, cap):
+        if self.split.get(key, 0) < cap:
+            self.split[key] = cap
+            self._write({"k": key, "v": "SPLIT", "cap": cap})
+
+    def close(self):
+        if self._out is not None:
+            self._out.close()
+            self._out = None
+
+
 def conquer_cube(nvars, clause_lines, solve_clause_lines, cube_lits, cap,
                  workdir, tag, resplit_opts, max_depth, depth, certified,
-                 records):
+                 records, cache=None, deadline=None):
     """Solve one cube; if it TIMEOUTs and we have re-split budget left,
     re-split it deeper with march_cu and recurse on the sub-cubes (adaptive
     cube-and-conquer -- the hard tail is exactly a few stubborn cubes, and
     splitting them again usually makes each piece easy). Returns
     (verdict, model_or_None): SAT (with model) short-circuits; UNSAT means
     every descendant refuted; UNRESOLVED means a leaf still timed out at
-    max depth.
+    max depth; DEADLINE means the wall-clock `deadline` (absolute time.time())
+    arrived first -- nothing is concluded, the caller must stop and treat the
+    cube as unfinished.
+
+    cache (SubcubeCache or None): skip nodes a previous run already finished
+    and persist the ones this run finishes, so a job killed at the wall keeps
+    its progress. With cache=None and deadline=None this is exactly the
+    original behaviour. See SubcubeCache for why that cannot change a verdict.
 
     SB-4 (PLAN_sb_probe.md): `clause_lines`/`nvars` (PLAIN) and
     `solve_clause_lines` (PLAIN, or PLAIN+SB in "conquer" mode -- see
@@ -672,16 +787,43 @@ def conquer_cube(nvars, clause_lines, solve_clause_lines, cube_lits, cap,
         passed through the recursion unchanged -- the SB clauses "rejoin"
         automatically the moment a (possibly re-split) child cube is
         actually solved."""
-    status, secs, model = solve_lits(solve_clause_lines, cube_lits, cap,
-                                     workdir, tag, certified)
-    records.append({"tag": tag, "depth": depth, "nlits": len(cube_lits),
-                    "status": status, "seconds": secs})
-    print(f"    cube {tag} (depth {depth}, {len(cube_lits)} lits): "
-          f"{status} in {secs:.2f}s", flush=True)
-    if status == "SAT":
-        return "SAT", model
-    if status == "UNSAT":
-        return "UNSAT", None
+    key = cache.key(cube_lits) if cache is not None else None
+    skip_solve = False
+    if cache is not None:
+        if key in cache.unsat:
+            cache.hits += 1
+            return "UNSAT", None
+        # a SPLIT entry only counts if it timed out at >= today's cap, and
+        # only where we could re-split anyway (at max depth a skipped solve
+        # would turn a possible answer into UNRESOLVED)
+        if depth < max_depth and cache.split.get(key, 0) >= cap:
+            cache.split_skips += 1
+            skip_solve = True
+    timed_out = skip_solve
+    if not skip_solve:
+        eff_cap = cap
+        if deadline is not None:
+            remaining = deadline - time.time()
+            if remaining < DEADLINE_MIN_SOLVE_SECONDS:
+                return "DEADLINE", None
+            eff_cap = min(cap, remaining)
+        status, secs, model = solve_lits(solve_clause_lines, cube_lits, eff_cap,
+                                         workdir, tag, certified)
+        records.append({"tag": tag, "depth": depth, "nlits": len(cube_lits),
+                        "status": status, "seconds": secs})
+        print(f"    cube {tag} (depth {depth}, {len(cube_lits)} lits): "
+              f"{status} in {secs:.2f}s", flush=True)
+        if status == "SAT":
+            return "SAT", model
+        if status == "UNSAT":
+            if cache is not None:
+                cache.add_unsat(key)
+            return "UNSAT", None
+        if status == "TIMEOUT" and eff_cap < cap:
+            # clipped by the deadline, not by the real cap: this says nothing
+            # about the cube's difficulty, so do NOT re-split or remember it
+            return "DEADLINE", None
+        timed_out = status == "TIMEOUT"
     # TIMEOUT (or solver error): try to re-split if we still can.
     if depth >= max_depth:
         return "UNRESOLVED", None
@@ -689,25 +831,36 @@ def conquer_cube(nvars, clause_lines, solve_clause_lines, cube_lits, cap,
                           resplit_opts)
     if not subs:
         return "UNRESOLVED", None
-    print(f"    cube {tag} TIMEOUT -> re-split into {len(subs)} sub-cubes "
-          f"(depth {depth + 1})", flush=True)
+    if cache is not None and timed_out:
+        cache.add_split(key, cap)   # persisted BEFORE descending
+    print(f"    cube {tag} {'TIMEOUT (cached)' if skip_solve else 'TIMEOUT'} "
+          f"-> re-split into {len(subs)} sub-cubes (depth {depth + 1})",
+          flush=True)
     any_unresolved = False
     for j, sub in enumerate(subs):
         verdict, m = conquer_cube(nvars, clause_lines, solve_clause_lines,
                                   cube_lits + sub, cap, workdir,
                                   f"{tag}.{j}", resplit_opts, max_depth,
-                                  depth + 1, certified, records)
+                                  depth + 1, certified, records, cache,
+                                  deadline)
         if verdict == "SAT":
             return "SAT", m
+        if verdict == "DEADLINE":
+            return "DEADLINE", None
         if verdict == "UNRESOLVED":
             any_unresolved = True
-    return ("UNRESOLVED" if any_unresolved else "UNSAT"), None
+    if any_unresolved:
+        return "UNRESOLVED", None
+    if cache is not None:
+        cache.add_unsat(key)    # every descendant refuted => this node is
+    return "UNSAT", None
 
 
 def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
                   outdir, certified, resplit_opts, max_resplit_depth,
                   cube_indices=None, batch_size=1, parent_cube=None,
-                  split_tag=None):
+                  split_tag=None, resume_dir=None, cache_tag=None,
+                  deadline_seconds=None):
     """Solve this shard's cubes: normally its round-robin slice (cube i goes
     to shard i%nshards), but if cube_indices is given, exactly those global
     cube indices instead (the re-dispatch path -- re-run only the cubes a
@@ -797,6 +950,20 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     unresolved = []
     sat_gidx = None
     witness = None
+    deadline_hit = False
+    caches = []
+    if resume_dir is not None:
+        # A cache hit skips the solver, so no DRAT proof would be emitted for
+        # that cube: the two are incompatible. Fail loudly, never silently.
+        if certified:
+            raise SystemExit("--resume-cache-dir cannot be combined with "
+                             "--certified (cached cubes produce no proof)")
+        if not cache_tag:
+            raise SystemExit("--resume-cache-dir needs --cache-tag (the "
+                             "per-run file name, e.g. the workflow run id)")
+        os.makedirs(resume_dir, exist_ok=True)
+        formula_sha = hashlib.sha256(
+            "".join(solve_clause_lines).encode()).hexdigest()
 
     def record(gidx, verdict, secs, batched=False):
         rec = {"gidx": gidx, "verdict": verdict, "seconds": round(secs, 3)}
@@ -807,13 +974,42 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
 
     def per_cube(gidx, cube_lits):
         """Solve one cube via the adaptive per-cube path (re-split aware),
-        record it, and return True if SAT (the shard short-circuits)."""
-        nonlocal n_unsat, sat_gidx, witness
+        record it, and return True if the shard should stop (a SAT, or the
+        --deadline-seconds wall arriving)."""
+        nonlocal n_unsat, sat_gidx, witness, deadline_hit
         c0 = time.time()
+        cache = None
+        if resume_dir is not None:
+            parent_label = parent_cube if parent_cube is not None else "top"
+            cache = SubcubeCache(
+                resume_dir, parent_label, gidx, cache_tag, formula_sha,
+                {"subcache": 1, "formula_sha256": formula_sha,
+                 "lengths": lengths, "encoding": encoding, "N": N,
+                 "symmetry_break": symmetry_break,
+                 "parent_cube": parent_cube, "child": gidx})
+            caches.append(cache)
+            print(f"    resume cache for cube {gidx}: {len(cache.unsat)} "
+                  f"UNSAT + {len(cache.split)} SPLIT entries loaded "
+                  f"({len(cache.ignored_files)} file(s) ignored)", flush=True)
         verdict, model = conquer_cube(nvars, clause_lines, solve_clause_lines,
                                       cube_lits, cap, workdir, str(gidx),
                                       resplit_opts, max_resplit_depth, 0,
-                                      certified, records)
+                                      certified, records, cache, deadline)
+        if cache is not None:
+            cache.close()
+            print(f"    resume cache for cube {gidx}: {cache.hits} sub-cube "
+                  f"solves skipped (UNSAT), {cache.split_skips} repeat "
+                  f"timeouts skipped, {cache.new_unsat} new UNSAT saved",
+                  flush=True)
+        if verdict == "DEADLINE":
+            # wall reached mid-cube: nothing is concluded for this cube, so
+            # log it as unresolved (the existing vocabulary) and stop the shard
+            record(gidx, "UNRESOLVED", time.time() - c0)
+            unresolved.append(gidx)
+            deadline_hit = True
+            print(f"    -> deadline reached in cube {gidx}; stopping shard",
+                  flush=True)
+            return True
         record(gidx, verdict, time.time() - c0)
         if verdict == "SAT":
             wit = check_witness(model, N, lengths, encoding)
@@ -833,6 +1029,7 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
     # certified needs one process per cube (per-cube DRAT); otherwise batch.
     eff_batch = 1 if (certified or batch_size < 1) else batch_size
     t0 = time.time()
+    deadline = (t0 + deadline_seconds) if deadline_seconds is not None else None
     stop = False
     for start in range(0, len(mine), eff_batch):
         batch = mine[start:start + eff_batch]
@@ -883,6 +1080,13 @@ def conquer_slice(meta, nvars, clause_lines, cubes, shard, nshards, cap,
             "n_cubes_in_slice": len(mine), "n_unsat": n_unsat,
             "unresolved_cubes": unresolved, "sat_cube": sat_gidx,
             "witness": witness, "status": status,
+            "deadline_hit": deadline_hit,
+            "resume_cache": (None if resume_dir is None else {
+                "subcube_solves_skipped": sum(c.hits for c in caches),
+                "repeat_timeouts_skipped": sum(c.split_skips for c in caches),
+                "new_unsat_saved": sum(c.new_unsat for c in caches),
+                "files_ignored": [f for c in caches
+                                  for f in c.ignored_files]}),
             "slice_seconds": time.time() - t0,
             "n_solves": len(records), "per_solve": records}
 
@@ -2489,6 +2693,27 @@ def main():
                           "ladder). Leave unset (the default) for the single "
                           "default group; every pre-existing untagged file "
                           "merges byte-for-byte as before.")
+    ap.add_argument("--resume-cache-dir", default=None,
+                     help="conquer: directory of per-cube sub-cube resume "
+                          "caches (SubcubeCache). Reads every earlier file for "
+                          "each cube it conquers and writes one new file per "
+                          "cube tagged --cache-tag, so a re-split tree cut off "
+                          "by the job wall keeps its progress. Never changes a "
+                          "verdict, only skips work already done; incompatible "
+                          "with --certified. Unset = no cache (original "
+                          "behaviour).")
+    ap.add_argument("--cache-tag", default=None,
+                     help="conquer --resume-cache-dir: unique tag for this "
+                          "run's cache files (the workflow run id)")
+    ap.add_argument("--deadline-seconds", type=float, default=None,
+                     help="conquer: stop gracefully this many seconds after "
+                          "the conquer starts instead of being killed by the "
+                          "job wall: no solve starts in the last "
+                          f"{DEADLINE_MIN_SOLVE_SECONDS}s, a running solve is "
+                          "clipped to the deadline (and not mistaken for a "
+                          "hard-cube timeout), the unfinished cube is logged "
+                          "UNRESOLVED, and the process exits normally so the "
+                          "upload/commit steps that follow run as usual.")
     ap.add_argument("--results-dir", default=None,
                      help="aggregate: directory of per-shard conquer JSONs")
     ap.add_argument("--merge-jsonl", action="store_true",
@@ -2867,7 +3092,10 @@ def main():
                             args.max_resplit_depth, cube_indices=cube_indices,
                             batch_size=args.batch_size,
                             parent_cube=args.parent_cube,
-                            split_tag=args.split_tag)
+                            split_tag=args.split_tag,
+                            resume_dir=args.resume_cache_dir,
+                            cache_tag=args.cache_tag,
+                            deadline_seconds=args.deadline_seconds)
         scope = (f" [parent cube {args.parent_cube}'s children only]"
                 if args.parent_cube is not None else "")
         print(f"\n  shard {args.shard} verdict: {res['status']}{scope} "

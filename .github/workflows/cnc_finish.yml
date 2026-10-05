@@ -15,8 +15,22 @@ name: vdw-cnc-finish
 # cover) and a child is only recorded UNSAT if the solver proved it -- this can
 # only ADD genuine refutations, never a false UNSAT.
 #
-# NOT self-chaining, NOT stateful: it commits raw shard evidence and stops. Run
-# once; re-running just re-attempts the same (deterministic) hard children.
+# NOT self-chaining: it commits raw shard evidence and stops.
+#
+# RESUMABLE (finish_cache/, see SubcubeCache in code/vdw_cnc.py): a hard child
+# is re-split into thousands of sub-cubes that are solved one after another, but
+# its verdict used to be written only when the WHOLE tree was refuted -- so a
+# job killed at the 350-min wall lost everything and the next daily run redid it
+# from scratch (the same two children timed out every day from at least 9/28 to
+# 10/05). Now each refuted node, and each "timed out at the cap, go straight to
+# the re-split" marker, is saved to finish_cache/ and COMMITTED BY THE FINISH JOB
+# ITSELF (not by `collect`, which needs a second runner that GitHub sometimes
+# fails to provide -- run 52 lost a day that way). Progress therefore
+# accumulates day over day, and if `collect` ever fails to commit a verdict the
+# next run re-derives it in seconds from the cache.
+# The solver also stops itself at --deadline-seconds (before the job wall) and
+# exits normally, so the upload/commit steps below run as usual instead of
+# racing a cancellation.
 permissions:
   contents: write
 
@@ -185,8 +199,34 @@ jobs:
             --max-resplit-depth ${{ inputs.max_resplit_depth || '10' }} \
             --resplit-march-opts "${{ inputs.resplit_march_opts || '-d 12' }}" \
             --batch-size 1 \
+            --resume-cache-dir finish_cache \
+            --cache-tag ${{ github.run_id }} \
+            --deadline-seconds 20100 \
             --outdir cnc_out --json-out cnc_out/shard-${{ matrix.shard }}.json \
             | tee cnc_out/shard-${{ matrix.shard }}.log
+        # --deadline-seconds 20100 = 5h35m from the START of the conquer. The
+        # job wall is 350 min (21000s) and ~75s of setup runs before this step
+        # (measured on run 52), leaving ~14 min for the upload + cache commit
+        # below. A solve running at the deadline is clipped to it and logged
+        # UNRESOLVED, never UNSAT.
+      - name: commit resume cache (survives even if `collect` never gets a runner)
+        if: always()
+        run: |
+          git config user.name "vdw-cnc-finish[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          if [ -z "$(git status --porcelain finish_cache 2>/dev/null)" ]; then
+            echo "no new resume-cache files"; exit 0
+          fi
+          for i in 1 2 3 4 5 6; do
+            git add finish_cache
+            git commit -q -m "GH Actions: vdw-cnc-finish resume cache (run ${{ github.run_id }}, shard ${{ matrix.shard }}, parent ${{ matrix.parent_cube }})" || true
+            if git pull -q --rebase origin main && git push -q origin main; then
+              echo "pushed on attempt $i"; exit 0
+            fi
+            echo "push attempt $i failed, retrying..."; git rebase --abort 2>/dev/null || true
+            sleep $(( (RANDOM % 15) + 5 ))
+          done
+          echo "::warning::could not push the resume cache after 6 attempts (still in the artifact)"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -196,6 +236,15 @@ jobs:
             cnc_out/shard-${{ matrix.shard }}.jsonl
             cnc_out/shard-${{ matrix.shard }}.log
           if-no-files-found: warn
+      # Separate artifact (name does NOT match collect's results-finish-shard-*
+      # pattern, and a shared upload would change the layout collect relies on):
+      # a belt-and-braces copy in case the cache push above fails.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: finish-cache-shard-${{ matrix.shard }}
+          path: finish_cache/*.${{ github.run_id }}.jsonl
+          if-no-files-found: ignore
 
   collect:
     needs: [setup, finish]
