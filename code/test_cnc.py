@@ -1654,6 +1654,107 @@ def test_plan_monster_matrix_carries_escalating_march_opts_and_tag():
     assert by_parent[100]["march_opts"] != by_parent[200]["march_opts"], by_parent
 
 
+
+def test_monster_shard_indices_partitions_the_unrefuted_children():
+    # Each shard gets exactly its round-robin slice (child i -> shard i % n) of
+    # the children still unrefuted in the monster's own tag cover: together the
+    # shards cover that set exactly once, and nothing already refuted is sent.
+    import cnc_grind_lib as lib
+    left = [1, 2, 4, 5, 9, 10, 17]
+    parents = {7: {"tags": {"": {"n_children": 20, "children_without_unsat": left},
+                            "-d 16": {"n_children": 30, "children_without_unsat": []}}}}
+    shards = [lib.monster_shard_indices(parents, 7, None, s, 3) for s in range(3)]
+    assert sorted(x for sh in shards for x in sh) == sorted(left), shards
+    assert sum(len(sh) for sh in shards) == len(left), "a child went to two shards"
+    for s, sh in enumerate(shards):
+        assert sh == sorted(sh) and all(c % 3 == s for c in sh), (s, sh)
+    # the untagged -d12 cover is the "" group; None and "" are the same group
+    assert lib.monster_shard_indices(parents, 7, "", 0, 3) == shards[0]
+    # a fully refuted cover is [] (nothing to do) -- NOT None (no evidence)
+    assert [lib.monster_shard_indices(parents, 7, "-d 16", s, 3) for s in range(3)] \
+        == [[], [], []]
+    # no evidence for this parent / depth / a group without a child count: None
+    assert lib.monster_shard_indices(parents, 8, None, 0, 3) is None
+    assert lib.monster_shard_indices(parents, 7, "-d 24", 0, 3) is None
+    assert lib.monster_shard_indices({7: {"tags": {"": {"n_children": None}}}},
+                                     7, None, 0, 3) is None
+    assert lib.monster_shard_indices({}, 7, None, 0, 3) is None
+    assert lib.monster_shard_indices(None, 7, None, 0, 3) is None
+    # string-keyed parents (older shape) work too
+    assert lib.monster_shard_indices({"7": parents[7]}, 7, None, 1, 3) == shards[1]
+
+
+def _run_planner(parents, monsters, ncubes=4095):
+    """Run the REAL cnc_grind_plan.main() with fake evidence; return its
+    emitted outputs as a dict. Only the evidence scan and the tier/selection
+    steps are faked."""
+    import cnc_grind_plan as P
+    state_file = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "cnc_grind_state.json")
+    saved = (P.filtered_verdict, P.default_evidence_dirs, P.assign_tiers,
+             P.select_monsters, sys.argv)
+    fake = {"verdict": "UNDETERMINED", "ncubes": ncubes, "sat_cubes": [],
+            "cubes_without_unsat": list(monsters), "parents": parents}
+    P.filtered_verdict = lambda t, N, dirs: (fake, [])
+    P.default_evidence_dirs = lambda: []
+    P.assign_tiers = lambda residual, stuck, cfg: ([], [], list(monsters))
+    P.select_monsters = lambda tier, cursor, cfg: (list(tier), cursor + len(tier))
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "out.txt")
+        # the real state file would stop on its iteration cap; give it headroom
+        st = json.load(open(state_file))
+        st["max_iterations"] = st["iteration"] + 10
+        sf = os.path.join(d, "state.json")
+        json.dump(st, open(sf, "w"))
+        sys.argv = ["cnc_grind_plan.py", "--state-file", sf, "--github-output", out]
+        try:
+            P.main()
+        finally:
+            (P.filtered_verdict, P.default_evidence_dirs, P.assign_tiers,
+             P.select_monsters, sys.argv) = saved
+        vals = dict(l.rstrip("\n").split("=", 1) for l in open(out) if "=" in l)
+    for k in ("monster_conquer_matrix", "monster_split_matrix", "has_monsters",
+              "stop_now"):
+        if k in vals:
+            vals[k] = json.loads(vals[k])
+    return vals
+
+
+def test_plan_dispatches_only_unrefuted_children_to_monster_jobs():
+    parents = {
+        7: {"tags": {"": {"n_children": 20, "children_without_unsat": [0, 1, 3, 4, 6, 7]}}},
+        # 8: never raced -> no evidence -> whole slice
+        9: {"tags": {"": {"n_children": 30, "children_without_unsat": []}}},
+    }
+    v = _run_planner(parents, monsters=[7, 8, 9])
+    assert v["stop_now"] is False and v["has_monsters"] is True, v
+    by = {}
+    for e in v["monster_conquer_matrix"]:
+        by.setdefault(e["parent_cube"], {})[e["shard"]] = e["cube_indices"]
+    # monster 7: exactly its unrefuted children, split i % 3; shard 2 has none
+    # left, so NO job is dispatched for it (an empty --cube-indices would
+    # otherwise mean the whole slice)
+    assert by[7] == {0: "0,3,6", 1: "1,4,7"}, by[7]
+    # monster 8 (no evidence): all three shards, whole slice (empty indices)
+    assert by[8] == {0: "", 1: "", 2: ""}, by[8]
+    # monster 9 (fully refuted cover): no jobs and no split job either
+    assert 9 not in by, by
+    assert sorted(e["parent_cube"] for e in v["monster_split_matrix"]) == [7, 8], \
+        v["monster_split_matrix"]
+    # every dispatched job carries the monster's march_opts / split_tag as before
+    assert all("march_opts" in e and "split_tag" in e
+               for e in v["monster_conquer_matrix"])
+
+
+def test_plan_with_nothing_left_for_any_monster_dispatches_no_monster_job():
+    # An empty conquer matrix would make GitHub fail the job; has_monsters must
+    # be false instead so the monster jobs are skipped.
+    parents = {7: {"tags": {"": {"n_children": 20, "children_without_unsat": []}}}}
+    v = _run_planner(parents, monsters=[7])
+    assert v["has_monsters"] is False, v
+    assert v["monster_conquer_matrix"] == [] and v["monster_split_matrix"] == [], v
+
+
 # ---------------------------------------------------------------------------
 # Sub-cube resume cache + graceful deadline (SubcubeCache / conquer_cube).
 # Hermetic: solve_lits / split_residual are replaced by a deterministic fake

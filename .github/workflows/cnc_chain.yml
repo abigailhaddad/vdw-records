@@ -299,6 +299,17 @@ jobs:
           MARCH_CU: ${{ github.workspace }}/cncbin/march_cu
           IGLUCOSE: ${{ github.workspace }}/cncbin/iglucose
         run: |
+          # matrix.cube_indices = the children of this shard's slice that are
+          # still UNREFUTED (cnc_grind_plan.py / monster_shard_indices). Empty
+          # means "this depth has no evidence yet -> the whole slice"; the flag
+          # must then be OMITTED, because an empty --cube-indices is read as
+          # "no restriction" anyway but we do not want to depend on that.
+          # Without this the job re-walks ~1300 mostly-refuted children from
+          # index 0 every generation and never reaches the unrefuted ones.
+          extra=()
+          if [ -n "${{ matrix.cube_indices }}" ]; then
+            extra+=(--cube-indices "${{ matrix.cube_indices }}")
+          fi
           python3 code/vdw_cnc.py conquer --t ${{ needs.setup.outputs.t }} \
             --N ${{ needs.setup.outputs.N }} \
             --parent-cube ${{ matrix.parent_cube }} \
@@ -306,12 +317,39 @@ jobs:
             --cnf cnc_out/cnc_t${{ needs.setup.outputs.t }}_N${{ needs.setup.outputs.N }}.parent${{ matrix.parent_cube }}.cnf \
             --cubes cnc_out/cnc_t${{ needs.setup.outputs.t }}_N${{ needs.setup.outputs.N }}.parent${{ matrix.parent_cube }}.cubes \
             --shard ${{ matrix.shard }} --nshards ${{ needs.setup.outputs.monster_nshards }} \
+            "${extra[@]}" \
             --cap-seconds ${{ needs.setup.outputs.monster_cap_seconds }} \
             --max-resplit-depth ${{ needs.setup.outputs.max_resplit_depth }} \
             --resplit-march-opts "${{ needs.setup.outputs.resplit_march_opts }}" \
             --batch-size 1 \
+            --resume-cache-dir finish_cache \
+            --cache-tag ${{ github.run_id }} \
+            --deadline-seconds 20100 \
             --outdir cnc_out --json-out cnc_out/monster-shard-${{ matrix.shard }}.json \
             | tee cnc_out/monster-shard-${{ matrix.shard }}.log
+        # --deadline-seconds 20100: stop 5h35m after the conquer starts so the
+        # upload and cache commit below run normally instead of racing the
+        # 350-min job wall (same margin as cnc_finish.yml).
+      - name: commit resume cache (survives even if `collect` never gets a runner)
+        if: always()
+        run: |
+          git config user.name "vdw-cnc-chain[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          if [ -z "$(git status --porcelain finish_cache 2>/dev/null)" ]; then
+            echo "no new resume-cache files"; exit 0
+          fi
+          # Every monster job ends at the same moment, so many push at once:
+          # more retries and a wider random wait than the 2-job finisher.
+          for i in $(seq 1 10); do
+            git add finish_cache
+            git commit -q -m "GH Actions: vdw-cnc-chain resume cache (run ${{ github.run_id }}, parent ${{ matrix.parent_cube }}, shard ${{ matrix.shard }})" || true
+            if git pull -q --rebase origin main && git push -q origin main; then
+              echo "pushed on attempt $i"; exit 0
+            fi
+            echo "push attempt $i failed, retrying..."; git rebase --abort 2>/dev/null || true
+            sleep $(( (RANDOM % 40) + 5 ))
+          done
+          echo "::warning::could not push the resume cache after 10 attempts (still in the artifact)"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -321,6 +359,15 @@ jobs:
             cnc_out/monster-shard-${{ matrix.shard }}.json
             cnc_out/monster-shard-${{ matrix.shard }}.log
           if-no-files-found: warn
+      # Separate artifact: its name must NOT match collect's results-monster-*
+      # pattern, and sharing the upload above would change the layout collect
+      # relies on. Belt-and-braces copy in case the cache push fails.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chain-cache-${{ matrix.parent_cube }}-shard-${{ matrix.shard }}
+          path: finish_cache/*.${{ github.run_id }}.jsonl
+          if-no-files-found: ignore
 
   # Folds this generation's evidence into gh_actions_results/, recomputes
   # the residual from scratch, updates the stuck_count ladder + cursors +

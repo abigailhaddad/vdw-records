@@ -361,6 +361,39 @@ def select_monsters(monster_tier, cursor, cfg):
     return selected, cursor + len(selected)
 
 
+def monster_shard_indices(parents, parent, split_tag, shard, nshards):
+    """The children of monster `parent` that a conquer job for `shard` should
+    solve this generation: the ones STILL UNREFUTED in this split_tag's cover,
+    restricted to the shard's round-robin slice (child i belongs to shard
+    i % nshards -- the same rule as vdw_cnc.slice_members, so the assignment of
+    children to shards does not change).
+
+    WHY: without this a monster job walks its whole slice (~1300 children) from
+    index 0 every generation. Re-solving children that are already refuted is
+    not free -- a heavy tail of them cost minutes each -- so in run 37492755565
+    the jobs spent ~197 solver-hours on 22,784 already-refuted children and
+    never reached an unrefuted one (e.g. parent 2014 shard 0 stopped at child
+    1971; its first unrefuted child is 2967). An UNSAT child stays UNSAT
+    (merge_jsonl_verdicts ORs evidence), so skipping them cannot change a
+    verdict -- this is the same explicit-index mode the finisher already uses.
+
+    Returns a sorted list (possibly EMPTY: nothing left for this shard -- the
+    caller must then NOT dispatch the job, because an empty --cube-indices
+    means "no restriction", i.e. the whole slice), or None when this tag's
+    cover has no evidence yet (a never-raced depth): the caller then lets the
+    job take its whole slice, as before.
+
+    `parents` is filtered_verdict()'s result["parents"], keyed by int parent
+    index; tag groups are keyed by split_tag with the untagged -d12 cover under
+    the empty string."""
+    info = (parents or {}).get(parent) or (parents or {}).get(str(parent)) or {}
+    group = (info.get("tags") or {}).get(split_tag or "")
+    if not group or group.get("n_children") is None:
+        return None
+    left = group.get("children_without_unsat") or []
+    return sorted(c for c in left if c % nshards == shard)
+
+
 def cfg_of(state):
     """state["config"] with any missing key filled from CONFIG_DEFAULTS
     (so an older/hand-edited state file that predates a new knob still
