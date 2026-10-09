@@ -1355,6 +1355,8 @@ def test_leaf_and_negcubes_match_lratcatch_export():
 
 _MERGE_BASELINE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                "test_cnc_merge_baseline.json")
+_PINNED_DIRS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "test_cnc_merge_baseline_evidence_dirs.json")
 
 
 def test_backward_compat_real_evidence_unchanged():
@@ -1369,18 +1371,30 @@ def test_backward_compat_real_evidence_unchanged():
     # n_cubes_refuted, sat_cubes, the exact residual (compared by sha256 of
     # its sorted list), and every parent's resolved-status. Uses the SAME
     # N-safe production path (cnc_grind_lib.filtered_verdict ->
-    # merge_jsonl_verdicts) the campaign itself uses. Regenerate the baseline
-    # only if the committed evidence for these cells legitimately changes.
+    # merge_jsonl_verdicts) the campaign itself uses.
+    #
+    # PINNED TO THE SNAPSHOT'S EVIDENCE: the merge is run over ONLY the 81
+    # evidence directories that existed when the snapshot was taken (listed in
+    # test_cnc_merge_baseline_evidence_dirs.json), not over everything now
+    # committed. The campaign's bots add new directories every day, so an
+    # unpinned exact comparison goes stale on its own (it did: 3980 vs 4076
+    # refuted cubes at t=28 N=744, with nothing wrong). Pinned, it stays an
+    # exact gate on the merge LOGIC in both directions -- a change that
+    # wrongly refutes extra cubes fails here, which the grows-only check below
+    # cannot see. A snapshot directory that disappears or is edited also fails.
     import hashlib
     import cnc_grind_lib as lib
     if not os.path.isdir(lib.RESULTS_ROOT):
         print("    (skipped: no gh_actions_results/ committed evidence here)")
         return
-    if not os.path.exists(_MERGE_BASELINE):
+    if not os.path.exists(_MERGE_BASELINE) or not os.path.exists(_PINNED_DIRS):
         print("    (skipped: baseline snapshot not present)")
         return
     baseline = json.load(open(_MERGE_BASELINE))
-    dirs = lib.default_evidence_dirs()
+    pinned = json.load(open(_PINNED_DIRS))
+    dirs = [os.path.join(lib.RESULTS_ROOT, d) for d in pinned]
+    missing = [d for d in dirs if not os.path.isdir(d)]
+    assert not missing, ("snapshot evidence directories are missing", missing[:3])
     checked = 0
     for key, exp in sorted(baseline.items()):
         t, N = exp["t"], exp["N"]
@@ -1409,6 +1423,90 @@ def test_backward_compat_real_evidence_unchanged():
                           "the baseline, got", checked)
     print(f"    backward-compat: {checked} real cells (incl. t=28 N=744/N=729 "
           f"and parent-cube evidence) merge byte-for-byte unchanged")
+
+
+def _grows_only_problems(exp, result):
+    """Ways the CURRENT merge of ALL committed evidence can fail to be a
+    superset of what the baseline snapshot established. Empty list = fine.
+    Evidence only ever accumulates, so for every cell: the cube count is fixed;
+    every cube refuted at snapshot time is still refuted; no SAT cube appears
+    or disappears (a new SAT would change the headline result and must be a
+    deliberate, reviewed event); every parent resolved then is still resolved;
+    and a verdict may only move UNDETERMINED -> UNSAT, never anything else."""
+    bad = []
+    residual = set(result.get("cubes_without_unsat") or [])
+    was = set(exp["cubes_without_unsat"])
+    if result["ncubes"] != exp["ncubes"]:
+        bad.append(("ncubes changed", result["ncubes"], exp["ncubes"]))
+    lost = sorted(residual - was)
+    if lost:
+        bad.append(("cubes refuted at snapshot are no longer refuted", lost[:5]))
+    if result.get("n_cubes_refuted") != result["ncubes"] - len(residual):
+        bad.append(("n_cubes_refuted disagrees with the residual",
+                    result.get("n_cubes_refuted"), result["ncubes"] - len(residual)))
+    if sorted(result.get("sat_cubes") or []) != sorted(exp["sat_cubes"]):
+        bad.append(("SAT cubes changed", result.get("sat_cubes"), exp["sat_cubes"]))
+    now_resolved = {str(p) for p, i in (result.get("parents") or {}).items()
+                    if i.get("resolved")}
+    was_resolved = {p for p, v in exp["parents_resolved"].items() if v}
+    if was_resolved - now_resolved:
+        bad.append(("parents resolved at snapshot are no longer resolved",
+                    sorted(was_resolved - now_resolved)[:5]))
+    ok_move = (result["verdict"] == exp["verdict"]
+               or (exp["verdict"] == "UNDETERMINED" and result["verdict"] == "UNSAT"))
+    if not ok_move:
+        bad.append(("verdict", exp["verdict"], "->", result["verdict"]))
+    return bad
+
+
+def test_real_evidence_only_grows_since_baseline():
+    # Over ALL evidence committed today (not pinned): nothing the snapshot
+    # established may have been lost. New refutations are expected and fine.
+    import cnc_grind_lib as lib
+    if not os.path.isdir(lib.RESULTS_ROOT) or not os.path.exists(_MERGE_BASELINE):
+        print("    (skipped: no committed evidence / baseline here)")
+        return
+    baseline = json.load(open(_MERGE_BASELINE))
+    dirs = lib.default_evidence_dirs()
+    gained = 0
+    for key, exp in sorted(baseline.items()):
+        result, _ = lib.filtered_verdict(exp["t"], exp["N"], dirs)
+        bad = _grows_only_problems(exp, result)
+        assert not bad, (key, bad)
+        gained += len(set(exp["cubes_without_unsat"])
+                      - set(result.get("cubes_without_unsat") or []))
+    print(f"    grows-only: {len(baseline)} cells, nothing lost; "
+          f"{gained} cube(s) refuted since the snapshot")
+
+
+def test_grows_only_check_catches_regressions():
+    # The check must be able to FAIL: feed it doctored results.
+    exp = {"ncubes": 10, "cubes_without_unsat": [3, 4, 5], "sat_cubes": [],
+           "parents_resolved": {"1": True, "2": False}, "verdict": "UNDETERMINED"}
+    good = {"ncubes": 10, "cubes_without_unsat": [4], "n_cubes_refuted": 9,
+            "sat_cubes": [], "parents": {"1": {"resolved": True},
+                                         "2": {"resolved": True}},
+            "verdict": "UNDETERMINED"}
+    assert _grows_only_problems(exp, good) == []
+    assert _grows_only_problems(exp, {**good, "cubes_without_unsat": [],
+                                      "n_cubes_refuted": 10,
+                                      "verdict": "UNSAT"}) == []   # closing is fine
+    cases = {
+        "a refuted cube became unrefuted": {**good, "cubes_without_unsat": [4, 7],
+                                            "n_cubes_refuted": 8},
+        "a new SAT cube appeared": {**good, "sat_cubes": [9]},
+        "a resolved parent regressed": {**good, "parents": {"1": {"resolved": False}}},
+        "cube count changed": {**good, "ncubes": 11, "n_cubes_refuted": 10},
+        "refuted count disagrees with residual": {**good, "n_cubes_refuted": 5},
+        "verdict regressed": {**good, "verdict": "SAT"},
+        "UNSAT turned back into UNDETERMINED": None,
+    }
+    for name, res in cases.items():
+        if res is None:
+            e2 = {**exp, "verdict": "UNSAT"}
+            assert _grows_only_problems(e2, good), name
+        else:
+            assert _grows_only_problems(exp, res), f"NOT caught: {name}"
 
 
 def _write_tagged_child_jsonl(d, parent, n_children, verdicts, split_tag,
