@@ -39,7 +39,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cnc_grind_lib import (  # noqa: E402
     DEFAULT_STATE_PATH, assign_tiers, build_batch_matrix, build_solo_matrix,
     cfg_of, default_evidence_dirs, filtered_verdict, load_state,
-    monster_march_opts, monster_split_tag, select_monsters)
+    monster_march_opts, monster_shard_indices, monster_split_tag,
+    select_monsters)
 
 
 def emit(out, key, value):
@@ -164,10 +165,21 @@ def main():
 
     monster_split_matrix = [{"parent_cube": m, "march_opts": monster_opts(m),
                              "split_tag": monster_tag(m)} for m in monsters]
-    monster_conquer_matrix = [{"parent_cube": m, "shard": s,
-                               "march_opts": monster_opts(m),
-                               "split_tag": monster_tag(m)}
-                               for m in monsters for s in range(cfg["monster_nshards"])]
+    # Each conquer job gets ONLY the still-unrefuted children of its slice
+    # (see monster_shard_indices); a shard with none left is not dispatched at
+    # all. cube_indices == "" means "no evidence for this depth yet -> whole
+    # slice", and the workflow then omits --cube-indices.
+    monster_conquer_matrix = []
+    for m in monsters:
+        for s in range(cfg["monster_nshards"]):
+            idxs = monster_shard_indices(result.get("parents"), m, monster_tag(m),
+                                         s, cfg["monster_nshards"])
+            if idxs is not None and not idxs:
+                continue
+            monster_conquer_matrix.append({
+                "parent_cube": m, "shard": s,
+                "march_opts": monster_opts(m), "split_tag": monster_tag(m),
+                "cube_indices": "" if idxs is None else ",".join(str(c) for c in idxs)})
 
     emit(out, "stop_now", False)
     emit(out, "reason", "ok")
@@ -177,9 +189,13 @@ def main():
     emit(out, "ncubes", result["ncubes"] or cell.get("ncubes"))
     emit(out, "residual_count", len(residual))
     emit(out, "has_batch", len(matrix) > 0)
-    emit(out, "has_monsters", len(monster_split_matrix) > 0)
+    emit(out, "has_monsters", len(monster_conquer_matrix) > 0)
     emit(out, "batch_matrix", matrix)
     emit(out, "batch_nshards", len(matrix))
+    # no split job for a monster that has nothing left to conquer this round
+    _conquered = {e["parent_cube"] for e in monster_conquer_matrix}
+    monster_split_matrix = [e for e in monster_split_matrix
+                            if e["parent_cube"] in _conquered]
     emit(out, "monster_split_matrix", monster_split_matrix)
     emit(out, "monster_conquer_matrix", monster_conquer_matrix)
     emit(out, "monster_nshards", cfg["monster_nshards"])
