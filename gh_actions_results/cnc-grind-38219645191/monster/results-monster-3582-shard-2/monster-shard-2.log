@@ -1,0 +1,10 @@
+  shard 2/3 (explicit): 2 of 3997 cubes, per-cube cap 2400.0s, re-split depth 9
+    resume cache for cube 3992: 940 UNSAT + 1 SPLIT entries loaded (0 file(s) ignored)
+    cube 3992 TIMEOUT (cached) -> re-split into 941 sub-cubes (depth 1)
+    cube 3992.940 (depth 1, 34 lits): UNSAT in 75.12s
+    resume cache for cube 3992: 940 sub-cube solves skipped (UNSAT), 1 repeat timeouts skipped, 2 new UNSAT saved
+    resume cache for cube 3995: 0 UNSAT + 0 SPLIT entries loaded (0 file(s) ignored)
+    cube 3995 (depth 0, 24 lits): UNSAT in 698.22s
+    resume cache for cube 3995: 0 sub-cube solves skipped (UNSAT), 0 repeat timeouts skipped, 1 new UNSAT saved
+
+  shard 2 verdict: UNSAT [parent cube 3582's children only] (2 UNSAT, 0 unresolved) in 784.3s
