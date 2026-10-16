@@ -5545,9 +5545,28 @@
      "run_id": "38727988897",
      "solo_shards": 0,
      "timestamp": "2026-10-15T19:41:06Z"
+    },
+    {
+     "batch_shards": 0,
+     "cleared": 0,
+     "cleared_cubes": [],
+     "iteration": 157,
+     "monsters_raced": [
+      4078,
+      4086,
+      4090,
+      4092,
+      4093
+     ],
+     "new_stuck_count_entries": 76,
+     "residual_after": 8,
+     "residual_before": 8,
+     "run_id": "38796329989",
+     "solo_shards": 0,
+     "timestamp": "2026-10-16T03:06:53Z"
     }
    ],
-   "monster_cursor": 1402,
+   "monster_cursor": 1407,
    "monster_state": {
     "1995": {
      "attempts": 1,
@@ -6054,8 +6073,8 @@
      "resolved": false
     },
     "4078": {
-     "attempts": 52,
-     "last_run_id": "38657655970",
+     "attempts": 53,
+     "last_run_id": "38796329989",
      "n_children": 3999,
      "n_children_refuted": 3577,
      "resolved": false
@@ -6075,8 +6094,8 @@
      "resolved": false
     },
     "4086": {
-     "attempts": 47,
-     "last_run_id": "38657655970",
+     "attempts": 48,
+     "last_run_id": "38796329989",
      "n_children": 4018,
      "n_children_refuted": 3721,
      "resolved": false
@@ -6089,8 +6108,8 @@
      "resolved": false
     },
     "4090": {
-     "attempts": 45,
-     "last_run_id": "38657655970",
+     "attempts": 46,
+     "last_run_id": "38796329989",
      "n_children": 3989,
      "n_children_refuted": 3727,
      "resolved": false
@@ -6103,17 +6122,17 @@
      "resolved": false
     },
     "4092": {
-     "attempts": 46,
-     "last_run_id": "38727988897",
+     "attempts": 47,
+     "last_run_id": "38796329989",
      "n_children": 3972,
      "n_children_refuted": 3845,
      "resolved": false
     },
     "4093": {
-     "attempts": 46,
-     "last_run_id": "38727988897",
+     "attempts": 47,
+     "last_run_id": "38796329989",
      "n_children": 4005,
-     "n_children_refuted": 3900,
+     "n_children_refuted": 3929,
      "resolved": false
     },
     "4094": {
@@ -6127,7 +6146,6 @@
    "ncubes": 4095,
    "residual": [
     2814,
-    3070,
     4062,
     4078,
     4086,
@@ -6205,15 +6223,15 @@
     "4073": 8,
     "4076": 22,
     "4077": 18,
-    "4078": 58,
+    "4078": 59,
     "4085": 8,
-    "4086": 55,
+    "4086": 56,
     "4088": 8,
     "4089": 18,
-    "4090": 53,
+    "4090": 54,
     "4091": 9,
-    "4092": 53,
-    "4093": 53,
+    "4092": 54,
+    "4093": 54,
     "4094": 55
    }
   }
@@ -6238,7 +6256,7 @@
   "top_march_opts": "-d 12"
  },
  "final_verdict": null,
- "iteration": 156,
+ "iteration": 157,
  "max_iterations": 200,
  "sat_halt": false,
  "stop": false,
