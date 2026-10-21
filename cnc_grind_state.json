@@ -1234,9 +1234,30 @@
      "run_id": "39547412621",
      "solo_shards": 15,
      "timestamp": "2026-10-21T12:01:31Z"
+    },
+    {
+     "batch_shards": 0,
+     "cleared": 1,
+     "cleared_cubes": [
+      4076
+     ],
+     "iteration": 179,
+     "monsters_raced": [
+      4076,
+      4077,
+      4078,
+      4079,
+      4080
+     ],
+     "new_stuck_count_entries": 11,
+     "residual_after": 11,
+     "residual_before": 12,
+     "run_id": "39596456985",
+     "solo_shards": 0,
+     "timestamp": "2026-10-21T17:44:37Z"
     }
    ],
-   "monster_cursor": 7,
+   "monster_cursor": 12,
    "monster_state": {
     "2035": {
      "attempts": 1,
@@ -1251,6 +1272,34 @@
      "n_children": 4039,
      "n_children_refuted": 4036,
      "resolved": false
+    },
+    "4077": {
+     "attempts": 1,
+     "last_run_id": "39596456985",
+     "n_children": 3843,
+     "n_children_refuted": 3837,
+     "resolved": false
+    },
+    "4078": {
+     "attempts": 1,
+     "last_run_id": "39596456985",
+     "n_children": 4027,
+     "n_children_refuted": 3494,
+     "resolved": false
+    },
+    "4079": {
+     "attempts": 1,
+     "last_run_id": "39596456985",
+     "n_children": 4028,
+     "n_children_refuted": 3567,
+     "resolved": false
+    },
+    "4080": {
+     "attempts": 1,
+     "last_run_id": "39596456985",
+     "n_children": 4049,
+     "n_children_refuted": 1758,
+     "resolved": false
     }
    },
    "ncubes": 4081,
@@ -1262,7 +1311,6 @@
     3058,
     3568,
     4056,
-    4076,
     4077,
     4078,
     4079,
@@ -1278,11 +1326,10 @@
     "3058": 4,
     "3568": 6,
     "4056": 4,
-    "4076": 4,
-    "4077": 4,
-    "4078": 4,
-    "4079": 4,
-    "4080": 4
+    "4077": 5,
+    "4078": 5,
+    "4079": 5,
+    "4080": 5
    }
   },
   "744": {
@@ -19254,7 +19301,7 @@
   "top_march_opts": "-d 12"
  },
  "final_verdict": null,
- "iteration": 178,
+ "iteration": 179,
  "max_iterations": 200,
  "sat_halt": false,
  "stop": false,
