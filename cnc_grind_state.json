@@ -1279,9 +1279,32 @@
      "run_id": "39646645203",
      "solo_shards": 0,
      "timestamp": "2026-10-21T23:26:32Z"
+    },
+    {
+     "batch_shards": 0,
+     "cleared": 3,
+     "cleared_cubes": [
+      2033,
+      4077,
+      4079
+     ],
+     "iteration": 181,
+     "monsters_raced": [
+      4077,
+      4078,
+      4079,
+      4080,
+      2033
+     ],
+     "new_stuck_count_entries": 4,
+     "residual_after": 4,
+     "residual_before": 7,
+     "run_id": "39693516145",
+     "solo_shards": 0,
+     "timestamp": "2026-10-22T05:08:11Z"
     }
    ],
-   "monster_cursor": 17,
+   "monster_cursor": 22,
    "monster_state": {
     "3058": {
      "attempts": 1,
@@ -1290,55 +1313,35 @@
      "n_children_refuted": 3312,
      "resolved": false
     },
-    "4077": {
-     "attempts": 1,
-     "last_run_id": "39596456985",
-     "n_children": 3843,
-     "n_children_refuted": 3837,
-     "resolved": false
-    },
     "4078": {
-     "attempts": 1,
-     "last_run_id": "39596456985",
+     "attempts": 2,
+     "last_run_id": "39693516145",
      "n_children": 4027,
-     "n_children_refuted": 3494,
-     "resolved": false
-    },
-    "4079": {
-     "attempts": 1,
-     "last_run_id": "39596456985",
-     "n_children": 4028,
-     "n_children_refuted": 3567,
+     "n_children_refuted": 4018,
      "resolved": false
     },
     "4080": {
-     "attempts": 1,
-     "last_run_id": "39596456985",
+     "attempts": 2,
+     "last_run_id": "39693516145",
      "n_children": 4049,
-     "n_children_refuted": 1758,
+     "n_children_refuted": 2004,
      "resolved": false
     }
    },
    "ncubes": 4081,
    "residual": [
-    2033,
     3058,
     4056,
-    4077,
     4078,
-    4079,
     4080
    ],
    "solo_cursor": 135,
    "status": "active",
    "stuck_count": {
-    "2033": 4,
     "3058": 5,
     "4056": 4,
-    "4077": 5,
-    "4078": 5,
-    "4079": 5,
-    "4080": 5
+    "4078": 6,
+    "4080": 6
    }
   },
   "744": {
@@ -19310,7 +19313,7 @@
   "top_march_opts": "-d 12"
  },
  "final_verdict": null,
- "iteration": 180,
+ "iteration": 181,
  "max_iterations": 200,
  "sat_halt": false,
  "stop": false,
